@@ -388,7 +388,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         }
       });
 
-      expect(error).toContain('not inside an <svg>');
+      expect(error).toContain('not inside an SVG tree');
 
       await page.close();
     });
