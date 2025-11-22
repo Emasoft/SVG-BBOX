@@ -150,14 +150,7 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
       await page.close();
     });
 
-    it.skip('should compute bbox for text on path', async () => {
-      // TODO: textPath rasterization issue
-      // getBBox() returns valid bounds, but canvas rasterization finds no pixels
-      // Possible causes:
-      // 1. textPath href resolution fails during SVG cloning/isolation
-      // 2. Canvas doesn't render textPath correctly from serialized SVG blob
-      // 3. Browser-specific rendering quirk in headless Chrome
-      // See: https://github.com/w3c/svgwg/issues/731 for textPath spec issues
+    it('should compute bbox for text on path', async () => {
       const page = await createPageWithSvg('text/textpath.svg');
       const bbox = await getBBoxById(page, 'text-on-path');
 
@@ -170,12 +163,7 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
       await page.close();
     });
 
-    it.skip('should compute bbox for nested tspan elements', async () => {
-      // TODO: Nested tspan rasterization issue
-      // Similar to textPath - getBBox() works but canvas rasterization finds no pixels
-      // The SVG appears to render in browser, but when cloned+serialized to blob
-      // and drawn to canvas, the tspan elements don't produce pixels
-      // This may be related to how tspan positioning (dx, dy, x, y) is handled
+    it('should compute bbox for nested tspan elements', async () => {
       const page = await createPageWithSvg('text/tspan-nested.svg');
       const bbox = await getBBoxById(page, 'nested-tspan');
 

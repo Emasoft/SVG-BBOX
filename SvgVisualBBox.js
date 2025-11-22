@@ -87,6 +87,9 @@
 }(typeof self !== 'undefined' ? self : this, () => {
   'use strict';
 
+  // Debug flag - set to true to enable console logging
+  const DEBUG = false;
+
   /**
    * Wait until the document's fonts are loaded (CSS Font Loading API),
    * with a timeout so we don't hang forever if the network is flaky.
@@ -133,11 +136,16 @@
     try {
       const box = el.getBBox();
       if (!box) return null;
-      if (!isFinite(box.x) || !isFinite(box.y)) return null;
-      if (!isFinite(box.width) || !isFinite(box.height)) return null;
+      // Extract values explicitly (SVGRect properties aren't enumerable)
+      const x = box.x;
+      const y = box.y;
+      const width = box.width;
+      const height = box.height;
+      if (!isFinite(x) || !isFinite(y)) return null;
+      if (!isFinite(width) || !isFinite(height)) return null;
       // If width & height are 0, treat as untrustworthy (especially for text-ish nodes)
-      if (box.width === 0 && box.height === 0) return null;
-      return { x: box.x, y: box.y, width: box.width, height: box.height };
+      if (width === 0 && height === 0) return null;
+      return { x, y, width, height };
     } catch {
       return null;
     }
@@ -228,6 +236,15 @@
       node = node.parentNode;
     }
 
+    // Add all descendants of the target
+    (function addDescendants(n) {
+      allowed.add(n);
+      const children = n.children;
+      for (let i = 0; i < children.length; i++) {
+        addDescendants(children[i]);
+      }
+    })(cloneTarget);
+
     (function hideIrrelevant(rootNode) {
       const children = Array.prototype.slice.call(rootNode.children);
       for (let i = 0; i < children.length; i++) {
@@ -249,6 +266,16 @@
 
     // Serialize SVG → Blob → Image
     const xml  = new XMLSerializer().serializeToString(clonedSvg);
+
+    if (DEBUG && typeof console !== 'undefined' && console.log) {
+      console.log('[DEBUG rasterize] Serialized SVG length:', xml.length);
+      console.log('[DEBUG rasterize] SVG contains textPath:', xml.includes('textPath'));
+      console.log('[DEBUG rasterize] SVG contains curve:', xml.includes('id="curve"'));
+      if (xml.length < 2000) {
+        console.log('[DEBUG rasterize] Full SVG:', xml);
+      }
+    }
+
     const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
 
@@ -288,6 +315,16 @@
     }
 
     const data = imageData.data;
+
+    if (DEBUG && typeof console !== 'undefined' && console.log) {
+      // Count non-transparent pixels for debugging
+      let nonZeroAlpha = 0;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] !== 0) nonZeroAlpha++;
+      }
+      console.log('[DEBUG rasterize] Total pixels with alpha > 0:', nonZeroAlpha);
+    }
+
     let xMin = pixelWidth,  xMax = -1;
     let yMin = pixelHeight, yMax = -1;
 
@@ -313,8 +350,16 @@
       }
     }
 
+    if (DEBUG && typeof console !== 'undefined' && console.log) {
+      console.log('[DEBUG rasterize] xMin/xMax:', xMin, xMax, 'yMin/yMax:', yMin, yMax);
+      console.log('[DEBUG rasterize] pixelWidth/Height:', pixelWidth, pixelHeight);
+    }
+
     if (xMax < xMin || yMax < yMin) {
       // No visible pixels (fully clipped / transparent)
+      if (DEBUG && typeof console !== 'undefined' && console.log) {
+        console.log('[DEBUG rasterize] No pixels detected');
+      }
       return null;
     }
 
@@ -442,9 +487,19 @@
     const finePPU   = Math.max(4, basePixelsPerUnit * fineFactor);
 
     // PASS 1: whole coarseROI at coarsePPU
+    if (DEBUG && typeof console !== 'undefined' && console.log) {
+      console.log('[DEBUG] coarseROI:', JSON.stringify(coarseROI));
+      console.log('[DEBUG] coarsePPU:', coarsePPU);
+    }
     const coarseBBox = await rasterizeSvgElementToBBox(el, svgRoot, coarseROI, coarsePPU);
+    if (DEBUG && typeof console !== 'undefined' && console.log) {
+      console.log('[DEBUG] coarseBBox result:', coarseBBox);
+    }
     if (!coarseBBox) {
       // Fully transparent / clipped; visually nothing there
+      if (DEBUG && typeof console !== 'undefined' && console.log) {
+        console.log('[DEBUG] No pixels found in coarse pass - returning null');
+      }
       return null;
     }
 
