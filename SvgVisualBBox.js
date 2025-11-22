@@ -84,7 +84,7 @@
     // Browser global
     root.SvgVisualBBox = factory();
   }
-}(typeof self !== 'undefined' ? self : this, function () {
+}(typeof self !== 'undefined' ? self : this, () => {
   'use strict';
 
   /**
@@ -96,8 +96,12 @@
    * @returns {Promise<void>}
    */
   async function waitForDocumentFonts(doc, timeoutMs) {
-    if (!doc) doc = document;
-    if (typeof timeoutMs !== 'number') timeoutMs = 8000;
+    if (!doc) {
+      doc = document;
+    }
+    if (typeof timeoutMs !== 'number') {
+      timeoutMs = 8000;
+    }
 
     const fonts = doc.fonts;
     if (!fonts || !fonts.ready) {
@@ -119,6 +123,42 @@
   }
 
   /**
+   * INTERNAL: Safely get getBBox() from an element, treating it as a hint only.
+   * Returns null if getBBox() fails, returns invalid values, or returns empty box.
+   *
+   * @param {SVGElement} el
+   * @returns {{x:number,y:number,width:number,height:number}|null}
+   */
+  function safeGetBBox(el) {
+    try {
+      const box = el.getBBox();
+      if (!box) return null;
+      if (!isFinite(box.x) || !isFinite(box.y)) return null;
+      if (!isFinite(box.width) || !isFinite(box.height)) return null;
+      // If width & height are 0, treat as untrustworthy (especially for text-ish nodes)
+      if (box.width === 0 && box.height === 0) return null;
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * INTERNAL: For text-ish elements (textPath, tspan), try to get bbox from parent <text>
+   * as a fallback, since getBBox() on these child elements is unreliable in headless Chrome.
+   *
+   * @param {SVGElement} el
+   * @returns {SVGElement} - Returns the element itself, or parent <text> if appropriate
+   */
+  function normalizeTargetForText(el) {
+    const tagName = el.tagName.toLowerCase();
+    if ((tagName === 'textpath' || tagName === 'tspan') && el.closest('text')) {
+      return el.closest('text');
+    }
+    return el;
+  }
+
+  /**
    * INTERNAL: Rasterize ONE element of ONE SVG into a canvas over a given
    * ROI (region of interest) in SVG user units, at a given resolution
    * (pixelsPerUnit), and return a visual bbox in user units.
@@ -133,7 +173,9 @@
    * @returns {Promise<{x:number,y:number,width:number,height:number}|null>}
    */
   async function rasterizeSvgElementToBBox(el, svgRoot, roi, pixelsPerUnit) {
-    if (!roi || roi.width <= 0 || roi.height <= 0) return null;
+    if (!roi || roi.width <= 0 || roi.height <= 0) {
+      return null;
+    }
 
     const vb = roi;
 
@@ -154,7 +196,7 @@
     clonedSvg.setAttribute('height', String(pixelHeight));
 
     // Map target element to cloned SVG
-    let hadId = !!el.id;
+    const hadId = !!el.id;
     let tmpId;
     if (!hadId) {
       tmpId = '__svg_visual_bbox_tmp_' + Math.random().toString(36).slice(2);
@@ -180,7 +222,9 @@
     let node = cloneTarget;
     while (node) {
       allowed.add(node);
-      if (node === clonedSvg) break;
+      if (node === clonedSvg) {
+        break;
+      }
       node = node.parentNode;
     }
 
@@ -213,8 +257,10 @@
     img.crossOrigin = 'anonymous';
     img.src         = url;
 
-    await new Promise(function (resolve, reject) {
-      img.onload  = function () { resolve(); };
+    await new Promise((resolve, reject) => {
+      img.onload  = function () {
+        resolve(); 
+      };
       img.onerror = function (e) {
         reject(new Error('Failed loading serialized SVG: ' + (e && e.message ? e.message : 'image error')));
       };
@@ -251,10 +297,18 @@
         const idx = rowOffset + x * 4;
         const alpha = data[idx + 3];
         if (alpha !== 0) {
-          if (x < xMin) xMin = x;
-          if (x > xMax) xMax = x;
-          if (y < yMin) yMin = y;
-          if (y > yMax) yMax = y;
+          if (x < xMin) {
+            xMin = x;
+          }
+          if (x > xMax) {
+            xMax = x;
+          }
+          if (y < yMin) {
+            yMin = y;
+          }
+          if (y > yMax) {
+            yMax = y;
+          }
         }
       }
     }
@@ -335,23 +389,34 @@
       viewBox = { x: vbVal.x, y: vbVal.y, width: vbVal.width, height: vbVal.height };
     } else {
       // fallback: geometry box of full SVG (ignores clipping)
-      const box = svgRoot.getBBox();
-      viewBox = { x: box.x, y: box.y, width: box.width, height: box.height };
+      const box = safeGetBBox(svgRoot);
+      if (box) {
+        viewBox = { x: box.x, y: box.y, width: box.width, height: box.height };
+      } else {
+        // Last resort: arbitrary large window
+        viewBox = { x: -2000, y: -2000, width: 4000, height: 4000 };
+      }
     }
 
-    // Geometry bbox of full drawing (no clipping) for "unclipped" mode
-    const geomBox = svgRoot.getBBox();
+    // Try to get geometry bbox from the target element (or parent text for textPath/tspan)
+    const normalizedEl = normalizeTargetForText(el);
+    let geomBox = safeGetBBox(normalizedEl);
 
     // Decide coarse region of interest (ROI) for PASS 1
     let coarseROI;
     if (mode === 'unclipped') {
       // Whole drawing, ignoring viewBox/viewport clipping
-      coarseROI = {
-        x: geomBox.x,
-        y: geomBox.y,
-        width:  geomBox.width,
-        height: geomBox.height
-      };
+      if (geomBox) {
+        coarseROI = {
+          x: geomBox.x,
+          y: geomBox.y,
+          width:  geomBox.width,
+          height: geomBox.height
+        };
+      } else {
+        // No geometry hint - use viewBox as fallback region
+        coarseROI = viewBox;
+      }
     } else {
       // "clipped": restrict to visible viewBox/viewport
       coarseROI = {
@@ -443,7 +508,9 @@
     for (let i = 0; i < targets.length; i++) {
       const t = targets[i];
       const bbox = await getSvgElementVisualBBoxTwoPassAggressive(t, options);
-      if (!bbox) continue; // invisible element
+      if (!bbox) {
+        continue;
+      } // invisible element
 
       if (!svgRoot) {
         svgRoot = bbox.svgRoot;
@@ -455,7 +522,9 @@
       bboxes.push(bbox);
     }
 
-    if (bboxes.length === 0) return null;
+    if (bboxes.length === 0) {
+      return null;
+    }
 
     let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
 

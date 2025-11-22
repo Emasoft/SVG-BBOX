@@ -146,8 +146,12 @@ ${svgContent}
         // both width and height exist: keep as-is
       }
 
-      if (newWidth) svg.setAttribute('width', newWidth);
-      if (newHeight) svg.setAttribute('height', newHeight);
+      if (newWidth) {
+        svg.setAttribute('width', newWidth);
+      }
+      if (newHeight) {
+        svg.setAttribute('height', newHeight);
+      }
 
       // 4) Serialize the fixed <svg> back to string
       const serializer = new XMLSerializer();

@@ -230,7 +230,9 @@ async function main() {
             return false;
           }
           // we also skip the root in this pool; we'll include it explicitly
-          if (el === importedSvg) return false;
+          if (el === importedSvg) {
+            return false;
+          }
           return true;
         });
 

@@ -217,7 +217,9 @@ function parseArgs(argv) {
       const next = typeof val === 'undefined' ? args[i + 1] : val;
 
       function useNext() {
-        if (typeof val === 'undefined') i++;
+        if (typeof val === 'undefined') {
+          i++;
+        }
       }
 
       switch (name) {
@@ -247,7 +249,9 @@ function parseArgs(argv) {
           break;
         case 'margin':
           options.margin = parseFloat(next);
-          if (!isFinite(options.margin) || options.margin < 0) options.margin = 0;
+          if (!isFinite(options.margin) || options.margin < 0) {
+            options.margin = 0;
+          }
           useNext();
           break;
         case 'include-context':
@@ -368,10 +372,14 @@ ${svgContent}
     // Shared "initial import": normalize viewBox + width/height in memory.
     await page.evaluate(async () => {
       const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) throw new Error('SvgVisualBBox not found.');
+      if (!SvgVisualBBox) {
+        throw new Error('SvgVisualBBox not found.');
+      }
 
       const rootSvg = document.querySelector('svg');
-      if (!rootSvg) throw new Error('No <svg> found in document.');
+      if (!rootSvg) {
+        throw new Error('No <svg> found in document.');
+      }
 
       await SvgVisualBBox.waitForDocumentFonts(document, 8000);
 
@@ -421,96 +429,100 @@ ${svgContent}
 // -------- LIST mode: data + HTML with filters & rename UI --------
 
 async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath, jsonMode) {
-  const result = await withPageForSvg(inputPath, async (page) => {
-    return await page.evaluate(async (assignIds) => {
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) throw new Error('SvgVisualBBox not found.');
+  const result = await withPageForSvg(inputPath, async (page) => await page.evaluate(async (assignIds) => {
+    const SvgVisualBBox = window.SvgVisualBBox;
+    if (!SvgVisualBBox) {
+      throw new Error('SvgVisualBBox not found.');
+    }
 
-      const rootSvg = document.querySelector('svg');
-      if (!rootSvg) throw new Error('No <svg> found');
+    const rootSvg = document.querySelector('svg');
+    if (!rootSvg) {
+      throw new Error('No <svg> found');
+    }
 
-      const serializer = new XMLSerializer();
+    const serializer = new XMLSerializer();
 
-      const selector = [
-        'g', 'path', 'rect', 'circle', 'ellipse',
-        'polygon', 'polyline', 'text', 'image', 'use', 'symbol'
-      ].join(',');
+    const selector = [
+      'g', 'path', 'rect', 'circle', 'ellipse',
+      'polygon', 'polyline', 'text', 'image', 'use', 'symbol'
+    ].join(',');
 
-      const els = Array.from(rootSvg.querySelectorAll(selector));
+    const els = Array.from(rootSvg.querySelectorAll(selector));
 
-      const seenIds = new Set();
-      function ensureUniqueId(base) {
-        let id = base;
-        let counter = 1;
-        while (seenIds.has(id) || document.getElementById(id)) {
-          id = base + '_' + (counter++);
-        }
-        seenIds.add(id);
-        return id;
+    const seenIds = new Set();
+    function ensureUniqueId(base) {
+      let id = base;
+      let counter = 1;
+      while (seenIds.has(id) || document.getElementById(id)) {
+        id = base + '_' + (counter++);
+      }
+      seenIds.add(id);
+      return id;
+    }
+
+    for (const el of els) {
+      if (el.id) {
+        seenIds.add(el.id);
+      }
+    }
+
+    const info = [];
+    let changed = false;
+
+    for (const el of els) {
+      let id = el.id || null;
+
+      if (assignIds && !id) {
+        const base = 'auto_id_' + el.tagName.toLowerCase();
+        const newId = ensureUniqueId(base);
+        el.setAttribute('id', newId);
+        id = newId;
+        changed = true;
       }
 
-      for (const el of els) {
-        if (el.id) seenIds.add(el.id);
+      // Compute group ancestors (IDs of ancestor <g>)
+      const groupIds = [];
+      let parent = el.parentElement;
+      while (parent && parent !== rootSvg) {
+        if (parent.tagName && parent.tagName.toLowerCase() === 'g' && parent.id) {
+          groupIds.push(parent.id);
+        }
+        parent = parent.parentElement;
       }
 
-      const info = [];
-      let changed = false;
-
-      for (const el of els) {
-        let id = el.id || null;
-
-        if (assignIds && !id) {
-          const base = 'auto_id_' + el.tagName.toLowerCase();
-          const newId = ensureUniqueId(base);
-          el.setAttribute('id', newId);
-          id = newId;
-          changed = true;
-        }
-
-        // Compute group ancestors (IDs of ancestor <g>)
-        const groupIds = [];
-        let parent = el.parentElement;
-        while (parent && parent !== rootSvg) {
-          if (parent.tagName && parent.tagName.toLowerCase() === 'g' && parent.id) {
-            groupIds.push(parent.id);
-          }
-          parent = parent.parentElement;
-        }
-
-        // Compute visual bbox (may fail / be null)
-        let bbox = null;
-        try {
-          const b = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-            mode: 'unclipped',
-            coarseFactor: 3,
-            fineFactor: 24,
-            useLayoutScale: true
-          });
-          if (b) {
-            bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
-          }
-        } catch (_) {
-          // ignore bbox errors
-        }
-
-        info.push({
-          tagName: el.tagName,
-          id,
-          bbox,
-          groups: groupIds
+      // Compute visual bbox (may fail / be null)
+      let bbox = null;
+      try {
+        const b = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+          mode: 'unclipped',
+          coarseFactor: 3,
+          fineFactor: 24,
+          useLayoutScale: true
         });
+        if (b) {
+          bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
+        }
+      } catch (_) {
+        // ignore bbox errors
       }
 
-      let fixedSvgString = null;
-      if (assignIds && changed) {
-        fixedSvgString = serializer.serializeToString(rootSvg);
-      }
+      info.push({
+        tagName: el.tagName,
+        id,
+        bbox,
+        groups: groupIds
+      });
+    }
 
-      const rootSvgMarkup = serializer.serializeToString(rootSvg);
+    let fixedSvgString = null;
+    if (assignIds && changed) {
+      fixedSvgString = serializer.serializeToString(rootSvg);
+    }
 
-      return { info, fixedSvgString, rootSvgMarkup };
-    }, assignIds);
-  });
+    const rootSvgMarkup = serializer.serializeToString(rootSvg);
+
+    return { info, fixedSvgString, rootSvgMarkup };
+  }, assignIds));
 
   // Build HTML listing file
   const html = buildListHtml(
@@ -1010,7 +1022,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = '${safeTitle.replace(/[^a-zA-Z0-9._-]+/g, "_")}.rename.json';
+        a.download = '${safeTitle.replace(/[^a-zA-Z0-9._-]+/g, '_')}.rename.json';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1057,93 +1069,101 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
 // -------- EXTRACT mode --------
 
 async function extractSingleObject(inputPath, elementId, outSvgPath, margin, includeContext, jsonMode) {
-  const result = await withPageForSvg(inputPath, async (page) => {
-    return await page.evaluate(async (elementId, marginUser, includeContext) => {
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) throw new Error('SvgVisualBBox not found.');
+  const result = await withPageForSvg(inputPath, async (page) => await page.evaluate(async (elementId, marginUser, includeContext) => {
+    const SvgVisualBBox = window.SvgVisualBBox;
+    if (!SvgVisualBBox) {
+      throw new Error('SvgVisualBBox not found.');
+    }
 
-      const rootSvg = document.querySelector('svg');
-      if (!rootSvg) throw new Error('No <svg> found');
+    const rootSvg = document.querySelector('svg');
+    if (!rootSvg) {
+      throw new Error('No <svg> found');
+    }
 
-      const el = rootSvg.ownerDocument.getElementById(elementId);
-      if (!el) throw new Error('No element found with id="' + elementId + '"');
+    const el = rootSvg.ownerDocument.getElementById(elementId);
+    if (!el) {
+      throw new Error('No element found with id="' + elementId + '"');
+    }
 
-      const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-        mode: 'unclipped',
-        coarseFactor: 3,
-        fineFactor: 24,
-        useLayoutScale: true
-      });
-      if (!bboxData) throw new Error('Element id="' + elementId + '" has no visible pixels.');
+    const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+      mode: 'unclipped',
+      coarseFactor: 3,
+      fineFactor: 24,
+      useLayoutScale: true
+    });
+    if (!bboxData) {
+      throw new Error('Element id="' + elementId + '" has no visible pixels.');
+    }
 
-      let x = bboxData.x;
-      let y = bboxData.y;
-      let w = bboxData.width;
-      let h = bboxData.height;
-      if (marginUser > 0) {
-        x -= marginUser;
-        y -= marginUser;
-        w += 2 * marginUser;
-        h += 2 * marginUser;
+    let x = bboxData.x;
+    let y = bboxData.y;
+    let w = bboxData.width;
+    let h = bboxData.height;
+    if (marginUser > 0) {
+      x -= marginUser;
+      y -= marginUser;
+      w += 2 * marginUser;
+      h += 2 * marginUser;
+    }
+    if (w <= 0 || h <= 0) {
+      throw new Error('Degenerate bbox after margin.');
+    }
+
+    const clonedRoot = rootSvg.cloneNode(false);
+    if (!clonedRoot.getAttribute('xmlns')) {
+      clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+    const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
+    if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
+      clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
+    }
+
+    clonedRoot.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+    clonedRoot.setAttribute('width', String(w));
+    clonedRoot.setAttribute('height', String(h));
+
+    const defsList = Array.from(rootSvg.querySelectorAll('defs'));
+    for (const defs of defsList) {
+      clonedRoot.appendChild(defs.cloneNode(true));
+    }
+
+    if (!includeContext) {
+      const ancestors = [];
+      let node = el;
+      while (node && node !== rootSvg) {
+        ancestors.unshift(node);
+        node = node.parentNode;
       }
-      if (w <= 0 || h <= 0) throw new Error('Degenerate bbox after margin.');
-
-      const clonedRoot = rootSvg.cloneNode(false);
-      if (!clonedRoot.getAttribute('xmlns')) {
-        clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      }
-      const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
-      if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
-        clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
-      }
-
-      clonedRoot.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-      clonedRoot.setAttribute('width', String(w));
-      clonedRoot.setAttribute('height', String(h));
-
-      const defsList = Array.from(rootSvg.querySelectorAll('defs'));
-      for (const defs of defsList) {
-        clonedRoot.appendChild(defs.cloneNode(true));
-      }
-
-      if (!includeContext) {
-        const ancestors = [];
-        let node = el;
-        while (node && node !== rootSvg) {
-          ancestors.unshift(node);
-          node = node.parentNode;
+      let currentParent = clonedRoot;
+      for (const original of ancestors) {
+        const clone = original.cloneNode(false);
+        if (original === el) {
+          const fullSubtree = original.cloneNode(true);
+          currentParent.appendChild(fullSubtree);
+        } else {
+          const nextParent = clone;
+          currentParent.appendChild(nextParent);
+          currentParent = nextParent;
         }
-        let currentParent = clonedRoot;
-        for (const original of ancestors) {
-          const clone = original.cloneNode(false);
-          if (original === el) {
-            const fullSubtree = original.cloneNode(true);
-            currentParent.appendChild(fullSubtree);
-          } else {
-            const nextParent = clone;
-            currentParent.appendChild(nextParent);
-            currentParent = nextParent;
-          }
-        }
-      } else {
-        const children = Array.from(rootSvg.childNodes);
-        for (const child of children) {
-          if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'defs') {
-            continue;
-          }
-          clonedRoot.appendChild(child.cloneNode(true));
-        }
       }
+    } else {
+      const children = Array.from(rootSvg.childNodes);
+      for (const child of children) {
+        if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'defs') {
+          continue;
+        }
+        clonedRoot.appendChild(child.cloneNode(true));
+      }
+    }
 
-      const serializer = new XMLSerializer();
-      const svgString = serializer.serializeToString(clonedRoot);
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clonedRoot);
 
-      return {
-        bbox: { x, y, width: w, height: h },
-        svgString
-      };
-    }, elementId, margin, includeContext);
-  });
+    return {
+      bbox: { x, y, width: w, height: h },
+      svgString
+    };
+  }, elementId, margin, includeContext));
 
   fs.writeFileSync(outSvgPath, result.svgString, 'utf8');
 
@@ -1172,145 +1192,157 @@ async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMod
     fs.mkdirSync(outDir, { recursive: true });
   }
 
-  const exports = await withPageForSvg(inputPath, async (page) => {
-    return await page.evaluate(async (marginUser, exportGroups) => {
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) throw new Error('SvgVisualBBox not found.');
+  const exports = await withPageForSvg(inputPath, async (page) => await page.evaluate(async (marginUser, exportGroups) => {
+    const SvgVisualBBox = window.SvgVisualBBox;
+    if (!SvgVisualBBox) {
+      throw new Error('SvgVisualBBox not found.');
+    }
 
-      const rootSvg = document.querySelector('svg');
-      if (!rootSvg) throw new Error('No <svg> found');
+    const rootSvg = document.querySelector('svg');
+    if (!rootSvg) {
+      throw new Error('No <svg> found');
+    }
 
-      const serializer = new XMLSerializer();
+    const serializer = new XMLSerializer();
 
-      const baseTags = [
-        'path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline',
-        'text', 'image', 'use', 'symbol'
-      ];
-      const groupTag = 'g';
+    const baseTags = [
+      'path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline',
+      'text', 'image', 'use', 'symbol'
+    ];
+    const groupTag = 'g';
 
-      const selector = exportGroups
-        ? baseTags.concat(groupTag).join(',')
-        : baseTags.join(',');
+    const selector = exportGroups
+      ? baseTags.concat(groupTag).join(',')
+      : baseTags.join(',');
 
-      const allCandidates = Array.from(rootSvg.querySelectorAll(selector));
+    const allCandidates = Array.from(rootSvg.querySelectorAll(selector));
 
-      const usedIds = new Set();
-      for (const el of allCandidates) {
-        if (el.id) usedIds.add(el.id);
+    const usedIds = new Set();
+    for (const el of allCandidates) {
+      if (el.id) {
+        usedIds.add(el.id);
       }
-      function ensureId(el) {
-        if (el.id) return el.id;
-        const base = 'auto_id_' + el.tagName.toLowerCase();
-        let id = base;
-        let i = 1;
-        while (usedIds.has(id) || document.getElementById(id)) {
-          id = base + '_' + (i++);
-        }
-        el.setAttribute('id', id);
-        usedIds.add(id);
-        return id;
+    }
+    function ensureId(el) {
+      if (el.id) {
+        return el.id;
+      }
+      const base = 'auto_id_' + el.tagName.toLowerCase();
+      let id = base;
+      let i = 1;
+      while (usedIds.has(id) || document.getElementById(id)) {
+        id = base + '_' + (i++);
+      }
+      el.setAttribute('id', id);
+      usedIds.add(id);
+      return id;
+    }
+
+    const defsList = Array.from(rootSvg.querySelectorAll('defs'));
+
+    function makeRootSvgWithBBox(bbox) {
+      const clonedRoot = rootSvg.cloneNode(false);
+      if (!clonedRoot.getAttribute('xmlns')) {
+        clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
+      if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
+        clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
+      }
+      let { x, y, width, height } = bbox;
+      if (marginUser > 0) {
+        x -= marginUser;
+        y -= marginUser;
+        width += 2 * marginUser;
+        height += 2 * marginUser;
+      }
+      if (width <= 0 || height <= 0) {
+        return null;
+      }
+      clonedRoot.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+      clonedRoot.setAttribute('width', String(width));
+      clonedRoot.setAttribute('height', String(height));
+      for (const defs of defsList) {
+        clonedRoot.appendChild(defs.cloneNode(true));
+      }
+      return clonedRoot;
+    }
+
+    function tagEquals(el, tagName) {
+      return el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase();
+    }
+
+    const exports = [];
+
+    async function exportElement(el, prefix) {
+      const id = ensureId(el);
+      const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+        mode: 'unclipped',
+        coarseFactor: 3,
+        fineFactor: 24,
+        useLayoutScale: true
+      });
+      if (!bboxData) {
+        return;
       }
 
-      const defsList = Array.from(rootSvg.querySelectorAll('defs'));
-
-      function makeRootSvgWithBBox(bbox) {
-        const clonedRoot = rootSvg.cloneNode(false);
-        if (!clonedRoot.getAttribute('xmlns')) {
-          clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        }
-        const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
-        if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
-          clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
-        }
-        let { x, y, width, height } = bbox;
-        if (marginUser > 0) {
-          x -= marginUser;
-          y -= marginUser;
-          width += 2 * marginUser;
-          height += 2 * marginUser;
-        }
-        if (width <= 0 || height <= 0) return null;
-        clonedRoot.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
-        clonedRoot.setAttribute('width', String(width));
-        clonedRoot.setAttribute('height', String(height));
-        for (const defs of defsList) {
-          clonedRoot.appendChild(defs.cloneNode(true));
-        }
-        return clonedRoot;
+      const rootForExport = makeRootSvgWithBBox(bboxData);
+      if (!rootForExport) {
+        return;
       }
 
-      function tagEquals(el, tagName) {
-        return el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase();
+      const ancestors = [];
+      let node = el;
+      while (node && node !== rootSvg) {
+        ancestors.unshift(node);
+        node = node.parentNode;
       }
 
-      const exports = [];
-
-      async function exportElement(el, prefix) {
-        const id = ensureId(el);
-        const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-          mode: 'unclipped',
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true
-        });
-        if (!bboxData) return;
-
-        const rootForExport = makeRootSvgWithBBox(bboxData);
-        if (!rootForExport) return;
-
-        const ancestors = [];
-        let node = el;
-        while (node && node !== rootSvg) {
-          ancestors.unshift(node);
-          node = node.parentNode;
+      let currentParent = rootForExport;
+      for (const original of ancestors) {
+        const shallowClone = original.cloneNode(false);
+        if (original === el) {
+          const subtree = original.cloneNode(true);
+          currentParent.appendChild(subtree);
+        } else {
+          const nextParent = shallowClone;
+          currentParent.appendChild(nextParent);
+          currentParent = nextParent;
         }
+      }
 
-        let currentParent = rootForExport;
-        for (const original of ancestors) {
-          const shallowClone = original.cloneNode(false);
-          if (original === el) {
-            const subtree = original.cloneNode(true);
-            currentParent.appendChild(subtree);
-          } else {
-            const nextParent = shallowClone;
-            currentParent.appendChild(nextParent);
-            currentParent = nextParent;
+      const svgString = serializer.serializeToString(rootForExport);
+      const fileName = (prefix ? prefix + '_' : '') + id + '.svg';
+
+      exports.push({
+        id,
+        fileName,
+        bbox: {
+          x: bboxData.x,
+          y: bboxData.y,
+          width: bboxData.width,
+          height: bboxData.height
+        },
+        svgString
+      });
+
+      if (exportGroups && tagEquals(el, groupTag)) {
+        const children = Array.from(el.children);
+        for (const child of children) {
+          const tag = child.tagName.toLowerCase();
+          if (baseTags.includes(tag) || tag === groupTag) {
+            await exportElement(child, id);
           }
         }
-
-        const svgString = serializer.serializeToString(rootForExport);
-        const fileName = (prefix ? prefix + '_' : '') + id + '.svg';
-
-        exports.push({
-          id,
-          fileName,
-          bbox: {
-            x: bboxData.x,
-            y: bboxData.y,
-            width: bboxData.width,
-            height: bboxData.height
-          },
-          svgString
-        });
-
-        if (exportGroups && tagEquals(el, groupTag)) {
-          const children = Array.from(el.children);
-          for (const child of children) {
-            const tag = child.tagName.toLowerCase();
-            if (baseTags.includes(tag) || tag === groupTag) {
-              await exportElement(child, id);
-            }
-          }
-        }
       }
+    }
 
-      for (const el of allCandidates) {
-        await exportElement(el, '');
-      }
+    for (const el of allCandidates) {
+      await exportElement(el, '');
+    }
 
-      return exports;
-    }, margin, exportGroups);
-  });
+    return exports;
+  }, margin, exportGroups));
 
   if (!exports || exports.length === 0) {
     if (jsonMode) {
@@ -1386,111 +1418,117 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
     throw new Error('No valid mappings found in JSON.');
   }
 
-  const result = await withPageForSvg(inputPath, async (page) => {
-    return await page.evaluate((mappings) => {
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) throw new Error('SvgVisualBBox not found.');
+  const result = await withPageForSvg(inputPath, async (page) => await page.evaluate((mappings) => {
+    const SvgVisualBBox = window.SvgVisualBBox;
+    if (!SvgVisualBBox) {
+      throw new Error('SvgVisualBBox not found.');
+    }
 
-      const rootSvg = document.querySelector('svg');
-      if (!rootSvg) throw new Error('No <svg> found');
+    const rootSvg = document.querySelector('svg');
+    if (!rootSvg) {
+      throw new Error('No <svg> found');
+    }
 
-      function isValidIdName(id) {
-        return /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(id);
+    function isValidIdName(id) {
+      return /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(id);
+    }
+
+    const allWithId = rootSvg.ownerDocument.querySelectorAll('[id]');
+    const existingIds = new Set();
+    allWithId.forEach(el => existingIds.add(el.id));
+
+    const applied = [];
+    const skipped = [];
+    const usedTargets = new Set();
+    const seenFrom = new Set();
+
+    for (const m of mappings) {
+      const from = m.from;
+      const to = m.to;
+
+      if (!from || !to) {
+        skipped.push({ mapping: m, reason: 'Empty from/to' });
+        continue;
       }
 
-      const allWithId = rootSvg.ownerDocument.querySelectorAll('[id]');
-      const existingIds = new Set();
-      allWithId.forEach(el => existingIds.add(el.id));
-
-      const applied = [];
-      const skipped = [];
-      const usedTargets = new Set();
-      const seenFrom = new Set();
-
-      for (const m of mappings) {
-        const from = m.from;
-        const to = m.to;
-
-        if (!from || !to) {
-          skipped.push({ mapping: m, reason: 'Empty from/to' });
-          continue;
-        }
-
-        if (!isValidIdName(to)) {
-          skipped.push({ mapping: m, reason: 'Invalid target ID syntax' });
-          continue;
-        }
-
-        if (seenFrom.has(from)) {
-          skipped.push({ mapping: m, reason: 'Duplicate source ID; earlier mapping wins' });
-          continue;
-        }
-
-        const el = rootSvg.ownerDocument.getElementById(from);
-        if (!el) {
-          skipped.push({ mapping: m, reason: 'Source ID not found in SVG' });
-          continue;
-        }
-
-        if (from === to) {
-          skipped.push({ mapping: m, reason: 'Source and target IDs are the same' });
-          continue;
-        }
-
-        if (existingIds.has(to) && to !== from) {
-          skipped.push({ mapping: m, reason: 'Target ID already exists in SVG' });
-          continue;
-        }
-
-        if (usedTargets.has(to) && to !== from) {
-          skipped.push({ mapping: m, reason: 'Target ID already used by a previous mapping' });
-          continue;
-        }
-
-        // Apply the rename
-        seenFrom.add(from);
-        usedTargets.add(to);
-        existingIds.delete(from);
-        existingIds.add(to);
-
-        el.setAttribute('id', to);
-
-        // Update references: href, xlink:href, url(#from) in attributes
-        const allEls = rootSvg.ownerDocument.querySelectorAll('*');
-        const oldRef = '#' + from;
-        const newRef = '#' + to;
-        const urlOld = 'url(#' + from + ')';
-        const urlNew = 'url(#' + to + ')';
-
-        allEls.forEach(node => {
-          if (node.hasAttribute('href')) {
-            const v = node.getAttribute('href');
-            if (v === oldRef) node.setAttribute('href', newRef);
-          }
-          if (node.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')) {
-            const v = node.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
-            if (v === oldRef) {
-              node.setAttributeNS('http://www.w3.org/1999/xlink', 'href', newRef);
-            }
-          }
-          for (const attr of Array.from(node.attributes)) {
-            const val = attr.value;
-            if (!val) continue;
-            if (val.indexOf(urlOld) !== -1) {
-              node.setAttribute(attr.name, val.split(urlOld).join(urlNew));
-            }
-          }
-        });
-
-        applied.push({ from, to });
+      if (!isValidIdName(to)) {
+        skipped.push({ mapping: m, reason: 'Invalid target ID syntax' });
+        continue;
       }
 
-      const serializer = new XMLSerializer();
-      const svgString = serializer.serializeToString(rootSvg);
+      if (seenFrom.has(from)) {
+        skipped.push({ mapping: m, reason: 'Duplicate source ID; earlier mapping wins' });
+        continue;
+      }
 
-      return { svgString, applied, skipped };
-    }, mappings);
-  });
+      const el = rootSvg.ownerDocument.getElementById(from);
+      if (!el) {
+        skipped.push({ mapping: m, reason: 'Source ID not found in SVG' });
+        continue;
+      }
+
+      if (from === to) {
+        skipped.push({ mapping: m, reason: 'Source and target IDs are the same' });
+        continue;
+      }
+
+      if (existingIds.has(to) && to !== from) {
+        skipped.push({ mapping: m, reason: 'Target ID already exists in SVG' });
+        continue;
+      }
+
+      if (usedTargets.has(to) && to !== from) {
+        skipped.push({ mapping: m, reason: 'Target ID already used by a previous mapping' });
+        continue;
+      }
+
+      // Apply the rename
+      seenFrom.add(from);
+      usedTargets.add(to);
+      existingIds.delete(from);
+      existingIds.add(to);
+
+      el.setAttribute('id', to);
+
+      // Update references: href, xlink:href, url(#from) in attributes
+      const allEls = rootSvg.ownerDocument.querySelectorAll('*');
+      const oldRef = '#' + from;
+      const newRef = '#' + to;
+      const urlOld = 'url(#' + from + ')';
+      const urlNew = 'url(#' + to + ')';
+
+      allEls.forEach(node => {
+        if (node.hasAttribute('href')) {
+          const v = node.getAttribute('href');
+          if (v === oldRef) {
+            node.setAttribute('href', newRef);
+          }
+        }
+        if (node.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')) {
+          const v = node.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+          if (v === oldRef) {
+            node.setAttributeNS('http://www.w3.org/1999/xlink', 'href', newRef);
+          }
+        }
+        for (const attr of Array.from(node.attributes)) {
+          const val = attr.value;
+          if (!val) {
+            continue;
+          }
+          if (val.indexOf(urlOld) !== -1) {
+            node.setAttribute(attr.name, val.split(urlOld).join(urlNew));
+          }
+        }
+      });
+
+      applied.push({ from, to });
+    }
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(rootSvg);
+
+    return { svgString, applied, skipped };
+  }, mappings));
 
   fs.writeFileSync(renameOutPath, result.svgString, 'utf8');
 

@@ -71,7 +71,9 @@ function parseArgs(argv) {
       const next = typeof val === 'undefined' ? args[i + 1] : val;
 
       function useNext() {
-        if (typeof val === 'undefined') i++;
+        if (typeof val === 'undefined') {
+          i++;
+        }
       }
 
       switch (name) {
@@ -286,13 +288,17 @@ ${svgContent}
         let node = el;
         while (node) {
           allowed.add(node);
-          if (node === svg) break;
+          if (node === svg) {
+            break;
+          }
           node = node.parentNode;
         }
         const all = Array.from(svg.querySelectorAll('*'));
         for (const child of all) {
           const tag = child.tagName && child.tagName.toLowerCase();
-          if (tag === 'defs') continue;
+          if (tag === 'defs') {
+            continue;
+          }
           if (!allowed.has(child) && !child.contains(el)) {
             child.setAttribute('display', 'none');
           }
@@ -320,7 +326,7 @@ ${svgContent}
       }
 
       // Apply margin in SVG units
-      let expanded = {
+      const expanded = {
         x: targetBBox.x,
         y: targetBBox.y,
         width: targetBBox.width,
@@ -364,8 +370,8 @@ ${svgContent}
         ? optsInPage.scale
         : 4;
 
-      let pixelWidth = optsInPage.width || Math.max(1, Math.round(expanded.width * scale));
-      let pixelHeight = optsInPage.height || Math.max(1, Math.round(expanded.height * scale));
+      const pixelWidth = optsInPage.width || Math.max(1, Math.round(expanded.width * scale));
+      const pixelHeight = optsInPage.height || Math.max(1, Math.round(expanded.height * scale));
 
       // Update SVG sizing in the DOM
       svg.removeAttribute('width');
@@ -417,8 +423,8 @@ ${svgContent}
     console.log(`✓ Rendered: ${output}`);
     console.log(`  mode: ${measure.mode}`);
     console.log(`  viewBox: ${measure.viewBox}`);
-    console.log(`  bbox (original target):`, measure.targetBBox);
-    console.log(`  bbox (with margin):`, measure.expandedBBox);
+    console.log('  bbox (original target):', measure.targetBBox);
+    console.log('  bbox (with margin):', measure.expandedBBox);
     console.log(`  size: ${measure.pixelWidth}×${measure.pixelHeight}px`);
     console.log(`  background: ${opts.background}`);
     console.log(`  margin (user units): ${opts.margin}`);

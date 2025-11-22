@@ -51,7 +51,7 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] }
-    },
+    }
 
     // Uncomment to test on Firefox and WebKit
     // {
@@ -62,7 +62,7 @@ export default defineConfig({
     //   name: 'webkit',
     //   use: { ...devices['Desktop Safari'] }
     // }
-  ],
+  ]
 
   // Run local dev server before starting tests (if needed)
   // webServer: {
