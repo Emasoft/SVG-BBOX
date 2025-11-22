@@ -139,6 +139,35 @@
   }
 
   /**
+   * INTERNAL: Save debug SVG to global for error handling
+   * @param {SVGSVGElement} svgRoot
+   */
+  function saveDebugSvgToGlobal(svgRoot) {
+    if (!svgRoot) return;
+
+    try {
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgRoot);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5);
+      const svgId = svgRoot.id || 'svg';
+
+      // Store in global for error handler to access
+      if (typeof window !== 'undefined') {
+        window.__DEBUG_SVG_DATA__ = {
+          content: svgString,
+          filename: `${svgId}_debug_${timestamp}.svg`,
+          timestamp: timestamp
+        };
+      }
+    } catch (e) {
+      // Silently fail
+      if (DEBUG && typeof console !== 'undefined' && console.warn) {
+        console.warn('[DEBUG] Failed to save debug SVG data:', e);
+      }
+    }
+  }
+
+  /**
    * INTERNAL: Get auto-ID warning text if any IDs are auto-generated
    * @param {SVGElement} el
    * @param {SVGSVGElement} svgRoot
@@ -153,23 +182,27 @@
       return '';
     }
 
+    // Save debug SVG to global for Node.js error handler to save
+    saveDebugSvgToGlobal(svgRoot);
+
+    const elementId = el && el.id ? el.id : '(none)';
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5);
+    const svgId = svgRoot && svgRoot.id ? svgRoot.id : 'svg';
+    const debugFilename = `${svgId}_debug_${timestamp}.svg`;
 
     return `\n` +
       `⚠️  AUTO-GENERATED ID WARNING:\n` +
       `   The IDs shown above were automatically assigned by export-svg-objects.js.\n` +
       `   These IDs DO NOT EXIST in your original SVG file!\n` +
       `\n` +
+      `   🔍 DEBUG SVG WILL BE AUTOMATICALLY SAVED:\n` +
+      `   ${debugFilename}\n` +
+      `\n` +
       `   To find this element in your original SVG:\n` +
-      `   1. Save a debug version with all auto-generated IDs:\n` +
-      `      node export-svg-objects.js your-file.svg --list --assign-ids \\\n` +
-      `        --out-fixed your-file_debug_${timestamp}.svg\n` +
-      `\n` +
-      `   2. Open the debug SVG and search for the ID "${el.id || '(none)'}"\n` +
-      `      to locate the problematic element\n` +
-      `\n` +
-      `   3. Identify the element by its visual position, tag type, and attributes\n` +
-      `      in your original SVG file\n`;
+      `   1. Open the debug SVG file (saved automatically in current directory)\n` +
+      `   2. Search for the ID "${elementId}" to locate the problematic element\n` +
+      `   3. Note the element's position, visual appearance, and attributes\n` +
+      `   4. Find the corresponding element in your original SVG using these details\n`;
   }
 
   /**

@@ -152,21 +152,44 @@ export async function callLibraryFunction(page, functionName, ...args) {
  * @returns {Promise<object|null>}
  */
 export async function getBBoxById(page, elementId, options = {}) {
-  return page.evaluate(
-    async (id, opts) => {
-      const lib = window.SvgVisualBBox;
-      if (!lib) {
-        throw new Error('SvgVisualBBox not loaded');
+  try {
+    return await page.evaluate(
+      async (id, opts) => {
+        const lib = window.SvgVisualBBox;
+        if (!lib) {
+          throw new Error('SvgVisualBBox not loaded');
+        }
+        const el = document.getElementById(id);
+        if (!el) {
+          throw new Error(`Element not found: ${id}`);
+        }
+        return lib.getSvgElementVisualBBoxTwoPassAggressive(el, opts);
+      },
+      elementId,
+      options
+    );
+  } catch (error) {
+    // Check if there's debug SVG data to save
+    const debugData = await page.evaluate(() => {
+      return window.__DEBUG_SVG_DATA__ || null;
+    });
+
+    if (debugData && debugData.content && debugData.filename) {
+      // Save debug SVG to current directory
+      const debugPath = path.join(process.cwd(), debugData.filename);
+      fs.writeFileSync(debugPath, debugData.content, 'utf8');
+
+      // Add the saved path to error message
+      if (error.message) {
+        error.message = error.message.replace(
+          /DEBUG SVG WILL BE AUTOMATICALLY SAVED:\s+([^\n]+)/,
+          `DEBUG SVG AUTOMATICALLY SAVED:\n   ✓ ${debugPath}`
+        );
       }
-      const el = document.getElementById(id);
-      if (!el) {
-        throw new Error(`Element not found: ${id}`);
-      }
-      return lib.getSvgElementVisualBBoxTwoPassAggressive(el, opts);
-    },
-    elementId,
-    options
-  );
+    }
+
+    throw error;
+  }
 }
 
 /**
