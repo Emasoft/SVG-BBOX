@@ -537,7 +537,16 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       fixedSvgString = serializer.serializeToString(rootSvg);
     }
 
-    const rootSvgMarkup = serializer.serializeToString(rootSvg);
+    // CRITICAL FIX: Remove viewBox, width, height, x, y from root SVG in hidden container
+    // These attributes constrain the coordinate system and cause preview viewBoxes to be wrong
+    // When <use> references elements, they should not be clipped by the original viewBox
+    const clonedForMarkup = rootSvg.cloneNode(true);
+    clonedForMarkup.removeAttribute('viewBox');
+    clonedForMarkup.removeAttribute('width');
+    clonedForMarkup.removeAttribute('height');
+    clonedForMarkup.removeAttribute('x');
+    clonedForMarkup.removeAttribute('y');
+    const rootSvgMarkup = serializer.serializeToString(clonedForMarkup);
 
     return { info, fixedSvgString, rootSvgMarkup };
   }, assignIds));
