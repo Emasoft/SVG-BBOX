@@ -1,10 +1,8 @@
-import { defineConfig, devices } from '@playwright/test';
-
 /**
  * Playwright configuration for E2E testing of HTML interactive features
- * @see https://playwright.dev/docs/test-configuration
+ * Compatible with Playwright 1.x in ESM mode
  */
-export default defineConfig({
+export default {
   testDir: './tests/e2e',
 
   // Maximum time one test can run for
@@ -24,9 +22,6 @@ export default defineConfig({
 
   // Shared settings for all projects
   use: {
-    // Base URL for navigating in tests
-    baseURL: 'file://' + process.cwd(),
-
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
 
@@ -50,24 +45,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        browserName: 'chromium',
+        channel: 'chrome'
+      }
     }
-
-    // Uncomment to test on Firefox and WebKit
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] }
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] }
-    // }
   ]
-
-  // Run local dev server before starting tests (if needed)
-  // webServer: {
-  //   command: 'npm run start',
-  //   url: 'http://localhost:3000',
-  //   reuseExistingServer: !process.env.CI
-  // }
-});
+};

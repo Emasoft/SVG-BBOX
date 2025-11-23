@@ -88,9 +88,9 @@ cd svg-visual-bbox-toolkit
 All scripts use [Puppeteer](https://github.com/puppeteer/puppeteer) under the hood:
 
 ```bash
-npm install
+pnpm install
 # or, if you prefer direct:
-npm install puppeteer
+pnpm add puppeteer
 ```
 
 3. **Make scripts executable (optional, on macOS/Linux)**
