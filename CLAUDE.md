@@ -275,6 +275,63 @@ node fix_svg_viewbox.js broken.svg fixed.svg
 node render_svg_chrome.js drawing.svg preview.png --mode visible --scale 2 --background transparent
 ```
 
+## Critical Implementation Details
+
+### HTML Preview Rendering (`export-svg-objects.cjs --list`)
+
+The HTML object catalog uses `<use href="#element-id" />` to reference elements from a hidden SVG container. This requires careful handling of transforms to ensure accurate previews.
+
+**CRITICAL BUG TO AVOID: `<use>` does NOT inherit parent group transforms!**
+
+#### The Problem
+
+When an SVG element has parent groups with transforms, the `<use>` element ONLY applies the element's local transform, NOT the parent transforms.
+
+**Example:**
+```xml
+<!-- Original SVG structure -->
+<g id="g37" transform="translate(-13.613145,-10.209854)">
+  <text id="text8" transform="scale(0.86535508,1.155595)">Λοπ</text>
+</g>
+
+<!-- In original: final transform = translate(...) scale(...) ✓ -->
+<!-- With <use>: only applies scale(...) ✗ WRONG! -->
+```
+
+When HTML preview does `<use href="#text8" />`, it applies:
+- ✓ text8's local `scale(0.86535508,1.155595)`
+- ✗ **MISSING** g37's parent `translate(-13.613145,-10.209854)`
+
+**Result:** Preview appears shifted/mispositioned compared to original SVG.
+
+#### The Solution
+
+Wrap `<use>` in a `<g>` element with collected parent transforms:
+
+```html
+<!-- CORRECT: Apply parent transforms explicitly -->
+<svg viewBox="-455.64 1474.75 394.40 214.40">
+  <g transform="translate(-13.613145,-10.209854)">
+    <use href="#text8" />
+  </g>
+</svg>
+```
+
+Now the transform chain is complete:
+1. Parent translate (applied to wrapper `<g>`)
+2. Element scale (from text8's local transform)
+3. Element content
+
+**Implementation:** The code collects all ancestor group transforms during SVG analysis and stores them in `parentTransforms` object. When generating HTML previews, it wraps `<use>` elements in `<g transform="...">` if parent transforms exist.
+
+#### Other HTML Preview Requirements
+
+1. **Remove viewBox from hidden container SVG:** The root SVG in the hidden container must have NO `viewBox`, `width`, `height`, `x`, or `y` attributes. These constrain the coordinate system and cause preview viewBoxes to be clipped incorrectly.
+
+2. **Preview SVGs use only viewBox:** Preview `<svg>` elements should use `viewBox` only (no `width`/`height` attributes in user units). CSS `max-width` and `max-height` handle display sizing.
+
+3. **Coordinate precision:** BBox measurements use the full precision of the library (typically 6-8 decimal places) to ensure pixel-perfect alignment.
+
 ## Troubleshooting
 
 ### Puppeteer/Browser Launch Fails

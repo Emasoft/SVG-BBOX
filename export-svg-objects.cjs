@@ -548,14 +548,58 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     clonedForMarkup.removeAttribute('y');
     const rootSvgMarkup = serializer.serializeToString(clonedForMarkup);
 
-    return { info, fixedSvgString, rootSvgMarkup };
+    // CRITICAL: Collect parent transforms for HTML preview rendering
+    //
+    // ROOT CAUSE OF PREVIEW BUG:
+    // When using <use href="#element-id" />, SVG does NOT apply parent group transforms!
+    //
+    // Example from test_text_to_path_advanced.svg:
+    //   <g id="g37" transform="translate(-13.613145,-10.209854)">
+    //     <text id="text8" transform="scale(0.86535508,1.155595)">...</text>
+    //   </g>
+    //
+    // In the original SVG, text8's final transform is:
+    //   translate(-13.613145,-10.209854) scale(0.86535508,1.155595)
+    //
+    // But when HTML preview does <use href="#text8" />, it ONLY applies:
+    //   scale(0.86535508,1.155595)  ← Missing parent translate!
+    //
+    // SOLUTION: Wrap <use> in a <g> with parent transforms:
+    //   <g transform="translate(-13.613145,-10.209854)">
+    //     <use href="#text8" />
+    //   </g>
+    //
+    // This ensures the preview matches the original rendering exactly.
+    const parentTransforms = {};
+    info.forEach(obj => {
+      const el = rootSvg.getElementById(obj.id);
+      if (!el) return;
+
+      // Collect transforms from all ancestor groups (bottom-up, then reverse for correct order)
+      const transforms = [];
+      let node = el.parentNode;
+      while (node && node !== rootSvg) {
+        const transform = node.getAttribute('transform');
+        if (transform) {
+          transforms.unshift(transform);  // Prepend to maintain parent→child order
+        }
+        node = node.parentNode;
+      }
+
+      if (transforms.length > 0) {
+        parentTransforms[obj.id] = transforms.join(' ');
+      }
+    });
+
+    return { info, fixedSvgString, rootSvgMarkup, parentTransforms };
   }, assignIds));
 
   // Build HTML listing file
   const html = buildListHtml(
     path.basename(inputPath),
     result.rootSvgMarkup,
-    result.info
+    result.info,
+    result.parentTransforms
   );
   fs.writeFileSync(outHtmlPath, html, 'utf8');
 
@@ -633,7 +677,7 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
   }
 }
 
-function buildListHtml(titleName, rootSvgMarkup, objects) {
+function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {}) {
   const safeTitle = String(titleName || 'SVG');
   const rows = [];
 
@@ -682,11 +726,19 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
           </div>`;
       } else {
         const viewBoxStr = `${x} ${y} ${w} ${h}`;
+        // Apply parent transforms if they exist (critical for elements with local transforms)
+        const parentTransform = parentTransforms[id] || '';
+        const useElement = id
+          ? (parentTransform
+              ? `<g transform="${parentTransform}"><use href="#${id}" /></g>`
+              : `<use href="#${id}" />`)
+          : '';
+
         previewCell = `
           <div style="width:120px; height:120px; display:flex; align-items:center; justify-content:center; border:1px solid #ccc; background:#fdfdfd;">
             <svg viewBox="${viewBoxStr}"
                  style="max-width:120px; max-height:120px; display:block;">
-              ${id ? `<use href="#${id}" />` : ''}
+              ${useElement}
             </svg>
           </div>`;
       }
