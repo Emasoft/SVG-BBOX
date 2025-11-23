@@ -684,8 +684,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
         const viewBoxStr = `${x} ${y} ${w} ${h}`;
         previewCell = `
           <div style="width:120px; height:120px; display:flex; align-items:center; justify-content:center; border:1px solid #ccc; background:#fdfdfd;">
-            <svg width="${w}" height="${h}"
-                 viewBox="${viewBoxStr}"
+            <svg viewBox="${viewBoxStr}"
                  style="max-width:120px; max-height:120px; display:block;">
               ${id ? `<use href="#${id}" />` : ''}
             </svg>
