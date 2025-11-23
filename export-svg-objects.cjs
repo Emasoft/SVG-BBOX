@@ -492,6 +492,7 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
 
       // Compute visual bbox (may fail / be null)
       let bbox = null;
+      let bboxError = null;
       try {
         const b = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
           mode: 'unclipped',
@@ -501,15 +502,18 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
         });
         if (b) {
           bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
+        } else {
+          bboxError = 'No visible pixels detected';
         }
-      } catch (_) {
-        // ignore bbox errors
+      } catch (err) {
+        bboxError = err.message || 'BBox measurement failed';
       }
 
       info.push({
         tagName: el.tagName,
         id,
         bbox,
+        bboxError,
         groups: groupIds
       });
     }
@@ -536,11 +540,21 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     fs.writeFileSync(outFixedPath, result.fixedSvgString, 'utf8');
   }
 
+  // Count bbox failures
+  const totalObjects = result.info.length;
+  const failedObjects = result.info.filter(obj => obj.bboxError).length;
+  const zeroSizeObjects = result.info.filter(obj =>
+    obj.bbox && (obj.bbox.width === 0 || obj.bbox.height === 0)
+  ).length;
+
   if (jsonMode) {
     const jsonOut = {
       mode: 'list',
       input: path.resolve(inputPath),
       objects: result.info || [],
+      totalObjects,
+      bboxFailures: failedObjects,
+      zeroSizeObjects,
       fixedSvgWritten: !!(assignIds && result.fixedSvgString && outFixedPath),
       fixedSvgPath: (assignIds && outFixedPath) ? path.resolve(outFixedPath) : null,
       htmlWritten: !!outHtmlPath,
@@ -558,6 +572,14 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       console.log('     objects, and fill the "New ID name" column to generate a');
       console.log('     JSON rename mapping.');
     }
+    console.log('');
+    console.log(`Objects found: ${totalObjects}`);
+    if (failedObjects > 0) {
+      console.log(`⚠️  BBox measurement FAILED for ${failedObjects} object(s) - marked with ❌ in HTML`);
+    }
+    if (zeroSizeObjects > 0) {
+      console.log(`⚠️  ${zeroSizeObjects} object(s) have zero width/height - marked with ⚠️ in HTML`);
+    }
   }
 }
 
@@ -570,15 +592,62 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
     const id = obj.id || '';
     const tagName = obj.tagName || '';
     const bbox = obj.bbox;
+    const bboxError = obj.bboxError;
     const groups = Array.isArray(obj.groups) ? obj.groups : [];
 
-    const x = bbox && isFinite(bbox.x) ? bbox.x : 0;
-    const y = bbox && isFinite(bbox.y) ? bbox.y : 0;
-    const w = bbox && isFinite(bbox.width) && bbox.width > 0 ? bbox.width : 100;
-    const h = bbox && isFinite(bbox.height) && bbox.height > 0 ? bbox.height : 100;
-
-    const viewBoxStr = `${x} ${y} ${w} ${h}`;
     const groupsStr = groups.join(',');
+
+    // If bbox measurement failed, show error instead of default
+    let previewCell;
+    let dataAttrs;
+
+    if (bboxError || !bbox) {
+      const errorMsg = bboxError || 'BBox is null';
+      previewCell = `
+        <div style="width:120px; height:120px; display:flex; align-items:center; justify-content:center; border:1px solid #f00; background:#ffe5e5; padding:8px; box-sizing:border-box;">
+          <div style="font-size:0.7rem; color:#b00020; text-align:center;">
+            ❌ BBox Failed<br>
+            <span style="font-size:0.65rem;">${errorMsg.replace(/"/g, '&quot;')}</span>
+          </div>
+        </div>`;
+      dataAttrs = `
+        data-x=""
+        data-y=""
+        data-w=""
+        data-h=""
+        data-bbox-error="${errorMsg.replace(/"/g, '&quot;')}"`;
+    } else {
+      const x = isFinite(bbox.x) ? bbox.x : 0;
+      const y = isFinite(bbox.y) ? bbox.y : 0;
+      const w = isFinite(bbox.width) && bbox.width > 0 ? bbox.width : 0;
+      const h = isFinite(bbox.height) && bbox.height > 0 ? bbox.height : 0;
+
+      if (w === 0 || h === 0) {
+        previewCell = `
+          <div style="width:120px; height:120px; display:flex; align-items:center; justify-content:center; border:1px solid #f90; background:#fff3e5; padding:8px; box-sizing:border-box;">
+            <div style="font-size:0.7rem; color:#f60; text-align:center;">
+              ⚠️ Zero Size<br>
+              <span style="font-size:0.65rem;">w=${w} h=${h}</span>
+            </div>
+          </div>`;
+      } else {
+        const viewBoxStr = `${x} ${y} ${w} ${h}`;
+        previewCell = `
+          <div style="width:120px; height:120px; display:flex; align-items:center; justify-content:center; border:1px solid #ccc; background:#fdfdfd;">
+            <svg width="${w}" height="${h}"
+                 viewBox="${viewBoxStr}"
+                 style="max-width:120px; max-height:120px; display:block;">
+              ${id ? `<use href="#${id}" />` : ''}
+            </svg>
+          </div>`;
+      }
+
+      dataAttrs = `
+        data-x="${x}"
+        data-y="${y}"
+        data-w="${w}"
+        data-h="${h}"`;
+    }
 
     rows.push(`
       <tr
@@ -586,23 +655,12 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
         data-id="${id.replace(/"/g, '&quot;')}"
         data-tag="${tagName.replace(/"/g, '&quot;')}"
         data-groups="${groupsStr.replace(/"/g, '&quot;')}"
-        data-x="${x}"
-        data-y="${y}"
-        data-w="${w}"
-        data-h="${h}"
+        ${dataAttrs}
       >
         <td class="row-index-cell">${rowIndex}</td>
         <td style="white-space:nowrap;"><code>${id}</code></td>
         <td><code>&lt;${tagName}&gt;</code></td>
-        <td>
-          <div style="width:120px; height:120px; display:flex; align-items:center; justify-content:center; border:1px solid #ccc; background:#fdfdfd;">
-            <svg width="${w}" height="${h}"
-                 viewBox="${viewBoxStr}"
-                 style="max-width:120px; max-height:120px; display:block;">
-              ${id ? `<use href="#${id}" />` : ''}
-            </svg>
-          </div>
-        </td>
+        <td>${previewCell}</td>
         <td>
           <label style="display:flex; flex-direction:column; gap:2px;">
             <span style="display:flex; gap:4px; align-items:center;">
