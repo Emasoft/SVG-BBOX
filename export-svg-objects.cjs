@@ -12,6 +12,7 @@
  *   node extract_svg_objects.js input.svg --list
  *     [--assign-ids --out-fixed fixed.svg]
  *     [--out-html list.html]
+ *     [--auto-open]
  *     [--json]
  *
  *   • Produces an HTML page with a big table of objects:
@@ -151,6 +152,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { execFile } = require('child_process');
 
 // -------- CLI parsing --------
 
@@ -163,6 +165,7 @@ function parseArgs(argv) {
       '  node extract_svg_objects.js input.svg --list\n' +
       '    [--assign-ids --out-fixed fixed.svg]\n' +
       '    [--out-html list.html]\n' +
+      '    [--auto-open]\n' +
       '    [--json]\n\n' +
       '  # RENAME IDs USING A JSON MAPPING\n' +
       '  node extract_svg_objects.js input.svg --rename mapping.json output.svg [--json]\n\n' +
@@ -205,7 +208,8 @@ function parseArgs(argv) {
     json: false,
     outHtml: null,
     renameJson: null,
-    renameOut: null
+    renameOut: null,
+    autoOpen: false       // automatically open HTML in browser
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -262,6 +266,9 @@ function parseArgs(argv) {
           break;
         case 'json':
           options.json = true;
+          break;
+        case 'auto-open':
+          options.autoOpen = true;
           break;
         case 'rename':
           options.mode = 'rename';
@@ -428,7 +435,7 @@ ${svgContent}
 
 // -------- LIST mode: data + HTML with filters & rename UI --------
 
-async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath, jsonMode) {
+async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath, jsonMode, autoOpen) {
   const result = await withPageForSvg(inputPath, async (page) => await page.evaluate(async (assignIds) => {
     const SvgVisualBBox = window.SvgVisualBBox;
     if (!SvgVisualBBox) {
@@ -586,6 +593,33 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     }
     if (zeroSizeObjects > 0) {
       console.log(`⚠️  ${zeroSizeObjects} object(s) have zero width/height - marked with ⚠️ in HTML`);
+    }
+
+    // Auto-open HTML in browser if requested
+    if (autoOpen) {
+      const absolutePath = path.resolve(outHtmlPath);
+
+      // Use execFile for security (no shell injection)
+      let command, args;
+      if (process.platform === 'darwin') {
+        command = 'open';
+        args = ['-a', 'Google Chrome', absolutePath];
+      } else if (process.platform === 'win32') {
+        command = 'cmd';
+        args = ['/c', 'start', 'chrome', absolutePath];
+      } else {
+        command = 'xdg-open';
+        args = [absolutePath];
+      }
+
+      execFile(command, args, (error) => {
+        if (error) {
+          console.log(`\n⚠️  Could not auto-open browser: ${error.message}`);
+          console.log(`   Please open manually: ${absolutePath}`);
+        } else {
+          console.log(`\n✓ Opened in browser: ${absolutePath}`);
+        }
+      });
     }
   }
 }
@@ -1629,7 +1663,7 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
 
   try {
     if (opts.mode === 'list') {
-      await listAndAssignIds(opts.input, opts.assignIds, opts.outFixed, opts.outHtml, opts.json);
+      await listAndAssignIds(opts.input, opts.assignIds, opts.outFixed, opts.outHtml, opts.json, opts.autoOpen);
     } else if (opts.mode === 'extract') {
       await extractSingleObject(
         opts.input,
