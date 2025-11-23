@@ -3,10 +3,13 @@
  * Fix SVG files missing width/height/viewBox using Puppeteer + SvgVisualBBox.
  *
  * Usage:
- *   node fix_svg_viewbox.js input.svg [output.svg]
+ *   node fix_svg_viewbox.js input.svg [output.svg] [--auto-open]
  *
  * If output.svg is omitted, the script writes a new file named:
  *   <input>.fixed.svg
+ *
+ * Options:
+ *   --auto-open: Automatically open the fixed SVG in Google Chrome
  *
  * What it does:
  *   - Loads the SVG into a headless browser.
@@ -20,19 +23,32 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { execFile } = require('child_process');
 
 function parseArgs(argv) {
   const args = argv.slice(2);
   if (args.length < 1) {
-    console.error('Usage: node fix_svg_viewbox.js input.svg [output.svg]');
+    console.error('Usage: node fix_svg_viewbox.js input.svg [output.svg] [--auto-open]');
     process.exit(1);
   }
-  const input = args[0];
-  const output = args[1] || (input.replace(/\.svg$/i, '') + '.fixed.svg');
-  return { input, output };
+
+  const positional = [];
+  let autoOpen = false;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--auto-open') {
+      autoOpen = true;
+    } else {
+      positional.push(args[i]);
+    }
+  }
+
+  const input = positional[0];
+  const output = positional[1] || (input.replace(/\.svg$/i, '') + '.fixed.svg');
+  return { input, output, autoOpen };
 }
 
-async function fixSvgFile(inputPath, outputPath) {
+async function fixSvgFile(inputPath, outputPath, autoOpen = false) {
   const svgPath = path.resolve(inputPath);
   if (!fs.existsSync(svgPath)) {
     throw new Error('SVG file does not exist: ' + svgPath);
@@ -162,6 +178,33 @@ ${svgContent}
     // Wrap the fixed <svg> in an XML prolog if you like, or just save as-is
     fs.writeFileSync(outputPath, fixedSvgString, 'utf8');
     console.log(`✓ Fixed SVG saved to: ${outputPath}`);
+
+    // Auto-open SVG in browser if requested
+    if (autoOpen) {
+      const absolutePath = path.resolve(outputPath);
+
+      // Use execFile for security (no shell injection)
+      let command, args;
+      if (process.platform === 'darwin') {
+        command = 'open';
+        args = ['-a', 'Google Chrome', absolutePath];
+      } else if (process.platform === 'win32') {
+        command = 'cmd';
+        args = ['/c', 'start', 'chrome', absolutePath];
+      } else {
+        command = 'xdg-open';
+        args = [absolutePath];
+      }
+
+      execFile(command, args, (error) => {
+        if (error) {
+          console.log(`\n⚠️  Could not auto-open: ${error.message}`);
+          console.log(`   Please open manually: ${absolutePath}`);
+        } else {
+          console.log(`\n✓ Opened in browser: ${absolutePath}`);
+        }
+      });
+    }
   } finally {
     await browser.close();
   }
@@ -170,9 +213,9 @@ ${svgContent}
 // -------- entry point --------
 
 (async () => {
-  const { input, output } = parseArgs(process.argv);
+  const { input, output, autoOpen } = parseArgs(process.argv);
   try {
-    await fixSvgFile(input, output);
+    await fixSvgFile(input, output, autoOpen);
   } catch (err) {
     console.error('Error fixing SVG:', err.message || err);
     process.exit(1);

@@ -9,7 +9,8 @@
  *     [--scale N] \
  *     [--width W --height H] \
  *     [--background white|transparent|#rrggbb|...] \
- *     [--margin N]
+ *     [--margin N] \
+ *     [--auto-open]
  *
  * Modes:
  *   --mode full
@@ -40,6 +41,7 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 
 // ---------- simple CLI parsing ----------
 
@@ -47,7 +49,7 @@ function parseArgs(argv) {
   const args = argv.slice(2);
   if (args.length < 2) {
     console.error(
-      'Usage: node render_svg_chrome.js input.svg output.png [--mode full|visible|element] [--element-id ID] [--scale N] [--width W --height H] [--background white|transparent|#rrggbb|...] [--margin N]'
+      'Usage: node render_svg_chrome.js input.svg output.png [--mode full|visible|element] [--element-id ID] [--scale N] [--width W --height H] [--background white|transparent|#rrggbb|...] [--margin N] [--auto-open]'
     );
     process.exit(1);
   }
@@ -60,7 +62,8 @@ function parseArgs(argv) {
     width: null,
     height: null,
     background: 'white',
-    margin: 0
+    margin: 0,
+    autoOpen: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -107,6 +110,9 @@ function parseArgs(argv) {
             options.margin = 0;
           }
           useNext();
+          break;
+        case 'auto-open':
+          options.autoOpen = true;
           break;
         default:
           console.warn('Unknown option:', key);
@@ -440,6 +446,33 @@ ${svgContent}
     console.log(`  size: ${measure.pixelWidth}×${measure.pixelHeight}px`);
     console.log(`  background: ${opts.background}`);
     console.log(`  margin (user units): ${opts.margin}`);
+
+    // Auto-open PNG in browser/viewer if requested
+    if (opts.autoOpen) {
+      const absolutePath = path.resolve(output);
+
+      // Use execFile for security (no shell injection)
+      let command, args;
+      if (process.platform === 'darwin') {
+        command = 'open';
+        args = ['-a', 'Google Chrome', absolutePath];
+      } else if (process.platform === 'win32') {
+        command = 'cmd';
+        args = ['/c', 'start', 'chrome', absolutePath];
+      } else {
+        command = 'xdg-open';
+        args = [absolutePath];
+      }
+
+      execFile(command, args, (error) => {
+        if (error) {
+          console.log(`\n⚠️  Could not auto-open: ${error.message}`);
+          console.log(`   Please open manually: ${absolutePath}`);
+        } else {
+          console.log(`\n✓ Opened in viewer: ${absolutePath}`);
+        }
+      });
+    }
   } finally {
     await browser.close();
   }
