@@ -43,9 +43,14 @@
  *        - full:    bbox ignoring viewBox clipping (whole drawing ROI)
  *
  *  - getSvgRootViewBoxExpansionForFullDrawing(svgRootOrId, options?)
- *      For a root <svg> with a viewBox, computes how much padding you’d
+ *      For a root <svg> with a viewBox, computes how much padding you'd
  *      need to expand the viewBox so its visible area fully covers the
- *      drawing’s full visual bbox.
+ *      drawing's full visual bbox.
+ *
+ *  - showTrueBBoxBorder(target, options?)
+ *      Visual debug helper: displays a dotted border around any SVG element's
+ *      true visual bounding box. Auto-detects dark/light theme. Works with all
+ *      SVG types. Returns {bbox, overlay, remove()} for cleanup.
  *
  * Usage
  * -----
@@ -1370,12 +1375,226 @@
     };
   }
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════════
+   * showTrueBBoxBorder - Visual Debug Helper for Browser Usage
+   * ═══════════════════════════════════════════════════════════════════════════════
+   *
+   * Displays a dotted border around any SVG element's true visual bounding box.
+   * Works with all SVG types: inline, embedded, sprites, objects, dynamically generated.
+   *
+   * Features:
+   *   - Automatic dark/light theme detection for visibility
+   *   - Non-intrusive overlay (doesn't modify SVG content)
+   *   - Handles all SVG embedding methods
+   *   - Returns cleanup function to remove border
+   *
+   * @param {string|SVGElement|HTMLElement} target - SVG element selector, element, or container
+   * @param {Object} options - Configuration options
+   * @param {string} options.theme - Force color theme: 'light', 'dark', or 'auto' (default: 'auto')
+   * @param {string} options.borderColor - Override theme color with custom color (default: theme-based)
+   * @param {string} options.borderWidth - Border width (default: '2px')
+   * @param {string} options.borderStyle - Border style (default: 'dashed')
+   * @param {number} options.padding - Padding around border in pixels (default: 4)
+   * @param {number} options.zIndex - Z-index for overlay (default: 999999)
+   * @param {Object} options.bboxOptions - Options passed to getSvgElementVisualBBoxTwoPassAggressive
+   *
+   * @returns {Promise<Object>} Object with {bbox, overlay, remove()} where:
+   *   - bbox: The computed bounding box {x, y, width, height}
+   *   - overlay: The DOM element showing the border
+   *   - remove(): Function to remove the border overlay
+   *
+   * @example
+   * // Show border on an inline SVG element
+   * const result = await SvgVisualBBox.showTrueBBoxBorder('#myText');
+   * // Later: result.remove();
+   *
+   * @example
+   * // Force dark theme (for light backgrounds)
+   * const result = await SvgVisualBBox.showTrueBBoxBorder('#myPath', {
+   *   theme: 'dark'  // Forces dark border regardless of system theme
+   * });
+   *
+   * @example
+   * // Show border with custom styling
+   * const result = await SvgVisualBBox.showTrueBBoxBorder('#myPath', {
+   *   borderColor: 'red',
+   *   borderWidth: '3px',
+   *   padding: 10
+   * });
+   *
+   * @example
+   * // Show border on dynamically created SVG
+   * const svgEl = document.querySelector('svg');
+   * const result = await SvgVisualBBox.showTrueBBoxBorder(svgEl);
+   */
+  async function showTrueBBoxBorder(target, options = {}) {
+    // Resolve target to SVG element
+    let svgElement = null;
+
+    if (typeof target === 'string') {
+      // Selector string
+      svgElement = document.querySelector(target);
+      if (!svgElement) {
+        throw new Error(`SVG element not found: ${target}`);
+      }
+    } else if (target instanceof Element) {
+      svgElement = target;
+    } else {
+      throw new Error('Target must be a selector string or DOM element');
+    }
+
+    // Handle different SVG embedding types
+    if (svgElement.tagName.toLowerCase() === 'object' && svgElement.contentDocument) {
+      // <object> element - get the SVG from contentDocument
+      const objectSvg = svgElement.contentDocument.querySelector('svg');
+      if (objectSvg) {
+        svgElement = objectSvg;
+      }
+    } else if (svgElement.tagName.toLowerCase() === 'iframe' && svgElement.contentDocument) {
+      // <iframe> element - get the SVG from contentDocument
+      const iframeSvg = svgElement.contentDocument.querySelector('svg');
+      if (iframeSvg) {
+        svgElement = iframeSvg;
+      }
+    } else if (svgElement.tagName.toLowerCase() === 'use') {
+      // <use> element - this is already an SVG element, will be handled by getBBox
+    }
+
+    // Ensure we have an SVG element
+    if (!svgElement || !svgElement.ownerSVGElement && svgElement.tagName.toLowerCase() !== 'svg') {
+      throw new Error('Target is not an SVG element or does not contain SVG content');
+    }
+
+    // Determine theme: 'auto' (default), 'light', or 'dark'
+    const theme = options.theme || 'auto';
+    let isDarkMode = false;
+
+    if (theme === 'auto') {
+      // Auto-detect system theme
+      isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } else if (theme === 'dark') {
+      // Force dark theme (light border for dark backgrounds)
+      isDarkMode = true;
+    } else if (theme === 'light') {
+      // Force light theme (dark border for light backgrounds)
+      isDarkMode = false;
+    }
+
+    // Select border color based on theme
+    const defaultBorderColor = isDarkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)';
+
+    // Parse options (borderColor overrides theme)
+    const borderColor = options.borderColor || defaultBorderColor;
+    const borderWidth = options.borderWidth || '2px';
+    const borderStyle = options.borderStyle || 'dashed';
+    const padding = options.padding !== undefined ? options.padding : 4;
+    const zIndex = options.zIndex !== undefined ? options.zIndex : 999999;
+    const bboxOptions = options.bboxOptions || {};
+
+    // Compute the true visual bounding box
+    const bbox = await getSvgElementVisualBBoxTwoPassAggressive(svgElement, bboxOptions);
+
+    if (!bbox || bbox.width === 0 || bbox.height === 0) {
+      console.warn('showTrueBBoxBorder: Element has zero-size bounding box', bbox);
+      return {
+        bbox: bbox,
+        overlay: null,
+        remove: () => {}
+      };
+    }
+
+    // Get the root SVG element to determine coordinate system
+    const rootSvg = svgElement.ownerSVGElement || svgElement;
+
+    // Get the SVG's position in the viewport
+    const svgRect = rootSvg.getBoundingClientRect();
+
+    // Get the viewBox to convert SVG coordinates to viewport coordinates
+    const viewBox = rootSvg.viewBox.baseVal;
+    let vbX = 0, vbY = 0, vbWidth = svgRect.width, vbHeight = svgRect.height;
+
+    if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
+      vbX = viewBox.x;
+      vbY = viewBox.y;
+      vbWidth = viewBox.width;
+      vbHeight = viewBox.height;
+    }
+
+    // Calculate scale factors from viewBox to screen coordinates
+    const scaleX = svgRect.width / vbWidth;
+    const scaleY = svgRect.height / vbHeight;
+
+    // Convert bbox coordinates (in SVG user space) to viewport coordinates
+    const screenX = svgRect.left + (bbox.x - vbX) * scaleX - padding;
+    const screenY = svgRect.top + (bbox.y - vbY) * scaleY - padding;
+    const screenWidth = bbox.width * scaleX + (padding * 2);
+    const screenHeight = bbox.height * scaleY + (padding * 2);
+
+    // Create overlay div with border
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.left = `${screenX}px`;
+    overlay.style.top = `${screenY}px`;
+    overlay.style.width = `${screenWidth}px`;
+    overlay.style.height = `${screenHeight}px`;
+    overlay.style.border = `${borderWidth} ${borderStyle} ${borderColor}`;
+    overlay.style.pointerEvents = 'none'; // Don't interfere with interactions
+    overlay.style.zIndex = zIndex;
+    overlay.style.boxSizing = 'border-box';
+    overlay.setAttribute('data-svg-bbox-overlay', 'true');
+    overlay.setAttribute('data-target-id', svgElement.id || 'anonymous');
+
+    // Add to document
+    document.body.appendChild(overlay);
+
+    // Function to update overlay position (for dynamic/animated SVGs)
+    const updatePosition = () => {
+      const currentSvgRect = rootSvg.getBoundingClientRect();
+      const currentScaleX = currentSvgRect.width / vbWidth;
+      const currentScaleY = currentSvgRect.height / vbHeight;
+
+      const currentScreenX = currentSvgRect.left + (bbox.x - vbX) * currentScaleX - padding;
+      const currentScreenY = currentSvgRect.top + (bbox.y - vbY) * currentScaleY - padding;
+      const currentScreenWidth = bbox.width * currentScaleX + (padding * 2);
+      const currentScreenHeight = bbox.height * currentScaleY + (padding * 2);
+
+      overlay.style.left = `${currentScreenX}px`;
+      overlay.style.top = `${currentScreenY}px`;
+      overlay.style.width = `${currentScreenWidth}px`;
+      overlay.style.height = `${currentScreenHeight}px`;
+    };
+
+    // Update on scroll and resize
+    const scrollListener = () => updatePosition();
+    const resizeListener = () => updatePosition();
+
+    window.addEventListener('scroll', scrollListener, true); // Capture phase for all scrolls
+    window.addEventListener('resize', resizeListener);
+
+    // Cleanup function
+    const remove = () => {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+      window.removeEventListener('scroll', scrollListener, true);
+      window.removeEventListener('resize', resizeListener);
+    };
+
+    return {
+      bbox: bbox,
+      overlay: overlay,
+      remove: remove
+    };
+  }
+
   // Export public API
   return {
     waitForDocumentFonts: waitForDocumentFonts,
     getSvgElementVisualBBoxTwoPassAggressive: getSvgElementVisualBBoxTwoPassAggressive,
     getSvgElementsUnionVisualBBox: getSvgElementsUnionVisualBBox,
     getSvgElementVisibleAndFullBBoxes: getSvgElementVisibleAndFullBBoxes,
-    getSvgRootViewBoxExpansionForFullDrawing: getSvgRootViewBoxExpansionForFullDrawing
+    getSvgRootViewBoxExpansionForFullDrawing: getSvgRootViewBoxExpansionForFullDrawing,
+    showTrueBBoxBorder: showTrueBBoxBorder
   };
 }));

@@ -66,6 +66,7 @@ All tools work **cross-platform** (Windows, macOS, Linux) and handle **file path
 - [How it works (diagram)](#-how-it-works-diagram)
 - [Tools](#-tools)
   - [Library: `SvgVisualBBox.js`](#library-svgvisualbboxjs)
+  - [Browser Usage](#-browser-usage)
   - [Renderer: `sbb-render.cjs`](#renderer-sbb-rendercjs)
   - [Comparer: `sbb-comparer.cjs`](#comparer-sbb-comparercjs)
   - [Fixer: `sbb-fix-viewbox.cjs`](#fixer-sbb-fix-viewboxcjs)
@@ -307,7 +308,12 @@ The **key idea** is to let the browser do all layout and rendering, then sample 
 
 ### Library: `SvgVisualBBox.js`
 
-This library runs in the **browser context** (injected by Puppeteer). It exposes helpers through `window.SvgVisualBBox`.
+This library can be used in two ways:
+
+1. **Node.js/CLI Tools** - Injected by Puppeteer in headless Chrome (used by all CLI tools)
+2. **Browser/Web Applications** - Loaded directly in webpages via `<script>` tag or npm import
+
+The library exposes all functions through the `SvgVisualBBox` namespace.
 
 #### `waitForDocumentFonts(document, timeoutMs)`
 
@@ -339,7 +345,101 @@ Compute both:
 - **visible** – what’s inside the current viewBox.
 - **full** – the entire drawing, ignoring viewBox clipping.
 
-Used by the fixer and renderer to choose between “full drawing” and “visible area inside the viewBox”.
+Used by the fixer and renderer to choose between "full drawing" and "visible area inside the viewBox".
+
+#### `showTrueBBoxBorder(target, options)` ⭐ NEW
+
+**Visual debug helper** - Displays a dotted border overlay around any SVG element's true visual bounding box.
+
+```js
+// Show border with auto-detected theme
+const result = await SvgVisualBBox.showTrueBBoxBorder('#myText');
+
+// Force dark theme for light backgrounds
+const result = await SvgVisualBBox.showTrueBBoxBorder('#myPath', {
+  theme: 'dark'
+});
+
+// Custom styling
+const result = await SvgVisualBBox.showTrueBBoxBorder('#myElement', {
+  borderColor: 'red',
+  borderWidth: '3px',
+  padding: 10
+});
+
+// Remove border
+result.remove();
+```
+
+**Features:**
+- ✅ Auto-detects system dark/light theme
+- ✅ Force theme with `theme: 'light'` or `'dark'` option
+- ✅ Works with all SVG types (inline, `<object>`, `<iframe>`, sprites, dynamic)
+- ✅ Non-intrusive overlay (doesn't modify SVG)
+- ✅ Follows SVG on scroll/resize
+- ✅ Easy cleanup with `remove()`
+
+---
+
+### 🌐 Browser Usage
+
+You can use `SvgVisualBBox.js` directly in webpages for accurate bounding box computation and visual debugging.
+
+#### Installation
+
+```html
+<!-- CDN -->
+<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
+
+<!-- Or via npm -->
+<script src="./node_modules/svg-bbox/SvgVisualBBox.js"></script>
+```
+
+#### Quick Example
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
+</head>
+<body>
+  <svg viewBox="0 0 200 100" width="400">
+    <text id="greeting" x="100" y="50" text-anchor="middle" font-size="24">
+      Hello SVG!
+    </text>
+  </svg>
+
+  <script>
+    (async () => {
+      // Wait for fonts
+      await SvgVisualBBox.waitForDocumentFonts();
+
+      // Get accurate bounding box
+      const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('#greeting');
+      console.log('BBox:', bbox); // {x, y, width, height}
+
+      // Show visual border for debugging
+      const result = await SvgVisualBBox.showTrueBBoxBorder('#greeting');
+
+      // Remove after 3 seconds
+      setTimeout(() => result.remove(), 3000);
+    })();
+  </script>
+</body>
+</html>
+```
+
+#### Complete API Documentation
+
+See [API.md](./API.md) for comprehensive browser API documentation with examples for:
+- Computing accurate bounding boxes
+- Working with complex text and transforms
+- Handling multiple elements
+- Visual debugging with borders
+- Theme customization
+- Error handling
+- Performance tips
 
 ---
 
