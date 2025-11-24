@@ -450,6 +450,111 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
 
     const serializer = new XMLSerializer();
 
+    // Sprite sheet detection function (runs in browser context)
+    function detectSpriteSheet(rootSvg) {
+      const children = Array.from(rootSvg.children).filter(el => {
+        const tag = el.tagName.toLowerCase();
+        return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
+               tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
+      });
+
+      if (children.length < 3) {
+        return { isSprite: false, sprites: [], grid: null, stats: null };
+      }
+
+      const sprites = [];
+      for (const child of children) {
+        const id = child.id || `auto_${child.tagName}_${sprites.length}`;
+        const bbox = child.getBBox ? child.getBBox() : null;
+
+        if (bbox && bbox.width > 0 && bbox.height > 0) {
+          sprites.push({
+            id,
+            tag: child.tagName.toLowerCase(),
+            x: bbox.x,
+            y: bbox.y,
+            width: bbox.width,
+            height: bbox.height,
+            hasId: !!child.id
+          });
+        }
+      }
+
+      if (sprites.length < 3) {
+        return { isSprite: false, sprites: [], grid: null, stats: null };
+      }
+
+      const widths = sprites.map(s => s.width);
+      const heights = sprites.map(s => s.height);
+      const areas = sprites.map(s => s.width * s.height);
+
+      const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
+      const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
+      const avgArea = areas.reduce((a, b) => a + b, 0) / areas.length;
+
+      const widthStdDev = Math.sqrt(
+        widths.reduce((sum, w) => sum + Math.pow(w - avgWidth, 2), 0) / widths.length
+      );
+      const heightStdDev = Math.sqrt(
+        heights.reduce((sum, h) => sum + Math.pow(h - avgHeight, 2), 0) / heights.length
+      );
+      const areaStdDev = Math.sqrt(
+        areas.reduce((sum, a) => sum + Math.pow(a - avgArea, 2), 0) / areas.length
+      );
+
+      const widthCV = widthStdDev / avgWidth;
+      const heightCV = heightStdDev / avgHeight;
+      const areaCV = areaStdDev / avgArea;
+
+      const idPatterns = [
+        /^icon[-_]/i,
+        /^sprite[-_]/i,
+        /^symbol[-_]/i,
+        /^glyph[-_]/i,
+        /[-_]\d+$/,
+        /^\d+$/
+      ];
+
+      const hasCommonPattern = sprites.filter(s =>
+        s.hasId && idPatterns.some(p => p.test(s.id))
+      ).length / sprites.length > 0.5;
+
+      const xPositions = [...new Set(sprites.map(s => Math.round(s.x)))].sort((a, b) => a - b);
+      const yPositions = [...new Set(sprites.map(s => Math.round(s.y)))].sort((a, b) => a - b);
+
+      const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
+
+      const isSpriteSheet = (
+        (widthCV < 0.3 && heightCV < 0.3) ||
+        (areaCV < 0.3) ||
+        hasCommonPattern ||
+        isGridArranged
+      );
+
+      return {
+        isSprite: isSpriteSheet,
+        sprites: sprites.map(s => ({ id: s.id, tag: s.tag })),
+        grid: isGridArranged ? {
+          rows: yPositions.length,
+          cols: xPositions.length
+        } : null,
+        stats: {
+          count: sprites.length,
+          avgSize: { width: avgWidth, height: avgHeight },
+          uniformity: {
+            widthCV: widthCV.toFixed(3),
+            heightCV: heightCV.toFixed(3),
+            areaCV: areaCV.toFixed(3)
+          },
+          hasCommonPattern,
+          isGridArranged
+        }
+      };
+    }
+
+    // Detect if this is a sprite sheet
+    const spriteInfo = detectSpriteSheet(rootSvg);
+
     const selector = [
       'g', 'path', 'rect', 'circle', 'ellipse',
       'polygon', 'polyline', 'text', 'image', 'use', 'symbol'
@@ -761,7 +866,7 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       }
     });
 
-    return { info, fixedSvgString, rootSvgMarkup, parentTransforms };
+    return { info, fixedSvgString, rootSvgMarkup, parentTransforms, spriteInfo };
   }, assignIds));
 
   // Build HTML listing file
@@ -795,7 +900,8 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       fixedSvgWritten: !!(assignIds && result.fixedSvgString && outFixedPath),
       fixedSvgPath: (assignIds && outFixedPath) ? path.resolve(outFixedPath) : null,
       htmlWritten: !!outHtmlPath,
-      htmlPath: outHtmlPath ? path.resolve(outHtmlPath) : null
+      htmlPath: outHtmlPath ? path.resolve(outHtmlPath) : null,
+      spriteInfo: result.spriteInfo
     };
     console.log(JSON.stringify(jsonOut, null, 2));
   } else {
@@ -809,6 +915,20 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       console.log('     objects, and fill the "New ID name" column to generate a');
       console.log('     JSON rename mapping.');
     }
+
+    // Display sprite sheet detection info
+    if (result.spriteInfo && result.spriteInfo.isSprite) {
+      console.log('');
+      console.log(`🎨 Sprite sheet detected!`);
+      console.log(`   Sprites: ${result.spriteInfo.stats.count}`);
+      if (result.spriteInfo.grid) {
+        console.log(`   Grid: ${result.spriteInfo.grid.rows} rows × ${result.spriteInfo.grid.cols} cols`);
+      }
+      console.log(`   Avg size: ${result.spriteInfo.stats.avgSize.width.toFixed(1)} × ${result.spriteInfo.stats.avgSize.height.toFixed(1)}`);
+      console.log(`   Uniformity: width CV=${result.spriteInfo.stats.uniformity.widthCV}, height CV=${result.spriteInfo.stats.uniformity.heightCV}`);
+      console.log(`   💡 Tip: Use --export-all to extract each sprite as a separate SVG file`);
+    }
+
     console.log('');
     console.log(`Objects found: ${totalObjects}`);
     if (failedObjects > 0) {

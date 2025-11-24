@@ -45,7 +45,10 @@ Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling
 
 ## 💡 Features
 
-- **Font-aware text bounds**  
+- **Sprite sheet detection & processing**
+  Automatically detects SVGs used as icon/sprite stacks and provides batch processing capabilities.
+
+- **Font-aware text bounds**
   Works with complex scripts (Arabic, CJK, Tamil), ligatures, RTL/LTR, `textPath`, `tspan`, and more.
 
 - **Filter-safe bounds**  
@@ -437,9 +440,10 @@ node extract_svg_objects.js input.svg --list \
 
 **What it does:**
 
-- Scans the SVG for “objects”:
+- Scans the SVG for "objects":
   - `g`, `path`, `rect`, `circle`, `ellipse`,
   - `polygon`, `polyline`, `text`, `image`, `use`, `symbol`.
+- **Automatically detects sprite sheets** - identifies SVGs used as icon/sprite stacks and provides helpful tips.
 - Computes a **visual bbox** for each object.
 - Generates an **HTML page**:
 
