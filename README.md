@@ -2,7 +2,7 @@
   <h1 style="font-size: 50pt; margin: 0;">📦 SVG-BBOX</h1>
 </div>
 
-> High-precision **visual bounding boxes** and **SVG object tooling** powered by headless Chrome & Puppeteer.
+> A set of tools to compute and to use a SVG bounding box you can trust (as opposed to the unreliable `.getBBox()` scourge)
 
 <p align="center">
   <a href="https://www.npmjs.com/package/svg-bbox"><img alt="npm version" src="https://img.shields.io/npm/v/svg-bbox?style=for-the-badge"></a>
