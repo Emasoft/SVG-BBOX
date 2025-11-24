@@ -30,6 +30,7 @@ Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling
 
 - [Features](#-features)
 - [Installation](#-installation)
+  - [Platform Compatibility](#platform-compatibility)
 - [Quickstart](#-quickstart)
 - [How it works (diagram)](#-how-it-works-diagram)
 - [Tools](#-tools)
@@ -117,11 +118,61 @@ pnpm install
 
 After installing, Puppeteer will automatically download a compatible Chromium browser. Alternatively, you can use your system Chrome by setting the `PUPPETEER_EXECUTABLE_PATH` environment variable.
 
-```bash
-chmod +x sbb-render.cjs
-chmod +x sbb-fix-viewbox.cjs
-chmod +x sbb-export.cjs
+### Platform Compatibility
+
+✅ **Fully cross-platform compatible:**
+- **Windows** 10/11 - All CLI tools work natively (PowerShell, CMD, Git Bash)
+- **macOS** - All versions supported (Intel and Apple Silicon)
+- **Linux** - All major distributions (Ubuntu, Debian, Fedora, etc.)
+
+**Key features:**
+- All file paths use Node.js `path` module (no hardcoded `/` or `\` separators)
+- Platform-specific commands handled automatically (Chrome detection, file opening)
+- Works with file paths containing spaces on all platforms
+- Pure Node.js CLI tools (no bash scripts required)
+
+**Platform-specific notes:**
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+- Chrome/Chromium auto-detection works with default install locations
+- File paths with spaces are properly handled
+- Use PowerShell or CMD (no WSL required)
+- Git Bash also supported
+
+```powershell
+# PowerShell example
+sbb-getbbox "C:\My Files\drawing.svg"
 ```
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+- Detects Chrome in `/Applications/`
+- Uses native `open` command for file viewing
+- Works on both Intel and Apple Silicon Macs
+
+```bash
+# macOS example
+chmod +x node_modules/.bin/sbb-*  # Make executable (first time only)
+sbb-getbbox ~/Documents/drawing.svg
+```
+</details>
+
+<details>
+<summary><strong>Linux</strong></summary>
+
+- Auto-detects `google-chrome`, `chromium`, `chromium-browser`
+- All standard Linux file paths supported
+
+```bash
+# Linux example
+chmod +x node_modules/.bin/sbb-*  # Make executable (first time only)
+sbb-getbbox /home/user/drawings/test.svg
+```
+</details>
 
 ---
 
