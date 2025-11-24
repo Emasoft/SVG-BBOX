@@ -38,8 +38,27 @@ This toolkit provides:
 
 ---
 
+## 🎯 What can SVG-BBOX toolkit do for you?
+
+- **Compute reliable bounding boxes** - Get accurate bbox for your entire SVG or any object ID inside it
+- **Extract objects to individual SVGs** - Reliably extract all objects from inside your SVG to individual files with correct viewBox
+- **Repair missing viewBox** - Automatically compute and add the missing viewBox to your SVG
+- **Repair missing dimensions** - Automatically compute and add missing width and height attributes to your SVG
+- **Generate perfect PNG/JPG renders** - Export pixel-perfect raster images at any resolution
+- **Process sprite sheets** - Automatically detect and extract individual sprites from sprite sheet SVGs
+- **Create interactive object catalogs** - Generate browsable HTML catalogs of all objects with visual previews
+- **Rename objects in bulk** - Interactive UI for renaming SVG object IDs with collision detection and validation
+- **Measure union bounding boxes** - Compute combined bbox of multiple objects at once
+- **Handle complex SVG features** - Properly measure text with custom fonts, filters, masks, clipping paths, transforms, and more
+
+All tools work **cross-platform** (Windows, macOS, Linux) and handle **file paths with spaces** correctly.
+
+---
+
 ## 📚 Table of Contents
 
+- [What is this?](#-what-is-this)
+- [What can SVG-BBOX toolkit do for you?](#-what-can-svg-bbox-toolkit-do-for-you)
 - [Features](#-features)
 - [Installation](#-installation)
   - [Platform Compatibility](#platform-compatibility)
