@@ -630,6 +630,11 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       --accent-secondary: #4caf50;
       --accent-result: #2e7d32;
       --shadow: rgba(0,0,0,0.1);
+      /* Tooltip colors - soft pastel blue */
+      --tooltip-bg: #e3f2fd;
+      --tooltip-text: #1565c0;
+      --tooltip-border: #90caf9;
+      --tooltip-shadow: rgba(33, 150, 243, 0.15);
     }
 
     /* Dark theme */
@@ -649,6 +654,11 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       --accent-secondary: #66bb6a;
       --accent-result: #81c784;
       --shadow: rgba(0,0,0,0.5);
+      /* Tooltip colors - soft pastel purple/blue */
+      --tooltip-bg: #4a4a6a;
+      --tooltip-text: #e8eaf6;
+      --tooltip-border: #7986cb;
+      --tooltip-shadow: rgba(63, 81, 181, 0.3);
     }
 
     body {
@@ -767,10 +777,42 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
     }
 
     .svg-container svg {
-      max-width: 100%;
+      display: block;
+
+      /* ═══════════════════════════════════════════════════════════════════════
+       * CRITICAL: SVG Border Sizing - DO NOT MODIFY
+       * ═══════════════════════════════════════════════════════════════════════
+       *
+       * GOAL: Border must wrap tightly around SVG at its rendered size,
+       *       NOT expand with browser window or container.
+       *
+       * SOLUTION:
+       *   - width: auto    (SVG uses intrinsic width, NOT container width)
+       *   - height: auto   (SVG uses intrinsic height, maintains aspect ratio)
+       *   - max-width: 600px   (constrains large SVGs to fit viewport)
+       *   - max-height: 500px  (constrains large SVGs to fit viewport)
+       *
+       * WHY THIS WORKS:
+       *   - "width: auto" means SVG does NOT stretch to fill container
+       *   - SVG renders at natural size, limited by max-width/max-height
+       *   - Border wraps actual rendered SVG, not container boundaries
+       *   - When window expands, border stays with SVG (doesn't expand)
+       *
+       * WHAT DOESN'T WORK:
+       *   ❌ max-width: 100%     (makes SVG expand with container)
+       *   ❌ width: 100%         (forces SVG to fill container width)
+       *   ❌ wrapper span        (adds complexity, still expands)
+       *   ❌ no max constraints  (SVGs too large for viewport)
+       *
+       * TESTED AND VERIFIED - DO NOT CHANGE UNLESS TESTING NEW APPROACH
+       * ═══════════════════════════════════════════════════════════════════════
+       */
+      max-width: 600px;
       max-height: 500px;
+      width: auto;
       height: auto;
-      /* Dotted border matching sbb-extractor */
+
+      /* Dotted border matching sbb-extractor - shows actual SVG boundary */
       border: 1px dashed rgba(0,0,0,0.4);
       padding: 4px;
     }
@@ -938,27 +980,35 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       cursor: help;
     }
 
+    /* Hide parent tooltip when hovering child with tooltip */
+    [data-tooltip]:has([data-tooltip]:hover)::before,
+    [data-tooltip]:has([data-tooltip]:hover)::after {
+      opacity: 0 !important;
+    }
+
     [data-tooltip]::before {
       content: attr(data-tooltip);
       position: absolute;
       bottom: 100%;
       left: 50%;
       transform: translateX(-50%) translateY(-8px);
-      padding: 8px 12px;
-      background: var(--text-tertiary);
-      color: white;
-      border-radius: 6px;
-      font-size: 12px;
+      padding: 10px 14px;
+      background: var(--tooltip-bg);
+      color: var(--tooltip-text);
+      border: 1px solid var(--tooltip-border);
+      border-radius: 8px;
+      font-size: 14px;
       white-space: nowrap;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.3s, transform 0.3s;
       z-index: 1000;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-      max-width: 300px;
+      box-shadow: 0 4px 12px var(--tooltip-shadow);
+      max-width: 320px;
       white-space: normal;
       text-align: center;
-      line-height: 1.4;
+      line-height: 1.5;
+      font-weight: 500;
     }
 
     [data-tooltip]::after {
@@ -967,12 +1017,13 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       bottom: 100%;
       left: 50%;
       transform: translateX(-50%) translateY(-2px);
-      border: 6px solid transparent;
-      border-top-color: var(--text-tertiary);
+      border: 7px solid transparent;
+      border-top-color: var(--tooltip-bg);
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.3s, transform 0.3s;
       z-index: 1000;
+      filter: drop-shadow(0 1px 1px var(--tooltip-shadow));
     }
 
     [data-tooltip]:hover::before,
@@ -994,8 +1045,8 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       top: 50%;
       bottom: auto;
       transform: translateY(-50%) translateX(2px);
-      border: 6px solid transparent;
-      border-right-color: var(--text-tertiary);
+      border: 7px solid transparent;
+      border-right-color: var(--tooltip-bg);
       border-top-color: transparent;
     }
 
