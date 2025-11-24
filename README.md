@@ -443,6 +443,12 @@ Returns:
 - Total pixels compared
 - Number of different pixels
 - Diff PNG image (white pixels = different, black = identical)
+- **HTML comparison report** (automatically generated and opened in browser)
+  - Side-by-side SVG comparison with embedded images
+  - ViewBox and resolution details for each SVG
+  - Comparison settings summary
+  - Visual diff PNG with percentage
+  - Self-contained (can be shared without dependencies)
 
 ---
 

@@ -557,6 +557,374 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// HTML REPORT GENERATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args, svgAnalysis1, svgAnalysis2) {
+  // Read files and convert to base64 for embedding
+  const svg1Content = fs.readFileSync(svg1Path, 'utf-8');
+  const svg2Content = fs.readFileSync(svg2Path, 'utf-8');
+  const diffPngBuffer = fs.readFileSync(diffPngPath);
+  const diffPngBase64 = diffPngBuffer.toString('base64');
+
+  // Get relative paths for links
+  const svg1Relative = path.relative(process.cwd(), svg1Path);
+  const svg2Relative = path.relative(process.cwd(), svg2Path);
+
+  // Format viewBox info
+  const formatViewBox = (vb) => {
+    if (!vb) return 'none';
+    return `${vb.x} ${vb.y} ${vb.width} ${vb.height}`;
+  };
+
+  // Format resolution info
+  const formatResolution = (analysis) => {
+    const w = analysis.width || (analysis.viewBox ? analysis.viewBox.width : 'none');
+    const h = analysis.height || (analysis.viewBox ? analysis.viewBox.height : 'none');
+    return `${w} × ${h}`;
+  };
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SVG Comparison Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+      font-size: 28px;
+      text-align: center;
+    }
+
+    .settings-summary {
+      background: #ecf0f1;
+      padding: 20px;
+      border-radius: 6px;
+      margin-bottom: 30px;
+      border-left: 4px solid #3498db;
+    }
+
+    .settings-summary h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: #2c3e50;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: baseline;
+    }
+
+    .setting-label {
+      font-weight: 600;
+      margin-right: 8px;
+      color: #555;
+    }
+
+    .setting-value {
+      color: #2c3e50;
+      font-family: 'Courier New', monospace;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .svg-panel {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 15px;
+      background: #fafafa;
+    }
+
+    .panel-header {
+      margin-bottom: 12px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 8px;
+    }
+
+    .file-link {
+      display: inline-block;
+      color: #3498db;
+      text-decoration: none;
+      font-size: 13px;
+      word-break: break-all;
+      padding: 4px 8px;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      transition: all 0.2s;
+    }
+
+    .file-link:hover {
+      background: #3498db;
+      color: white;
+    }
+
+    .svg-container {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+    }
+
+    .svg-container svg {
+      max-width: 100%;
+      max-height: 500px;
+      height: auto;
+    }
+
+    .diff-container {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+    }
+
+    .diff-container img {
+      max-width: 100%;
+      max-height: 500px;
+      height: auto;
+      image-rendering: pixelated;
+    }
+
+    .info-panel {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 12px;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: #555;
+    }
+
+    .info-value {
+      color: #2c3e50;
+      font-family: 'Courier New', monospace;
+      text-align: right;
+    }
+
+    .result-panel {
+      background: #e8f5e9;
+      border: 2px solid #4caf50;
+      border-radius: 6px;
+      padding: 20px;
+      text-align: center;
+      margin-top: 12px;
+    }
+
+    .result-percentage {
+      font-size: 48px;
+      font-weight: 700;
+      color: #2e7d32;
+      margin: 10px 0;
+    }
+
+    .result-label {
+      font-size: 14px;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .result-stats {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    @media (max-width: 1200px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 SVG Comparison Report</h1>
+
+    <div class="settings-summary">
+      <h2>⚙️ Comparison Settings</h2>
+      <div class="settings-grid">
+        <div class="setting-item">
+          <span class="setting-label">Alignment:</span>
+          <span class="setting-value">${args.alignment}${args.alignmentParam ? ` (${JSON.stringify(args.alignmentParam)})` : ''}</span>
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">Resolution:</span>
+          <span class="setting-value">${args.resolution}</span>
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">Threshold:</span>
+          <span class="setting-value">${args.threshold}/256</span>
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">Meet Rule:</span>
+          <span class="setting-value">${args.meetRule}</span>
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">Slice Rule:</span>
+          <span class="setting-value">${args.sliceRule}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="comparison-grid">
+      <!-- SVG 1 Panel -->
+      <div class="svg-panel">
+        <div class="panel-header">
+          <div class="panel-title">📄 SVG 1</div>
+          <a href="${svg1Relative}" class="file-link" target="_blank">${svg1Relative}</a>
+        </div>
+        <div class="svg-container">
+          ${svg1Content}
+        </div>
+        <div class="info-panel">
+          <div class="info-row">
+            <span class="info-label">ViewBox:</span>
+            <span class="info-value">${formatViewBox(svgAnalysis1.viewBox)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Width:</span>
+            <span class="info-value">${svgAnalysis1.width || 'none'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Height:</span>
+            <span class="info-value">${svgAnalysis1.height || 'none'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Resolution:</span>
+            <span class="info-value">${formatResolution(svgAnalysis1)}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SVG 2 Panel -->
+      <div class="svg-panel">
+        <div class="panel-header">
+          <div class="panel-title">📄 SVG 2</div>
+          <a href="${svg2Relative}" class="file-link" target="_blank">${svg2Relative}</a>
+        </div>
+        <div class="svg-container">
+          ${svg2Content}
+        </div>
+        <div class="info-panel">
+          <div class="info-row">
+            <span class="info-label">ViewBox:</span>
+            <span class="info-value">${formatViewBox(svgAnalysis2.viewBox)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Width:</span>
+            <span class="info-value">${svgAnalysis2.width || 'none'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Height:</span>
+            <span class="info-value">${svgAnalysis2.height || 'none'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Resolution:</span>
+            <span class="info-value">${formatResolution(svgAnalysis2)}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diff Panel -->
+      <div class="svg-panel">
+        <div class="panel-header">
+          <div class="panel-title">🔍 Visual Difference</div>
+          <span class="file-link" style="cursor: default; pointer-events: none;">White = Different, Black = Same</span>
+        </div>
+        <div class="diff-container">
+          <img src="data:image/png;base64,${diffPngBase64}" alt="Difference visualization">
+        </div>
+        <div class="result-panel">
+          <div class="result-label">Difference</div>
+          <div class="result-percentage">${result.diffPercentage}%</div>
+          <div class="result-stats">
+            ${result.differentPixels.toLocaleString()} of ${result.totalPixels.toLocaleString()} pixels differ
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  // Generate HTML filename
+  const svg1Base = path.basename(svg1Path, path.extname(svg1Path));
+  const svg2Base = path.basename(svg2Path, path.extname(svg2Path));
+  const htmlPath = `${svg1Base}_vs_${svg2Base}_comparison.html`;
+
+  fs.writeFileSync(htmlPath, html, 'utf-8');
+
+  return htmlPath;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -595,6 +963,10 @@ async function main() {
       console.log('Analyzing SVG files...');
     }
     const params = await calculateRenderParams(args.svg1, args.svg2, args, browser);
+
+    // Store SVG analysis for HTML report
+    const svgAnalysis1 = await analyzeSvg(args.svg1, browser);
+    const svgAnalysis2 = await analyzeSvg(args.svg2, browser);
 
     // Render SVGs to PNG
     const tempDir = path.join(process.cwd(), '.tmp-compare');
@@ -648,6 +1020,31 @@ async function main() {
       console.log(`  Difference:         ${result.diffPercentage}%`);
       console.log(`  Threshold:          ${args.threshold}/256`);
       console.log(`  Diff image:         ${args.outDiff}\n`);
+    }
+
+    // Generate HTML report
+    if (!args.json) {
+      if (args.verbose) {
+        console.log('Generating HTML report...');
+      }
+      const htmlPath = await generateHtmlReport(
+        args.svg1,
+        args.svg2,
+        args.outDiff,
+        result,
+        args,
+        svgAnalysis1,
+        svgAnalysis2
+      );
+
+      console.log(`  HTML report:        ${htmlPath}`);
+
+      // Auto-open in browser
+      if (args.verbose) {
+        console.log('Opening HTML report in browser...');
+      }
+      const { openInChrome } = require('./browser-utils.cjs');
+      await openInChrome(htmlPath);
     }
 
   } catch (error) {

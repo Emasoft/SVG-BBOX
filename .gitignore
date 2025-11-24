@@ -18,6 +18,7 @@ playwright-report/
 *.rename.json
 *_diff.png
 *_vs_*.png
+*_vs_*_comparison.html
 
 # Vitest
 vitest.config.js.timestamp-*
