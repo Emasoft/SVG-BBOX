@@ -16,15 +16,25 @@
 
 ## ✨ What is this?
 
-A small set of tools to measure and manipulate SVGs **as they actually render in a browser**:
+**Tired of `.getBBox()` lying to you?** This toolkit gives you SVG bounding boxes you can actually trust.
 
-- Robust **visual bounding boxes** (including text, filters, `<use>`, masks, strokes, etc.).
-- Automatic **viewBox / width / height repair** for broken SVGs.
-- High-quality **PNG rendering via Chrome**.
-- **Object extraction & exporting** with per-object SVGs.
-- Visual **HTML catalog** of all objects in an SVG, with live **ID renaming** support.
+The problem with `.getBBox()`:
+- ❌ Ignores filters (blur, shadows, glows)
+- ❌ Ignores stroke width
+- ❌ Breaks with complex text (ligatures, RTL, textPath)
+- ❌ Fails on `<use>`, masks, and clipping paths
+- ❌ Returns garbage for transformed elements
 
-Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling through headless Chrome**, so whatever the browser paints is what we measure.
+**Our solution:** Measure what the browser actually paints, pixel by pixel.
+
+This toolkit provides:
+- ✅ **Trustworthy visual bounding boxes** - Measures actual rendered pixels via headless Chrome
+- ✅ **Automatic viewBox repair** - Fixes broken SVGs missing width/height/viewBox
+- ✅ **High-quality PNG rendering** - Render SVGs at precise dimensions
+- ✅ **Object extraction & cataloging** - Interactive HTML viewer with live ID renaming
+- ✅ **Sprite sheet processing** - Batch process and extract individual objects
+
+**How it works:** Uses **raster sampling through headless Chrome** - whatever the browser paints is what we measure. No geometry guesswork, no `.getBBox()` lies.
 
 ---
 
