@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * getbbox.cjs
+ * sbb-getbbox.cjs
  *
  * CLI utility to compute visual bounding boxes for SVG files and elements
  * using canvas-based rasterization technique (not getBBox()).
  *
  * Usage:
- *   node getbbox.cjs <svg-file> [object-ids...]
- *   node getbbox.cjs <svg-file> --ignore-vbox
- *   node getbbox.cjs --dir <directory> [--filter <regex>]
- *   node getbbox.cjs --list <txt-file>
- *   node getbbox.cjs <svg-file> [object-ids...] --json <output.json>
+ *   node sbb-getbbox.cjs <svg-file> [object-ids...]
+ *   node sbb-getbbox.cjs <svg-file> --ignore-vbox
+ *   node sbb-getbbox.cjs --dir <directory> [--filter <regex>]
+ *   node sbb-getbbox.cjs --list <txt-file>
+ *   node sbb-getbbox.cjs <svg-file> [object-ids...] --json <output.json>
  *
  * Features:
  * - Compute bbox for whole SVG or specific elements by ID
@@ -91,34 +91,34 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ getbbox.cjs - Visual BBox Calculator for SVG                              ║
+║ sbb-getbbox.cjs - Visual BBox Calculator for SVG                              ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 USAGE:
-  node getbbox.cjs <svg-file> [object-ids...] [options]
-  node getbbox.cjs --dir <directory> [options]
-  node getbbox.cjs --list <txt-file> [options]
+  node sbb-getbbox.cjs <svg-file> [object-ids...] [options]
+  node sbb-getbbox.cjs --dir <directory> [options]
+  node sbb-getbbox.cjs --list <txt-file> [options]
 
 MODES:
   Single File:
-    node getbbox.cjs drawing.svg
+    node sbb-getbbox.cjs drawing.svg
       → Compute bbox for entire SVG content (respecting viewBox)
 
-    node getbbox.cjs drawing.svg --ignore-vbox
+    node sbb-getbbox.cjs drawing.svg --ignore-vbox
       → Compute bbox for full drawing (ignoring viewBox clipping)
 
-    node getbbox.cjs drawing.svg icon1 icon2 icon3
+    node sbb-getbbox.cjs drawing.svg icon1 icon2 icon3
       → Compute bbox for specific elements by ID
 
   Directory Batch:
-    node getbbox.cjs --dir ./svgs
+    node sbb-getbbox.cjs --dir ./svgs
       → Process all SVG files in directory
 
-    node getbbox.cjs --dir ./svgs --filter "^icon_"
+    node sbb-getbbox.cjs --dir ./svgs --filter "^icon_"
       → Process only SVG files matching regex pattern
 
   List File:
-    node getbbox.cjs --list files.txt
+    node sbb-getbbox.cjs --list files.txt
       → Process SVGs from list file (see format below)
 
 OPTIONS:
@@ -199,25 +199,25 @@ SPRITE DETECTION (--sprite):
 
 EXAMPLES:
   # Compute whole SVG bbox
-  node getbbox.cjs drawing.svg
+  node sbb-getbbox.cjs drawing.svg
 
   # Compute specific elements
-  node getbbox.cjs sprites.svg icon_save icon_load icon_close
+  node sbb-getbbox.cjs sprites.svg icon_save icon_load icon_close
 
   # Get full drawing (ignore viewBox)
-  node getbbox.cjs drawing.svg --ignore-vbox
+  node sbb-getbbox.cjs drawing.svg --ignore-vbox
 
   # Auto-detect sprite sheet and process all sprites
-  node getbbox.cjs icon-sprite-sheet.svg --sprite
+  node sbb-getbbox.cjs icon-sprite-sheet.svg --sprite
 
   # Batch process directory
-  node getbbox.cjs --dir ./svgs --json results.json
+  node sbb-getbbox.cjs --dir ./svgs --json results.json
 
   # Process filtered files
-  node getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
+  node sbb-getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
 
   # Process from list
-  node getbbox.cjs --list process-list.txt --json output.json
+  node sbb-getbbox.cjs --list process-list.txt --json output.json
 `);
 }
 

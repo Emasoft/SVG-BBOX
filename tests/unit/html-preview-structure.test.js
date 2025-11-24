@@ -1,7 +1,7 @@
 /**
  * HTML Preview Structure Validation Tests
  *
- * These tests verify that export-svg-objects.cjs generates HTML with the correct
+ * These tests verify that sbb-export.cjs generates HTML with the correct
  * structure to properly display preview thumbnails.
  *
  * WHAT WE TEST:
@@ -18,7 +18,7 @@
  * CRITICAL HEADLESS BROWSER QUIRK:
  * style="display:none" does NOT work reliably in headless browsers (Chrome/Puppeteer)!
  * Elements with display:none may still be visible or may not render references correctly.
- * Instead, export-svg-objects.cjs uses CSS class .hidden-svg-container with:
+ * Instead, sbb-export.cjs uses CSS class .hidden-svg-container with:
  *   - position: absolute
  *   - width: 0; height: 0
  *   - overflow: hidden
@@ -42,7 +42,7 @@ describe('HTML Preview Structure Validation', () => {
   test('export-svg-objects generates HTML with parent transform wrappers', async () => {
     // Generate HTML from sample SVG
     const { stdout } = await execFilePromise('node', [
-      'export-svg-objects.cjs',
+      'sbb-export.cjs',
       'samples/test_text_to_path_advanced.svg',
       '--list',
       '--out-html',

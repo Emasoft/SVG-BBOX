@@ -1,8 +1,32 @@
 {
-  "name": "svg-visual-bbox-toolkit",
+  "name": "svg-bbox",
   "version": "1.0.0",
   "description": "High-precision visual bounding boxes and SVG object tooling powered by headless Chrome & Puppeteer",
   "type": "module",
+  "main": "./SvgVisualBBox.js",
+  "bin": {
+    "sbb-getbbox": "./sbb-getbbox.cjs",
+    "sbb-export": "./sbb-export.cjs",
+    "sbb-fix-viewbox": "./sbb-fix-viewbox.cjs",
+    "sbb-render": "./sbb-render.cjs",
+    "sbb-test": "./sbb-test.cjs"
+  },
+  "files": [
+    "SvgVisualBBox.js",
+    "sbb-*.cjs",
+    "browser-utils.cjs",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/USERNAME/svg-bbox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/USERNAME/svg-bbox/issues"
+  },
+  "homepage": "https://github.com/USERNAME/svg-bbox#readme",
   "keywords": [
     "svg",
     "bounding-box",
@@ -10,7 +34,12 @@
     "puppeteer",
     "visual-bounds",
     "svg-tools",
-    "headless-chrome"
+    "headless-chrome",
+    "svg-extraction",
+    "svg-export",
+    "svg-render",
+    "sprite-sheet",
+    "cli"
   ],
   "author": "",
   "license": "MIT",

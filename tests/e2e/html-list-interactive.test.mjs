@@ -30,7 +30,7 @@ const execFilePromise = promisify(execFile);
 test.beforeAll(async () => {
   console.log('Generating HTML catalog for interactive testing...');
   await execFilePromise('node', [
-    'export-svg-objects.cjs',
+    'sbb-export.cjs',
     'samples/test_text_to_path_advanced.svg',
     '--list',
     '--out-html',

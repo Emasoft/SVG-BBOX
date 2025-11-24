@@ -1,7 +1,7 @@
 /**
  * HTML Preview Rendering Tests
  *
- * These tests verify the critical fixes for HTML preview rendering in export-svg-objects.cjs.
+ * These tests verify the critical fixes for HTML preview rendering in sbb-export.cjs.
  * Each test documents the FAULTY methods we tried and proves the CORRECT method works.
  *
  * CRITICAL: Uses SvgVisualBBox library functions, NOT getBBox()!
@@ -16,7 +16,7 @@
  * exposed several subtle bugs related to coordinate systems and transform inheritance.
  *
  * All bugs were discovered through systematic hypothesis testing documented in CLAUDE.md
- * and export-svg-objects.cjs comments.
+ * and sbb-export.cjs comments.
  */
 
 import { test, describe, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
@@ -118,14 +118,14 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
    * TEST: Complete HTML Preview Rendering (Real-World Scenario)
    * ═══════════════════════════════════════════════════════════════════════════════
    *
-   * This tests the ACTUAL export-svg-objects.cjs HTML generation with ALL fixes applied.
+   * This tests the ACTUAL sbb-export.cjs HTML generation with ALL fixes applied.
    * We verify that the generated HTML correctly renders elements with:
    * - Parent transforms applied via wrapper <g>
    * - No viewBox on hidden container
    * - Precise viewBox coordinates
    * - Elements at negative coordinates
    *
-   * REFERENCE: export-svg-objects.cjs HTML generation code
+   * REFERENCE: sbb-export.cjs HTML generation code
    */
   describe('Real-World HTML Preview Generation', () => {
 
@@ -133,7 +133,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
       const fonts = getRandomFonts(3);
 
       for (const font of fonts) {
-        // Simulate export-svg-objects.cjs HTML structure
+        // Simulate sbb-export.cjs HTML structure
         const parentTransform = 'translate(-13.5,-10.2)';
         const textX = -50;
         const textY = 100;
@@ -316,7 +316,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
    *    - Each test runs with 3+ different fonts for robustness
    *
    * Code references:
-   * - export-svg-objects.cjs lines 540-715 (implementation)
+   * - sbb-export.cjs lines 540-715 (implementation)
    * - CLAUDE.md lines 278-702 (comprehensive documentation)
    */
 });

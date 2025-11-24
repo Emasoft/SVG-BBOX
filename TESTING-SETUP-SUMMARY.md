@@ -204,7 +204,7 @@ Write remaining unit tests:
 ### Phase 3: Integration Tests (2-3 days)
 
 Write CLI tool tests:
-1. Test harness (test-svg-bbox.js)
+1. Test harness (sbb-test.cjs)
 2. Export objects - all 4 modes
 3. Fix viewBox
 4. Render SVG
@@ -279,7 +279,7 @@ Current thresholds in `vitest.config.js`:
 Files covered:
 - `SvgVisualBBox.js`
 - `*-svg-*.js` (all CLI tools)
-- `export-svg-objects.cjs`
+- `sbb-export.cjs`
 
 ---
 

@@ -297,7 +297,7 @@ export function assertValidBBox(bbox, expectations = {}) {
 
 /**
  * Helper to run CLI tool and return output
- * @param {string} scriptPath - Path to script (e.g., 'test-svg-bbox.js')
+ * @param {string} scriptPath - Path to script (e.g., 'sbb-test.cjs')
  * @param {string[]} args - Command line arguments
  * @returns {Promise<{stdout: string, stderr: string, exitCode: number}>}
  */

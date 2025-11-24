@@ -160,7 +160,7 @@ const { openInChrome } = require('./browser-utils.cjs');
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ export-svg-objects.cjs - SVG Object Extraction & Manipulation Toolkit     ║
+║ sbb-export.cjs - SVG Object Extraction & Manipulation Toolkit     ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
@@ -168,14 +168,14 @@ DESCRIPTION:
   with visual bbox calculation and interactive HTML catalog.
 
 USAGE:
-  node export-svg-objects.cjs input.svg <mode> [options]
+  node sbb-export.cjs input.svg <mode> [options]
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 1: LIST OBJECTS (--list)
   Generate interactive HTML catalog with visual previews
 
-  node export-svg-objects.cjs input.svg --list \\
+  node sbb-export.cjs input.svg --list \\
     [--assign-ids] [--out-fixed fixed.svg] \\
     [--out-html list.html] [--auto-open] [--json]
 
@@ -197,14 +197,14 @@ MODE 1: LIST OBJECTS (--list)
     --json              Output JSON instead of human-readable format
 
   Example:
-    node export-svg-objects.cjs sprites.svg --list --assign-ids
+    node sbb-export.cjs sprites.svg --list --assign-ids
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 2: RENAME IDS (--rename)
   Apply ID renaming from JSON mapping file
 
-  node export-svg-objects.cjs input.svg --rename mapping.json output.svg [--json]
+  node sbb-export.cjs input.svg --rename mapping.json output.svg [--json]
 
   What it does:
   • Validates ID syntax (^[A-Za-z_][A-Za-z0-9_.:-]*$)
@@ -227,14 +227,14 @@ MODE 2: RENAME IDS (--rename)
     • Object: { "oldId": "newId" }
 
   Example:
-    node export-svg-objects.cjs sprites.svg --rename map.json renamed.svg
+    node sbb-export.cjs sprites.svg --rename map.json renamed.svg
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 3: EXTRACT OBJECT (--extract)
   Extract single object to standalone SVG
 
-  node export-svg-objects.cjs input.svg --extract objectId output.svg \\
+  node sbb-export.cjs input.svg --extract objectId output.svg \\
     [--margin N] [--include-context] [--json]
 
   Two behaviors:
@@ -254,14 +254,14 @@ MODE 3: EXTRACT OBJECT (--extract)
     --json                Output JSON metadata
 
   Example:
-    node export-svg-objects.cjs drawing.svg --extract logo logo.svg --margin 10
+    node sbb-export.cjs drawing.svg --extract logo logo.svg --margin 10
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 4: EXPORT ALL OBJECTS (--export-all)
   Export each object as separate SVG file
 
-  node export-svg-objects.cjs input.svg --export-all out-dir \\
+  node sbb-export.cjs input.svg --export-all out-dir \\
     [--margin N] [--export-groups] [--json]
 
   What it does:
@@ -278,7 +278,7 @@ MODE 4: EXPORT ALL OBJECTS (--export-all)
     --json                Output JSON list of exported files
 
   Example:
-    node export-svg-objects.cjs sprites.svg --export-all ./sprites --margin 2
+    node sbb-export.cjs sprites.svg --export-all ./sprites --margin 2
 
   Perfect for sprite sheets! Extracts each sprite/icon automatically.
 
@@ -301,17 +301,17 @@ SPRITE SHEET DETECTION:
 
 COMPLETE WORKFLOW:
   1. List & browse objects:
-     node export-svg-objects.cjs sprites.svg --list --assign-ids
+     node sbb-export.cjs sprites.svg --list --assign-ids
 
   2. Open HTML, use filters, rename objects interactively
 
   3. Save JSON mapping from HTML page
 
   4. Apply renaming:
-     node export-svg-objects.cjs sprites.ids.svg --rename map.json renamed.svg
+     node sbb-export.cjs sprites.ids.svg --rename map.json renamed.svg
 
   5. Extract individual objects or export all:
-     node export-svg-objects.cjs renamed.svg --export-all ./icons --margin 5
+     node sbb-export.cjs renamed.svg --export-all ./icons --margin 5
 
 `);
 }

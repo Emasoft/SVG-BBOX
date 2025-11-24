@@ -64,26 +64,26 @@ All Node.js scripts require Puppeteer:
 npm install puppeteer chrome-launcher
 ```
 
-### test-svg-bbox.js
+### sbb-test.cjs
 
 Test harness that runs library functions against an SVG in headless Chrome.
 
 **Usage:**
 ```bash
-node test-svg-bbox.js path/to/file.svg
+node sbb-test.cjs path/to/file.svg
 ```
 
 **Output:**
 - `<basename>-bbox-results.json` - All measurement results
 - `<basename>-bbox-errors.log` - Console output and errors
 
-### export-svg-objects.cjs
+### sbb-export.cjs
 
 Advanced SVG object extraction/manipulation tool with four modes:
 
 **1. LIST Mode** - Generate HTML overview with renaming UI
 ```bash
-node export-svg-objects.cjs input.svg --list \
+node sbb-export.cjs input.svg --list \
   [--assign-ids] [--out-fixed fixed.svg] [--out-html list.html] [--json]
 ```
 - Creates interactive HTML table of all objects
@@ -93,7 +93,7 @@ node export-svg-objects.cjs input.svg --list \
 
 **2. RENAME Mode** - Apply ID renaming from JSON mapping
 ```bash
-node export-svg-objects.cjs input.svg --rename mapping.json output.svg [--json]
+node sbb-export.cjs input.svg --rename mapping.json output.svg [--json]
 ```
 - Updates element IDs and all references (href, xlink:href, url(#id))
 - Validates ID syntax, avoids collisions, handles mapping conflicts
@@ -101,7 +101,7 @@ node export-svg-objects.cjs input.svg --rename mapping.json output.svg [--json]
 
 **3. EXTRACT Mode** - Extract single object
 ```bash
-node export-svg-objects.cjs input.svg --extract id output.svg \
+node sbb-export.cjs input.svg --extract id output.svg \
   [--margin N] [--include-context] [--json]
 ```
 - Default (no --include-context): Pure cut-out, only target + ancestors
@@ -109,20 +109,20 @@ node export-svg-objects.cjs input.svg --extract id output.svg \
 
 **4. EXPORT-ALL Mode** - Export all objects as individual SVGs
 ```bash
-node export-svg-objects.cjs input.svg --export-all out-dir \
+node sbb-export.cjs input.svg --export-all out-dir \
   [--margin N] [--export-groups] [--json]
 ```
 - Exports path, rect, circle, ellipse, polygon, polyline, text, image, use, symbol
 - With --export-groups: Also export each `<g>` with recursive children
 - Each file gets its own viewBox = visual bbox + margin
 
-### fix_svg_viewbox.js
+### sbb-fix-viewbox.cjs
 
 Fix SVGs missing viewBox/width/height attributes.
 
 **Usage:**
 ```bash
-node fix_svg_viewbox.js input.svg [output.svg]
+node sbb-fix-viewbox.cjs input.svg [output.svg]
 ```
 - Computes full visual bbox using library
 - Sets viewBox if missing
@@ -213,7 +213,7 @@ This is the most common workflow for organizing sprite sheets and icon libraries
 
 1. **Analyze SVG & assign IDs to all objects:**
    ```bash
-   node export-svg-objects.cjs sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
+   node sbb-export.cjs sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
    ```
    - Produces `sprites.objects.html` (visual catalog)
    - Produces `sprites.ids.svg` (all objects have IDs like `auto_id_path_3`)
@@ -248,7 +248,7 @@ This is the most common workflow for organizing sprite sheets and icon libraries
 
 5. **Apply renaming to SVG:**
    ```bash
-   node export-svg-objects.cjs sprites.ids.svg --rename sprites.rename.json sprites.renamed.svg
+   node sbb-export.cjs sprites.ids.svg --rename sprites.rename.json sprites.renamed.svg
    ```
    - Updates IDs and all references (href, xlink:href, url(#id))
    - Reports applied vs skipped mappings
@@ -256,20 +256,20 @@ This is the most common workflow for organizing sprite sheets and icon libraries
 6. **Extract or export with stable IDs:**
    ```bash
    # Single object
-   node export-svg-objects.cjs sprites.renamed.svg --extract icon_save icon_save.svg --margin 5
+   node sbb-export.cjs sprites.renamed.svg --extract icon_save icon_save.svg --margin 5
 
    # All objects
-   node export-svg-objects.cjs sprites.renamed.svg --export-all exported --export-groups --margin 2
+   node sbb-export.cjs sprites.renamed.svg --export-all exported --export-groups --margin 2
    ```
 
 ## Quick Testing & Validation
 
 ```bash
 # Test library functions against an SVG
-node test-svg-bbox.js drawing.svg
+node sbb-test.cjs drawing.svg
 
 # Fix broken SVG (missing viewBox/width/height)
-node fix_svg_viewbox.js broken.svg fixed.svg
+node sbb-fix-viewbox.cjs broken.svg fixed.svg
 
 # Render to PNG
 node render_svg_chrome.js drawing.svg preview.png --mode visible --scale 2 --background transparent
@@ -277,7 +277,7 @@ node render_svg_chrome.js drawing.svg preview.png --mode visible --scale 2 --bac
 
 ## Critical Implementation Details
 
-### HTML Preview Rendering (`export-svg-objects.cjs --list`)
+### HTML Preview Rendering (`sbb-export.cjs --list`)
 
 The HTML object catalog uses `<use href="#element-id" />` to reference elements from a hidden SVG container for thumbnail generation. This architecture requires careful handling of transforms and coordinate systems to ensure accurate previews.
 
@@ -371,7 +371,7 @@ This bug was discovered through systematic hypothesis testing. Here's the comple
 **Test performed:**
 ```bash
 # Extract text8 to individual SVG file with zero margin
-node export-svg-objects.cjs samples/test_text_to_path_advanced.svg \
+node sbb-export.cjs samples/test_text_to_path_advanced.svg \
   --extract text8 /tmp/extracted_objects/text8.svg --margin 0
 
 # Open in browser
@@ -402,7 +402,7 @@ open -a "Google Chrome" /tmp/extracted_objects/text8.svg
 
 **Test performed:**
 ```javascript
-// In export-svg-objects.cjs, remove viewBox from hidden container
+// In sbb-export.cjs, remove viewBox from hidden container
 const clonedForMarkup = rootSvg.cloneNode(true);
 clonedForMarkup.removeAttribute('viewBox');
 clonedForMarkup.removeAttribute('width');
@@ -574,7 +574,7 @@ This **exactly matches** the original SVG's transform inheritance chain! ✓✓�
 **Test performed:**
 ```bash
 # Regenerate HTML with parent transform fix
-node export-svg-objects.cjs samples/test_text_to_path_advanced.svg \
+node sbb-export.cjs samples/test_text_to_path_advanced.svg \
   --list --out-html /tmp/test.objects.html --auto-open
 
 # Open in Chrome and inspect previously broken elements

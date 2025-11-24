@@ -49,7 +49,7 @@ const { openInChrome } = require('./browser-utils.cjs');
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ render_svg_chrome.cjs - Render SVG to PNG via Headless Chrome             ║
+║ sbb-render.cjs - Render SVG to PNG via Headless Chrome             ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
@@ -57,7 +57,7 @@ DESCRIPTION:
   precise control over what gets rendered and how.
 
 USAGE:
-  node render_svg_chrome.cjs input.svg output.png [options]
+  node sbb-render.cjs input.svg output.png [options]
 
 ARGUMENTS:
   input.svg           Input SVG file to render
@@ -125,24 +125,24 @@ OPTIONS:
 EXAMPLES:
 
   # Render with default settings (visible mode, white background)
-  node render_svg_chrome.cjs drawing.svg output.png
+  node sbb-render.cjs drawing.svg output.png
 
   # Render full drawing regardless of viewBox
-  node render_svg_chrome.cjs drawing.svg full.png --mode full
+  node sbb-render.cjs drawing.svg full.png --mode full
 
   # Render with transparent background at high resolution
-  node render_svg_chrome.cjs icon.svg icon.png --background transparent --scale 8
+  node sbb-render.cjs icon.svg icon.png --background transparent --scale 8
 
   # Render only a specific element
-  node render_svg_chrome.cjs sprites.svg logo.png \\
+  node sbb-render.cjs sprites.svg logo.png \\
     --mode element --element-id logo_main --margin 5
 
   # Custom dimensions and background color
-  node render_svg_chrome.cjs chart.svg chart.png \\
+  node sbb-render.cjs chart.svg chart.png \\
     --width 1920 --height 1080 --background "#f0f0f0"
 
   # Render and immediately view
-  node render_svg_chrome.cjs drawing.svg preview.png --auto-open
+  node sbb-render.cjs drawing.svg preview.png --auto-open
 
 ═══════════════════════════════════════════════════════════════════════════════
 

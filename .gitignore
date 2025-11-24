@@ -76,3 +76,11 @@ yarn.lock
 # Optional: Browser downloads
 *.crdownload
 *.download
+
+# npm pack output
+*.tgz
+
+# Development/testing files (not published)
+*.bak
+*.bak2
+*.bak3

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * test-svg-bbox.js
+ * sbb-test.cjs
  *
  * Usage:
- *    node test-svg-bbox.js path/to/file.svg
+ *    node sbb-test.cjs path/to/file.svg
  *
  * What it does:
  *  - launches Chrome/Chromium via Puppeteer (headless).
@@ -109,7 +109,7 @@ function makeHtmlShell() {
 async function main() {
   const args = process.argv.slice(2);
   if (args.length < 1) {
-    console.error('Usage: node test-svg-bbox.js path/to/file.svg');
+    console.error('Usage: node sbb-test.cjs path/to/file.svg');
     process.exit(1);
   }
 

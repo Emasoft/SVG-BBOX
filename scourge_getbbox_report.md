@@ -58,7 +58,7 @@ This report lists all occurrences of the **forbidden** `.getBBox()` function in 
 **In Node.js:**
 ```javascript
 // Requires Puppeteer for headless Chrome
-// See test-svg-bbox.js or export-svg-objects.cjs for Node.js examples
+// See sbb-test.cjs or sbb-export.cjs for Node.js examples
 ```
 
 ### Step 2: Replace getBBox() Calls

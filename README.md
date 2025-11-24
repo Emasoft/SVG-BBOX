@@ -1,11 +1,13 @@
-# SVG Visual BBox Toolkit 🧩
+# SVG-BBOX 🧩
 
 > High-precision **visual bounding boxes** and **SVG object tooling** powered by headless Chrome & Puppeteer.
 
 <p align="center">
-  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D16-brightgreen?style=for-the-badge">
-  <img alt="Puppeteer" src="https://img.shields.io/badge/puppeteer-^22-blue?style=for-the-badge">
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge">
+  <a href="https://www.npmjs.com/package/svg-bbox"><img alt="npm version" src="https://img.shields.io/npm/v/svg-bbox?style=for-the-badge"></a>
+  <a href="https://www.npmjs.com/package/svg-bbox"><img alt="npm downloads" src="https://img.shields.io/npm/dm/svg-bbox?style=for-the-badge"></a>
+  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=for-the-badge">
+  <a href="https://github.com/USERNAME/svg-bbox/actions"><img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/USERNAME/svg-bbox/ci.yml?branch=main&style=for-the-badge"></a>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge"></a>
 </p>
 
 ---
@@ -32,9 +34,9 @@ Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling
 - [How it works (diagram)](#-how-it-works-diagram)
 - [Tools](#-tools)
   - [Library: `SvgVisualBBox.js`](#library-svgvisualbboxjs)
-  - [Renderer: `render_svg_chrome.cjs`](#renderer-render_svg_chromecjs)
-  - [Fixer: `fix_svg_viewbox.js`](#fixer-fix_svg_viewboxjs)
-  - [BBox Calculator: `getbbox.cjs`](#bbox-calculator-getbboxcjs)
+  - [Renderer: `sbb-render.cjs`](#renderer-render_svg_chromecjs)
+  - [Fixer: `sbb-fix-viewbox.cjs`](#fixer-fix_svg_viewboxjs)
+  - [BBox Calculator: `sbb-getbbox.cjs`](#bbox-calculator-getbboxcjs)
   - [Multi-tool: `extract_svg_objects.js`](#multi-tool-extract_svg_objectsjs)
 - [Renaming workflow with the HTML viewer](#-renaming-workflow-with-the-html-viewer)
 - [Troubleshooting](#-troubleshooting)
@@ -74,34 +76,50 @@ Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling
 
 ## 📦 Installation
 
-> **CRITICAL**: You need **Node.js ≥ 16** and **Chrome or Chromium** installed.
+### Via npm (Recommended)
+
+```bash
+# Install globally for CLI commands
+npm install -g svg-bbox
+
+# Or install locally in your project
+npm install svg-bbox
+
+# Using pnpm
+pnpm add svg-bbox
+
+# Using yarn
+yarn add svg-bbox
+```
+
+After installation, the following CLI commands are available:
+- `sbb-getbbox` - Compute visual bounding boxes
+- `sbb-export` - List, extract, and export SVG objects
+- `sbb-fix-viewbox` - Fix missing viewBox/dimensions
+- `sbb-render` - Render SVG to PNG
+- `sbb-test` - Test library functions
+
+### From Source
+
+```bash
+git clone https://github.com/USERNAME/svg-bbox.git
+cd svg-bbox
+pnpm install
+```
+
+### Requirements
+
+> **CRITICAL**: You need **Node.js ≥ 18** and **Chrome or Chromium** installed.
 >
 > **⚠️ ONLY Chrome/Chromium are supported** — other browsers have poor SVG support.
 > This library uses headless Chrome via Puppeteer for measurements, and visual verification
 > must use the same browser engine to match results.
 
-1. **Clone the repo**
+After installing, Puppeteer will automatically download a compatible Chromium browser. Alternatively, you can use your system Chrome by setting the `PUPPETEER_EXECUTABLE_PATH` environment variable.
 
 ```bash
-git clone https://github.com/your-user/svg-visual-bbox-toolkit.git
-cd svg-visual-bbox-toolkit
-```
-
-2. **Install dependencies**
-
-All scripts use [Puppeteer](https://github.com/puppeteer/puppeteer) under the hood:
-
-```bash
-pnpm install
-# or, if you prefer direct:
-pnpm add puppeteer
-```
-
-3. **Make scripts executable (optional, on macOS/Linux)**
-
-```bash
-chmod +x render_svg_chrome.cjs
-chmod +x fix_svg_viewbox.js
+chmod +x sbb-render.cjs
+chmod +x sbb-fix-viewbox.cjs
 chmod +x extract_svg_objects.js
 ```
 
@@ -112,7 +130,7 @@ chmod +x extract_svg_objects.js
 ### Render an SVG to PNG at the correct size
 
 ```bash
-node render_svg_chrome.cjs input.svg output.png --mode full --scale 4
+node sbb-render.cjs input.svg output.png --mode full --scale 4
 ```
 
 - Detects the **full drawing extents**.
@@ -124,7 +142,7 @@ node render_svg_chrome.cjs input.svg output.png --mode full --scale 4
 ### Fix an SVG that has no `viewBox` / `width` / `height`
 
 ```bash
-node fix_svg_viewbox.js broken.svg fixed/broken.fixed.svg
+node sbb-fix-viewbox.cjs broken.svg fixed/broken.fixed.svg
 ```
 
 - Computes the **full visual drawing box**.
@@ -241,14 +259,14 @@ Used by the fixer and renderer to choose between “full drawing” and “visib
 
 ---
 
-### Renderer: `render_svg_chrome.cjs`
+### Renderer: `sbb-render.cjs`
 
 Render SVG → PNG using Chrome + `SvgVisualBBox`.
 
 #### Syntax
 
 ```bash
-node render_svg_chrome.cjs input.svg output.png \
+node sbb-render.cjs input.svg output.png \
   [--mode full|visible|element] \
   [--element-id someId] \
   [--scale N] \
@@ -275,7 +293,7 @@ node render_svg_chrome.cjs input.svg output.png \
 
 ```bash
 # Transparent PNG of what's actually visible in the viewBox
-node render_svg_chrome.cjs map.svg map.png \
+node sbb-render.cjs map.svg map.png \
   --mode visible \
   --margin 10 \
   --background transparent
@@ -283,14 +301,14 @@ node render_svg_chrome.cjs map.svg map.png \
 
 ---
 
-### Fixer: `fix_svg_viewbox.js`
+### Fixer: `sbb-fix-viewbox.cjs`
 
 Fix missing/inconsistent viewBox and sizes.
 
 #### Syntax
 
 ```bash
-node fix_svg_viewbox.js input.svg [output.svg]
+node sbb-fix-viewbox.cjs input.svg [output.svg]
 ```
 
 - If `output.svg` is omitted, writes `input.fixed.svg`.
@@ -302,12 +320,12 @@ node fix_svg_viewbox.js input.svg [output.svg]
 #### Example
 
 ```bash
-node fix_svg_viewbox.js broken.svg fixed/broken.fixed.svg
+node sbb-fix-viewbox.cjs broken.svg fixed/broken.fixed.svg
 ```
 
 ---
 
-### BBox Calculator: `getbbox.cjs`
+### BBox Calculator: `sbb-getbbox.cjs`
 
 CLI utility for computing visual bounding boxes using canvas-based measurement.
 
@@ -315,17 +333,17 @@ CLI utility for computing visual bounding boxes using canvas-based measurement.
 
 **Single file:**
 ```bash
-node getbbox.cjs <svg-file> [object-ids...] [--ignore-vbox] [--sprite] [--json <file>]
+node sbb-getbbox.cjs <svg-file> [object-ids...] [--ignore-vbox] [--sprite] [--json <file>]
 ```
 
 **Directory batch:**
 ```bash
-node getbbox.cjs --dir <directory> [--filter <regex>] [--sprite] [--json <file>]
+node sbb-getbbox.cjs --dir <directory> [--filter <regex>] [--sprite] [--json <file>]
 ```
 
 **List file:**
 ```bash
-node getbbox.cjs --list <txt-file> [--sprite] [--json <file>]
+node sbb-getbbox.cjs --list <txt-file> [--sprite] [--json <file>]
 ```
 
 #### Features
@@ -343,22 +361,22 @@ node getbbox.cjs --list <txt-file> [--sprite] [--json <file>]
 
 ```bash
 # Compute whole SVG bbox
-node getbbox.cjs drawing.svg
+node sbb-getbbox.cjs drawing.svg
 
 # Compute specific elements
-node getbbox.cjs sprites.svg icon_save icon_load icon_close
+node sbb-getbbox.cjs sprites.svg icon_save icon_load icon_close
 
 # Get full drawing (ignore viewBox)
-node getbbox.cjs drawing.svg --ignore-vbox
+node sbb-getbbox.cjs drawing.svg --ignore-vbox
 
 # Auto-detect and process sprite sheet
-node getbbox.cjs sprite-sheet.svg --sprite
+node sbb-getbbox.cjs sprite-sheet.svg --sprite
 
 # Batch process directory with filter
-node getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
+node sbb-getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
 
 # Process from list file
-node getbbox.cjs --list process-list.txt --json output.json
+node sbb-getbbox.cjs --list process-list.txt --json output.json
 ```
 
 #### List File Format

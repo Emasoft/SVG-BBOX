@@ -3,7 +3,7 @@
  * Fix SVG files missing width/height/viewBox using Puppeteer + SvgVisualBBox.
  *
  * Usage:
- *   node fix_svg_viewbox.js input.svg [output.svg] [--auto-open]
+ *   node sbb-fix-viewbox.cjs input.svg [output.svg] [--auto-open]
  *
  * If output.svg is omitted, the script writes a new file named:
  *   <input>.fixed.svg
@@ -30,7 +30,7 @@ const { openInChrome } = require('./browser-utils.cjs');
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ fix_svg_viewbox.js - Repair Missing SVG ViewBox & Dimensions              ║
+║ sbb-fix-viewbox.cjs - Repair Missing SVG ViewBox & Dimensions              ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
@@ -38,7 +38,7 @@ DESCRIPTION:
   by computing the full visual bbox of all content.
 
 USAGE:
-  node fix_svg_viewbox.js input.svg [output.svg] [--auto-open] [--help]
+  node sbb-fix-viewbox.cjs input.svg [output.svg] [--auto-open] [--help]
 
 ARGUMENTS:
   input.svg           Input SVG file to fix
@@ -75,14 +75,14 @@ AUTO-REPAIR RULES:
 
 EXAMPLES:
   # Fix SVG with default output name
-  node fix_svg_viewbox.js broken.svg
+  node sbb-fix-viewbox.cjs broken.svg
   → Creates: broken.fixed.svg
 
   # Fix with custom output path
-  node fix_svg_viewbox.js broken.svg repaired.svg
+  node sbb-fix-viewbox.cjs broken.svg repaired.svg
 
   # Fix and automatically open in browser
-  node fix_svg_viewbox.js broken.svg --auto-open
+  node sbb-fix-viewbox.cjs broken.svg --auto-open
 
 USE CASES:
   • SVG exports from design tools missing viewBox

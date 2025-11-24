@@ -63,7 +63,7 @@ included in the bounding box: stroke, filters, masks, markers, images, patterns,
 | File                  | Description                                                                                 |
 |-----------------------|---------------------------------------------------------------------------------------------|
 | `SvgVisualBBox.js`    | Main library (UMD): exposes `SvgVisualBBox` global in browser and works with CommonJS/AMD. |
-| `test-svg-bbox.js`    | Node.js CLI script that uses Puppeteer to test the library against a given SVG file.       |
+| `sbb-test.cjs`    | Node.js CLI script that uses Puppeteer to test the library against a given SVG file.       |
 | `manual.md`           | This manual – usage, API, and examples.                                                     |
 
 Typical project layout:
@@ -71,7 +71,7 @@ Typical project layout:
 ```text
 your-project/
   SvgVisualBBox.js
-  test-svg-bbox.js
+  sbb-test.cjs
   manual.md
   some-drawing.svg
   package.json
@@ -401,7 +401,7 @@ The `padding` object tells you how many **user units** to expand on each side.
 
 ## 7. Node.js Test Harness
 
-The Node script `test-svg-bbox.js` allows you to run real SVGs through a headless
+The Node script `sbb-test.cjs` allows you to run real SVGs through a headless
 browser and record all bbox calculations.
 
 ### Setup
@@ -416,12 +416,12 @@ npm install puppeteer chrome-launcher
 Ensure the following files exist:
 
 - `SvgVisualBBox.js`
-- `test-svg-bbox.js`
+- `sbb-test.cjs`
 
 ### Running Tests
 
 ```bash
-node test-svg-bbox.js path/to/drawing.svg
+node sbb-test.cjs path/to/drawing.svg
 ```
 
 This will:
