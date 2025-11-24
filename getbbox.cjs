@@ -41,6 +41,7 @@ function parseArgs(argv) {
     filter: null,         // regex filter for directory files
     listFile: null,       // txt file with list of SVGs
     jsonOutput: null,     // JSON output file path
+    spriteMode: false,    // auto-detect and process as sprite sheet
     help: false
   };
 
@@ -53,6 +54,9 @@ function parseArgs(argv) {
     }
     else if (arg === '--ignore-vbox' || arg === '--ignore-viewbox') {
       options.ignoreViewBox = true;
+    }
+    else if (arg === '--sprite' || arg === '-s') {
+      options.spriteMode = true;
     }
     else if (arg === '--dir' || arg === '-d') {
       options.mode = 'dir';
@@ -121,6 +125,10 @@ OPTIONS:
   --ignore-vbox, --ignore-viewbox
       Compute full drawing bbox, ignoring viewBox clipping
 
+  --sprite, -s
+      Auto-detect sprite sheets and compute bbox for each sprite/icon
+      Automatically processes all sprites when no object IDs specified
+
   --json <file>, -j <file>
       Save results as JSON to specified file
 
@@ -185,6 +193,9 @@ EXAMPLES:
   # Get full drawing (ignore viewBox)
   node getbbox.cjs drawing.svg --ignore-vbox
 
+  # Auto-detect sprite sheet and process all sprites
+  node getbbox.cjs icon-sprite-sheet.svg --sprite
+
   # Batch process directory
   node getbbox.cjs --dir ./svgs --json results.json
 
@@ -244,6 +255,134 @@ function repairSvgAttributes(svgMarkup, bbox) {
 }
 
 // ============================================================================
+// SPRITE SHEET DETECTION & ANALYSIS
+// ============================================================================
+
+/**
+ * Detect if SVG is likely a sprite sheet and extract sprite information
+ * @param {Object} page - Puppeteer page with loaded SVG
+ * @returns {Promise<Object>} - {isSprite: boolean, sprites: Array, grid: Object}
+ */
+async function detectSpriteSheet(page) {
+  return await page.evaluate(() => {
+    const rootSvg = document.querySelector('svg');
+    if (!rootSvg) return { isSprite: false, sprites: [], grid: null };
+
+    // Get all potential sprite elements (excluding defs, style, script, etc.)
+    const children = Array.from(rootSvg.children).filter(el => {
+      const tag = el.tagName.toLowerCase();
+      return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
+             tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
+    });
+
+    if (children.length < 3) {
+      return { isSprite: false, sprites: [], grid: null };
+    }
+
+    // Collect sprite candidates with their visual properties
+    const sprites = [];
+    for (const child of children) {
+      const id = child.id || `auto_${child.tagName}_${sprites.length}`;
+      const bbox = child.getBBox ? child.getBBox() : null;
+
+      if (bbox && bbox.width > 0 && bbox.height > 0) {
+        sprites.push({
+          id,
+          tag: child.tagName.toLowerCase(),
+          x: bbox.x,
+          y: bbox.y,
+          width: bbox.width,
+          height: bbox.height,
+          hasId: !!child.id
+        });
+      }
+    }
+
+    if (sprites.length < 3) {
+      return { isSprite: false, sprites: [], grid: null };
+    }
+
+    // Analyze sprite characteristics
+    const widths = sprites.map(s => s.width);
+    const heights = sprites.map(s => s.height);
+    const areas = sprites.map(s => s.width * s.height);
+
+    const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
+    const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
+    const avgArea = areas.reduce((a, b) => a + b, 0) / areas.length;
+
+    // Calculate standard deviations
+    const widthStdDev = Math.sqrt(
+      widths.reduce((sum, w) => sum + Math.pow(w - avgWidth, 2), 0) / widths.length
+    );
+    const heightStdDev = Math.sqrt(
+      heights.reduce((sum, h) => sum + Math.pow(h - avgHeight, 2), 0) / heights.length
+    );
+    const areaStdDev = Math.sqrt(
+      areas.reduce((sum, a) => sum + Math.pow(a - avgArea, 2), 0) / areas.length
+    );
+
+    // Coefficient of variation (lower = more uniform)
+    const widthCV = widthStdDev / avgWidth;
+    const heightCV = heightStdDev / avgHeight;
+    const areaCV = areaStdDev / avgArea;
+
+    // Check for common ID patterns in sprite sheets
+    const idPatterns = [
+      /^icon[-_]/i,
+      /^sprite[-_]/i,
+      /^symbol[-_]/i,
+      /^glyph[-_]/i,
+      /[-_]\d+$/,
+      /^\d+$/
+    ];
+
+    const hasCommonPattern = sprites.filter(s =>
+      s.hasId && idPatterns.some(p => p.test(s.id))
+    ).length / sprites.length > 0.5;
+
+    // Detect grid arrangement
+    const xPositions = [...new Set(sprites.map(s => Math.round(s.x)))].sort((a, b) => a - b);
+    const yPositions = [...new Set(sprites.map(s => Math.round(s.y)))].sort((a, b) => a - b);
+
+    const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
+
+    // Decision criteria for sprite sheet detection
+    const isSpriteSheet = (
+      // Uniform sizes (CV < 0.3 means sizes are quite similar)
+      (widthCV < 0.3 && heightCV < 0.3) ||
+      (areaCV < 0.3) ||
+      // Common naming pattern
+      hasCommonPattern ||
+      // Grid arrangement
+      isGridArranged
+    );
+
+    return {
+      isSprite: isSpriteSheet,
+      sprites: sprites.map(s => ({ id: s.id, tag: s.tag })),
+      grid: isGridArranged ? {
+        rows: yPositions.length,
+        cols: xPositions.length,
+        xPositions,
+        yPositions
+      } : null,
+      stats: {
+        count: sprites.length,
+        avgSize: { width: avgWidth, height: avgHeight },
+        uniformity: {
+          widthCV: widthCV.toFixed(3),
+          heightCV: heightCV.toFixed(3),
+          areaCV: areaCV.toFixed(3)
+        },
+        hasCommonPattern,
+        isGridArranged
+      }
+    };
+  });
+}
+
+// ============================================================================
 // BBOX COMPUTATION (using Puppeteer + SvgVisualBBox)
 // ============================================================================
 
@@ -252,9 +391,10 @@ function repairSvgAttributes(svgMarkup, bbox) {
  * @param {string} svgPath - Path to SVG file
  * @param {string[]} objectIds - Array of object IDs (empty = whole content)
  * @param {boolean} ignoreViewBox - Compute full drawing bbox
- * @returns {Promise<Object>} - {filename: string, results: {id: bbox}}
+ * @param {boolean} spriteMode - Auto-detect and process as sprite sheet
+ * @returns {Promise<Object>} - {filename: string, results: {id: bbox}, spriteInfo: Object}
  */
-async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false) {
+async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, spriteMode = false) {
   const svgContent = fs.readFileSync(svgPath, 'utf8');
 
   const browser = await puppeteer.launch({
@@ -297,6 +437,31 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false) {
         await window.SvgVisualBBox.waitForDocumentFonts(document, 8000);
       }
     });
+
+    // Detect sprite sheet if in sprite mode or auto-detect
+    let spriteInfo = null;
+    if (spriteMode && objectIds.length === 0) {
+      spriteInfo = await detectSpriteSheet(page);
+
+      if (spriteInfo.isSprite) {
+        // Automatically use all detected sprites as object IDs
+        objectIds = spriteInfo.sprites.map(s => s.id).filter(id => id && !id.startsWith('auto_'));
+
+        // If no named sprites, use auto-generated IDs
+        if (objectIds.length === 0) {
+          objectIds = spriteInfo.sprites.map(s => s.id);
+        }
+
+        console.log(`\n🎨 Sprite sheet detected!`);
+        console.log(`   Sprites: ${spriteInfo.stats.count}`);
+        if (spriteInfo.grid) {
+          console.log(`   Grid: ${spriteInfo.grid.rows} rows × ${spriteInfo.grid.cols} cols`);
+        }
+        console.log(`   Avg size: ${spriteInfo.stats.avgSize.width.toFixed(1)} × ${spriteInfo.stats.avgSize.height.toFixed(1)}`);
+        console.log(`   Uniformity: width CV=${spriteInfo.stats.uniformity.widthCV}, height CV=${spriteInfo.stats.uniformity.heightCV}`);
+        console.log(`   Computing bbox for ${objectIds.length} sprites...\n`);
+      }
+    }
 
     const mode = ignoreViewBox ? 'unclipped' : 'clipped';
 
@@ -351,11 +516,17 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false) {
       return output;
     }, objectIds, mode);
 
-    return {
+    const result = {
       filename: path.basename(svgPath),
       path: svgPath,
       results
     };
+
+    if (spriteInfo) {
+      result.spriteInfo = spriteInfo;
+    }
+
+    return result;
 
   } finally {
     await browser.close();
@@ -561,7 +732,7 @@ async function main() {
         process.exit(1);
       }
 
-      const result = await computeBBox(options.svgPath, options.objectIds, options.ignoreViewBox);
+      const result = await computeBBox(options.svgPath, options.objectIds, options.ignoreViewBox, options.spriteMode);
       allResults.push(result);
     }
     else if (options.mode === 'dir') {

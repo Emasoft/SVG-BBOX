@@ -312,17 +312,17 @@ CLI utility for computing visual bounding boxes using canvas-based measurement.
 
 **Single file:**
 ```bash
-node getbbox.cjs <svg-file> [object-ids...] [--ignore-vbox] [--json <file>]
+node getbbox.cjs <svg-file> [object-ids...] [--ignore-vbox] [--sprite] [--json <file>]
 ```
 
 **Directory batch:**
 ```bash
-node getbbox.cjs --dir <directory> [--filter <regex>] [--json <file>]
+node getbbox.cjs --dir <directory> [--filter <regex>] [--sprite] [--json <file>]
 ```
 
 **List file:**
 ```bash
-node getbbox.cjs --list <txt-file> [--json <file>]
+node getbbox.cjs --list <txt-file> [--sprite] [--json <file>]
 ```
 
 #### Features
@@ -330,6 +330,7 @@ node getbbox.cjs --list <txt-file> [--json <file>]
 - **Whole SVG bbox**: Compute bbox for entire SVG content (respecting viewBox)
 - **Multiple objects**: Get bboxes for specific elements by ID
 - **Full drawing mode**: Use `--ignore-vbox` to measure complete drawing (ignoring viewBox clipping)
+- **Sprite sheet detection**: Use `--sprite` to automatically detect and process icon sprites/stacks
 - **Batch processing**: Process entire directories with optional regex filter
 - **List files**: Process multiple SVGs with per-file object IDs from a text file
 - **JSON export**: Save results as JSON for programmatic use
@@ -346,6 +347,9 @@ node getbbox.cjs sprites.svg icon_save icon_load icon_close
 
 # Get full drawing (ignore viewBox)
 node getbbox.cjs drawing.svg --ignore-vbox
+
+# Auto-detect and process sprite sheet
+node getbbox.cjs sprite-sheet.svg --sprite
 
 # Batch process directory with filter
 node getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
@@ -367,6 +371,32 @@ path/to/sprites.svg icon1 icon2 icon3
 
 # Get full drawing bbox (ignore viewBox)
 path/to/drawing.svg --ignore-vbox
+```
+
+#### Sprite Sheet Detection
+
+When using the `--sprite` flag with no object IDs specified, the tool automatically detects sprite sheets (SVGs used as icon stacks) and processes each sprite/icon separately.
+
+**Detection criteria:**
+- **Size uniformity** - Coefficient of variation < 0.3 for widths, heights, or areas
+- **Grid arrangement** - Icons arranged in rows/columns with consistent spacing
+- **Common naming patterns** - IDs matching `icon_`, `sprite_`, `symbol_`, `glyph_`, or numeric patterns
+- **Minimum count** - At least 3 child elements
+
+**Example output:**
+```
+🎨 Sprite sheet detected!
+   Sprites: 6
+   Grid: 2 rows × 3 cols
+   Avg size: 40.0 × 40.0
+   Uniformity: width CV=0.000, height CV=0.000
+   Computing bbox for 6 sprites...
+
+SVG: sprite-sheet.svg
+├─ icon_1: {x: 5.00, y: 5.00, width: 40.00, height: 40.00}
+├─ icon_2: {x: 80.00, y: 5.00, width: 40.00, height: 40.00}
+├─ icon_3: {x: 150.00, y: 5.00, width: 40.00, height: 40.00}
+└─ ... (remaining sprites)
 ```
 
 #### Output Format
