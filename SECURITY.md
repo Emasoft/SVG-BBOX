@@ -170,12 +170,64 @@ When using SVG-BBOX in production:
    });
    ```
 
+## Security Audit Status
+
+**Comprehensive Audit Performed:** 2025-11-24
+
+### Issues Identified
+
+| Severity | Count | Status |
+|----------|-------|--------|
+| Critical | 8 | ⏳ In Progress |
+| High | 14 | ⏳ In Progress |
+| Medium | 18 | 📋 Planned |
+| Low | 7 | 📋 Planned |
+| **Total** | **47** | |
+
+See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
+
+### Critical Issues Being Addressed
+
+1. **Command Injection** - Unsanitized file paths passed to shell commands
+2. **Path Traversal** - Missing validation allows arbitrary file read/write
+3. **SVG Code Injection** - Malicious SVG can execute code
+4. **JSON Injection** - Prototype pollution via malicious JSON
+5. **Insecure Temp Files** - Predictable paths in world-readable locations
+6. **Undefined Variable Bug** - Critical parsing error in sbb-fix-viewbox
+7. **Missing File Extension Validation** - Any file type accepted
+8. **Windows Command Injection** - Unsafe path escaping on Windows
+
+### Mitigation Progress
+
+✅ **Completed:**
+- Created `lib/security-utils.cjs` with comprehensive security functions
+- Created `lib/cli-utils.cjs` for standardized CLI tooling
+- Path validation (`validateFilePath`, `validateOutputPath`)
+- SVG sanitization (`readSVGFileSafe`, `sanitizeSVGContent`)
+- JSON validation (`readJSONFileSafe`, `validateRenameMapping`)
+- Secure temp file handling (`createSecureTempDir`)
+- Custom error classes for better error handling
+
+⏳ **In Progress:**
+- Applying security fixes to all 6 CLI tools
+- Adding comprehensive security tests
+- Updating all documentation
+
+📋 **Planned:**
+- Refactoring duplicate code across CLI tools
+- Adding input size limits everywhere
+- Implementing proper timeout handling
+- Breaking up large functions (>100 lines)
+- Adding comprehensive JSDoc
+
+**Estimated Completion:** 5-7 weeks (200-270 hours)
+
 ## Known Limitations
 
-- **No SVG sanitization** - We do not sanitize SVG input
-- **No network isolation** - External resources can be loaded by default
-- **No resource limits** - Very large/complex SVG can consume excessive resources
-- **Browser security** - We rely on Chrome's security, which is not perfect
+- **Limited SVG sanitization** - Basic script/event removal (use DOMPurify for full sanitization)
+- **No network isolation by default** - External resources can be loaded
+- **No built-in resource limits** - Large/complex SVG can consume excessive resources
+- **Browser security dependency** - Relies on Chromium's security model
 
 ## Security Checklist for Contributors
 
