@@ -103,11 +103,11 @@ function updateChangelog(newVersion) {
 
   if (lastLinkIndex !== -1) {
     lines[lastLinkIndex] =
-      `[Unreleased]: https://github.com/USERNAME/svg-bbox/compare/v${newVersion}...HEAD`;
+      `[Unreleased]: https://github.com/Emasoft/SVG-BBOX/compare/v${newVersion}...HEAD`;
     lines.splice(
       lastLinkIndex + 1,
       0,
-      `[${newVersion}]: https://github.com/USERNAME/svg-bbox/releases/tag/v${newVersion}`
+      `[${newVersion}]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v${newVersion}`
     );
     content = lines.join('\n');
   }

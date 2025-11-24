@@ -14,7 +14,7 @@ This guide covers the development setup, architecture, and workflows for SVG-BBO
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/svg-bbox.git
+git clone https://github.com/YOUR_Emasoft/SVG-BBOX.git
 cd svg-bbox
 pnpm install
 ```

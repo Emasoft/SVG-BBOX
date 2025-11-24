@@ -35,7 +35,7 @@ Enhancement suggestions are welcome! Please:
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/svg-bbox.git
+   git clone https://github.com/YOUR_Emasoft/SVG-BBOX.git
    cd svg-bbox
    pnpm install
    ```

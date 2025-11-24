@@ -6,7 +6,7 @@
   <a href="https://www.npmjs.com/package/svg-bbox"><img alt="npm version" src="https://img.shields.io/npm/v/svg-bbox?style=for-the-badge"></a>
   <a href="https://www.npmjs.com/package/svg-bbox"><img alt="npm downloads" src="https://img.shields.io/npm/dm/svg-bbox?style=for-the-badge"></a>
   <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=for-the-badge">
-  <a href="https://github.com/USERNAME/svg-bbox/actions"><img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/USERNAME/svg-bbox/ci.yml?branch=main&style=for-the-badge"></a>
+  <a href="https://github.com/Emasoft/SVG-BBOX/actions"><img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/Emasoft/SVG-BBOX/ci.yml?branch=main&style=for-the-badge"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge"></a>
 </p>
 
@@ -102,7 +102,7 @@ After installation, the following CLI commands are available:
 ### From Source
 
 ```bash
-git clone https://github.com/USERNAME/svg-bbox.git
+git clone https://github.com/Emasoft/SVG-BBOX.git
 cd svg-bbox
 pnpm install
 ```

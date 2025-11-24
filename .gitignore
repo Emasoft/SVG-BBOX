@@ -69,6 +69,9 @@ scripts_dev/
 libs_dev/
 examples_dev/
 
+# AI assistant instructions (private)
+CLAUDE.md
+
 # Package manager locks (keep pnpm-lock.yaml but ignore others)
 package-lock.json
 yarn.lock

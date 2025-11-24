@@ -38,5 +38,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/USERNAME/svg-bbox/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/USERNAME/svg-bbox/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Emasoft/SVG-BBOX/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.0

@@ -22,12 +22,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/svg-bbox.git"
+    "url": "https://github.com/Emasoft/SVG-BBOX.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/svg-bbox/issues"
+    "url": "https://github.com/Emasoft/SVG-BBOX/issues"
   },
-  "homepage": "https://github.com/USERNAME/svg-bbox#readme",
+  "homepage": "https://github.com/Emasoft/SVG-BBOX#readme",
   "keywords": [
     "svg",
     "bounding-box",
@@ -42,7 +42,7 @@
     "sprite-sheet",
     "cli"
   ],
-  "author": "",
+  "author": "Emasoft",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
@@ -65,10 +65,12 @@
     "version:bump:patch": "node scripts/bump-version.cjs patch",
     "version:bump:minor": "node scripts/bump-version.cjs minor",
     "version:bump:major": "node scripts/bump-version.cjs major",
-    "version:bump": "node scripts/bump-version.cjs"
+    "version:bump": "node scripts/bump-version.cjs",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {
-    "chrome-launcher": "^1.1.2"
+    "chrome-launcher": "^1.1.2",
+    "puppeteer": "^24.31.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
@@ -81,7 +83,6 @@
     "happy-dom": "^14.12.0",
     "jsdom": "^27.2.0",
     "prettier": "^3.3.0",
-    "puppeteer": "^24.31.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
   }
