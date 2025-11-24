@@ -105,8 +105,10 @@ async function openInChrome(filePath) {
       command = 'open';
       args = ['-a', detection.name, filePath];
     } else if (platform === 'win32') {
+      // Windows: Use 'start ""' to handle paths with spaces
+      // The empty quotes are the window title (required before the path)
       command = 'cmd';
-      args = ['/c', 'start', detection.path, filePath];
+      args = ['/c', 'start', '""', detection.path, filePath];
     } else {
       // Linux
       command = detection.path;
