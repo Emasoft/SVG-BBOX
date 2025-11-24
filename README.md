@@ -1,4 +1,6 @@
-# SVG-BBOX 🧩
+<div align="center">
+  <h1 style="font-size: 50pt; margin: 0;">📦 SVG-BBOX</h1>
+</div>
 
 > High-precision **visual bounding boxes** and **SVG object tooling** powered by headless Chrome & Puppeteer.
 
