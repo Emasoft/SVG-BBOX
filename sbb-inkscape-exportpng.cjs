@@ -2,7 +2,10 @@
 /**
  * sbb-inkscape-exportpng.cjs
  *
- * Export SVG files to PNG format using Inkscape.
+ * Export SVG files to PNG format using Inkscape with comprehensive control
+ * over all export parameters including color modes, compression, antialiasing,
+ * background, and area settings.
+ *
  * Requires Inkscape to be installed on your system.
  *
  * Part of the svg-bbox toolkit - Inkscape Tools Collection.
@@ -38,58 +41,111 @@ const {
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-inkscape-exportpng.cjs - SVG to PNG Export Tool                 ║
+║ sbb-inkscape-exportpng.cjs - Advanced SVG to PNG Export Tool        ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
-  Export SVG files to PNG format using Inkscape with full control over
-  dimensions, DPI, and export areas.
+  Export SVG files to PNG format using Inkscape with comprehensive control
+  over all export parameters including dimensions, DPI, color modes,
+  compression, antialiasing, background, and export areas.
 
 USAGE:
   node sbb-inkscape-exportpng.cjs input.svg [options]
   node sbb-inkscape-exportpng.cjs --batch <file> [options]
 
-OPTIONS:
+DIMENSION & RESOLUTION OPTIONS:
   --output <file>           Output PNG file (default: <input>.png)
   --width <pixels>          Export width in pixels
   --height <pixels>         Export height in pixels
   --dpi <dpi>               Export DPI (default: 96)
-  --area <mode>             Export area mode:
-                              drawing  - Bounding box of all objects (default)
-                              page     - Full SVG page/canvas
-  --id <object-id>          Export specific object by ID
+                            96 DPI = 1 SVG user unit (px) = 1 bitmap pixel
+  --margin <pixels>         Margin around export area in pixels
+
+EXPORT AREA OPTIONS:
+  --area-drawing            Export bounding box of all objects (default)
+  --area-page               Export full SVG page/viewBox area
+  --area-snap               Snap export area outwards to nearest integer px
+                            (preserves pixel alignment for pixel-snapped graphics)
+  --id <object-id>          Export specific object by ID (with --area-drawing)
+
+COLOR & QUALITY OPTIONS:
+  --color-mode <mode>       Bit depth and color type:
+                            Gray_1, Gray_2, Gray_4, Gray_8, Gray_16
+                            RGB_8, RGB_16
+                            GrayAlpha_8, GrayAlpha_16
+                            RGBA_8, RGBA_16 (default)
+  --compression <0-9>       PNG compression level (default: 6)
+                            0=no compression, 9=maximum compression
+  --antialias <0-3>         Antialiasing level (default: 2)
+                            0=none, 3=maximum
+
+BACKGROUND OPTIONS:
+  --background <color>      Background color (SVG color string)
+                            Examples: "#ff007f", "rgb(255,0,128)", "white"
+  --background-opacity <n>  Background opacity: 0.0-1.0 or 1-255
+                            (default: 255 = fully opaque if --background set)
+
+LEGACY FILE HANDLING:
+  --convert-dpi <method>    Method for legacy (pre-0.92) files (default: none)
+                            none          - No change (renders at 94% size)
+                            scale-viewbox - Rescale globally
+                            scale-document - Rescale each length individually
+
+BATCH PROCESSING:
   --batch <file>            Batch export mode using file list
                             Format: svg_path.svg (one file per line)
+                            All export options apply to each file
+
+OTHER OPTIONS:
   --help                    Show this help
   --version                 Show version
 
 EXAMPLES:
 
-  # Basic PNG export
+  # Basic PNG export (default: area-drawing, 96 DPI)
   node sbb-inkscape-exportpng.cjs icon.svg
 
   # Export with specific dimensions
   node sbb-inkscape-exportpng.cjs icon.svg --width 512 --height 512
 
-  # Export at high DPI
-  node sbb-inkscape-exportpng.cjs icon.svg --dpi 300
+  # Export at high DPI with margin
+  node sbb-inkscape-exportpng.cjs icon.svg --dpi 300 --margin 10
 
   # Export specific object by ID
   node sbb-inkscape-exportpng.cjs sprite.svg --id icon_home --output home.png
 
-  # Export full page area
-  node sbb-inkscape-exportpng.cjs document.svg --area page
+  # Export full page area with white background
+  node sbb-inkscape-exportpng.cjs document.svg --area-page \\
+    --background white --background-opacity 1.0
 
-  # Batch export from file list
-  node sbb-inkscape-exportpng.cjs --batch icons.txt --width 256 --height 256
+  # High-quality export with maximum compression
+  node sbb-inkscape-exportpng.cjs logo.svg --width 1024 --height 1024 \\
+    --antialias 3 --compression 9
+
+  # Export to grayscale 8-bit PNG
+  node sbb-inkscape-exportpng.cjs drawing.svg --color-mode Gray_8
+
+  # Pixel-perfect export with snap
+  node sbb-inkscape-exportpng.cjs pixel-art.svg --area-snap --dpi 96
+
+  # Batch export with shared settings
+  node sbb-inkscape-exportpng.cjs --batch icons.txt \\
+    --width 256 --height 256 --compression 9
 
 OUTPUT:
-  Creates PNG file(s) from SVG input.
+  Creates PNG file(s) from SVG input with specified parameters.
 
   Exit codes:
   • 0: Export successful
   • 1: Error occurred
   • 2: Invalid arguments
+
+NOTES:
+  - By default, exported area is the bounding box of all objects (--area-drawing)
+  - Default DPI of 96 means 1 SVG user unit = 1 bitmap pixel
+  - --area-snap is useful for preserving pixel alignment in pixel art
+  - Legacy file handling only affects pre-Inkscape 0.92 files
+  - Text baseline spacing is never converted (--no-convert-text-baseline-spacing)
 `);
 }
 
@@ -106,11 +162,26 @@ function parseArgs(argv) {
   const args = {
     input: null,
     output: null,
+    // Dimensions
     width: null,
     height: null,
-    dpi: 96,
-    area: 'drawing',
+    dpi: null,
+    margin: null,
+    // Export area
+    areaDrawing: true,  // Default
+    areaPage: false,
+    areaSnap: false,
     objectId: null,
+    // Color & Quality
+    colorMode: null,
+    compression: null,
+    antialias: null,
+    // Background
+    background: null,
+    backgroundOpacity: null,
+    // Legacy handling
+    convertDpiMethod: 'none',
+    // Batch
     batch: null
   };
 
@@ -143,14 +214,67 @@ function parseArgs(argv) {
         console.error('Error: --dpi must be a positive number');
         process.exit(2);
       }
-    } else if (arg === '--area' && i + 1 < argv.length) {
-      args.area = argv[++i];
-      if (!['drawing', 'page'].includes(args.area)) {
-        console.error('Error: --area must be "drawing" or "page"');
+    } else if (arg === '--margin' && i + 1 < argv.length) {
+      args.margin = parseFloat(argv[++i]);
+      if (isNaN(args.margin) || args.margin < 0) {
+        console.error('Error: --margin must be a non-negative number');
         process.exit(2);
       }
+    } else if (arg === '--area-drawing') {
+      args.areaDrawing = true;
+      args.areaPage = false;
+    } else if (arg === '--area-page') {
+      args.areaPage = true;
+      args.areaDrawing = false;
+    } else if (arg === '--area-snap') {
+      args.areaSnap = true;
     } else if (arg === '--id' && i + 1 < argv.length) {
       args.objectId = argv[++i];
+    } else if (arg === '--color-mode' && i + 1 < argv.length) {
+      args.colorMode = argv[++i];
+      const validModes = [
+        'Gray_1', 'Gray_2', 'Gray_4', 'Gray_8', 'Gray_16',
+        'RGB_8', 'RGB_16',
+        'GrayAlpha_8', 'GrayAlpha_16',
+        'RGBA_8', 'RGBA_16'
+      ];
+      if (!validModes.includes(args.colorMode)) {
+        console.error(`Error: --color-mode must be one of: ${validModes.join(', ')}`);
+        process.exit(2);
+      }
+    } else if (arg === '--compression' && i + 1 < argv.length) {
+      args.compression = parseInt(argv[++i], 10);
+      if (isNaN(args.compression) || args.compression < 0 || args.compression > 9) {
+        console.error('Error: --compression must be between 0 and 9');
+        process.exit(2);
+      }
+    } else if (arg === '--antialias' && i + 1 < argv.length) {
+      args.antialias = parseInt(argv[++i], 10);
+      if (isNaN(args.antialias) || args.antialias < 0 || args.antialias > 3) {
+        console.error('Error: --antialias must be between 0 and 3');
+        process.exit(2);
+      }
+    } else if (arg === '--background' && i + 1 < argv.length) {
+      args.background = argv[++i];
+    } else if (arg === '--background-opacity' && i + 1 < argv.length) {
+      args.backgroundOpacity = parseFloat(argv[++i]);
+      if (isNaN(args.backgroundOpacity) || args.backgroundOpacity < 0) {
+        console.error('Error: --background-opacity must be >= 0');
+        process.exit(2);
+      }
+      // Convert 0.0-1.0 range to 0-255 range if needed
+      if (args.backgroundOpacity <= 1.0) {
+        args.backgroundOpacity = Math.round(args.backgroundOpacity * 255);
+      } else if (args.backgroundOpacity > 255) {
+        console.error('Error: --background-opacity must be 0.0-1.0 or 1-255');
+        process.exit(2);
+      }
+    } else if (arg === '--convert-dpi' && i + 1 < argv.length) {
+      args.convertDpiMethod = argv[++i];
+      if (!['none', 'scale-viewbox', 'scale-document'].includes(args.convertDpiMethod)) {
+        console.error('Error: --convert-dpi must be "none", "scale-viewbox", or "scale-document"');
+        process.exit(2);
+      }
     } else if (arg === '--batch' && i + 1 < argv.length) {
       args.batch = argv[++i];
     } else if (!arg.startsWith('-')) {
@@ -235,37 +359,81 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
   const {
     width = null,
     height = null,
-    dpi = 96,
-    area = 'drawing',
-    objectId = null
+    dpi = null,
+    margin = null,
+    areaDrawing = true,
+    areaPage = false,
+    areaSnap = false,
+    objectId = null,
+    colorMode = null,
+    compression = null,
+    antialias = null,
+    background = null,
+    backgroundOpacity = null,
+    convertDpiMethod = 'none'
   } = options;
 
   // Build Inkscape command arguments
   const inkscapeArgs = [
     '--export-type=png',
-    `--export-dpi=${dpi}`,
+    '--export-overwrite',
+    '--no-convert-text-baseline-spacing',
+    `--convert-dpi-method=${convertDpiMethod}`,
     `--export-filename=${safeOutputPath}`
   ];
 
-  // Set export area
-  if (area === 'page') {
+  // Export area mode
+  if (areaPage) {
     inkscapeArgs.push('--export-area-page');
-  } else {
+  } else if (areaDrawing) {
     inkscapeArgs.push('--export-area-drawing');
   }
 
-  // Add width/height if specified
-  if (width !== null) {
-    inkscapeArgs.push(`--export-width=${width}`);
-  }
-  if (height !== null) {
-    inkscapeArgs.push(`--export-height=${height}`);
+  // Area snap
+  if (areaSnap) {
+    inkscapeArgs.push('--export-area-snap');
   }
 
   // Export specific object by ID
   if (objectId) {
     inkscapeArgs.push(`--export-id=${objectId}`);
     inkscapeArgs.push('--export-id-only');
+  }
+
+  // Dimensions and DPI
+  if (dpi !== null) {
+    inkscapeArgs.push(`--export-dpi=${dpi}`);
+  }
+  if (width !== null) {
+    inkscapeArgs.push(`--export-width=${width}`);
+  }
+  if (height !== null) {
+    inkscapeArgs.push(`--export-height=${height}`);
+  }
+  if (margin !== null) {
+    inkscapeArgs.push(`--export-margin=${margin}`);
+  }
+
+  // Color mode, compression, antialiasing
+  if (colorMode !== null) {
+    inkscapeArgs.push(`--export-png-color-mode=${colorMode}`);
+  }
+  if (compression !== null) {
+    inkscapeArgs.push(`--export-png-compression=${compression}`);
+  }
+  if (antialias !== null) {
+    inkscapeArgs.push(`--export-png-antialias=${antialias}`);
+  }
+
+  // Background color and opacity
+  if (background !== null) {
+    inkscapeArgs.push(`--export-background=${background}`);
+  }
+  if (backgroundOpacity !== null) {
+    inkscapeArgs.push(`--export-background-opacity=${backgroundOpacity}`);
+  } else if (background !== null) {
+    // Default to fully opaque if background set but opacity not specified
+    inkscapeArgs.push('--export-background-opacity=255');
   }
 
   // Add input file as last argument
@@ -293,8 +461,17 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
       width,
       height,
       dpi,
-      area,
+      margin,
+      areaDrawing,
+      areaPage,
+      areaSnap,
       objectId,
+      colorMode,
+      compression,
+      antialias,
+      background,
+      backgroundOpacity,
+      convertDpiMethod,
       stdout: stdout.trim(),
       stderr: stderr.trim()
     };
@@ -341,8 +518,17 @@ async function main() {
           width: args.width,
           height: args.height,
           dpi: args.dpi,
-          area: args.area,
-          objectId: args.objectId
+          margin: args.margin,
+          areaDrawing: args.areaDrawing,
+          areaPage: args.areaPage,
+          areaSnap: args.areaSnap,
+          objectId: args.objectId,
+          colorMode: args.colorMode,
+          compression: args.compression,
+          antialias: args.antialias,
+          background: args.background,
+          backgroundOpacity: args.backgroundOpacity,
+          convertDpiMethod: args.convertDpiMethod
         });
 
         results.push({
@@ -382,24 +568,66 @@ async function main() {
     width: args.width,
     height: args.height,
     dpi: args.dpi,
-    area: args.area,
-    objectId: args.objectId
+    margin: args.margin,
+    areaDrawing: args.areaDrawing,
+    areaPage: args.areaPage,
+    areaSnap: args.areaSnap,
+    objectId: args.objectId,
+    colorMode: args.colorMode,
+    compression: args.compression,
+    antialias: args.antialias,
+    background: args.background,
+    backgroundOpacity: args.backgroundOpacity,
+    convertDpiMethod: args.convertDpiMethod
   });
 
   printSuccess(`✓ PNG export successful`);
-  console.log(`  Input:     ${result.inputPath}`);
-  console.log(`  Output:    ${result.outputPath}`);
-  console.log(`  Size:      ${(result.fileSize / 1024).toFixed(1)} KB`);
-  console.log(`  DPI:       ${result.dpi}`);
-  console.log(`  Area:      ${result.area}`);
-  if (result.width) {
-    console.log(`  Width:     ${result.width}px`);
+  console.log(`  Input:       ${result.inputPath}`);
+  console.log(`  Output:      ${result.outputPath}`);
+  console.log(`  Size:        ${(result.fileSize / 1024).toFixed(1)} KB`);
+
+  // Export settings
+  if (result.width || result.height) {
+    const dims = [];
+    if (result.width) dims.push(`${result.width}px`);
+    if (result.height) dims.push(`${result.height}px`);
+    console.log(`  Dimensions:  ${dims.join(' × ')}`);
   }
-  if (result.height) {
-    console.log(`  Height:    ${result.height}px`);
+  if (result.dpi) {
+    console.log(`  DPI:         ${result.dpi}`);
   }
+  if (result.margin) {
+    console.log(`  Margin:      ${result.margin}px`);
+  }
+
+  // Area mode
+  const areaMode = result.areaPage ? 'page' : 'drawing';
+  const areaExtra = result.areaSnap ? ' (snap)' : '';
+  console.log(`  Export area: ${areaMode}${areaExtra}`);
+
   if (result.objectId) {
-    console.log(`  Object ID: ${result.objectId}`);
+    console.log(`  Object ID:   ${result.objectId}`);
+  }
+
+  // Color & quality
+  if (result.colorMode) {
+    console.log(`  Color mode:  ${result.colorMode}`);
+  }
+  if (result.compression !== null) {
+    console.log(`  Compression: ${result.compression}/9`);
+  }
+  if (result.antialias !== null) {
+    console.log(`  Antialias:   ${result.antialias}/3`);
+  }
+
+  // Background
+  if (result.background) {
+    const opacity = result.backgroundOpacity !== null ? ` (opacity: ${result.backgroundOpacity}/255)` : '';
+    console.log(`  Background:  ${result.background}${opacity}`);
+  }
+
+  if (result.convertDpiMethod !== 'none') {
+    console.log(`  DPI method:  ${result.convertDpiMethod}`);
   }
 
   // Show Inkscape warnings if any
