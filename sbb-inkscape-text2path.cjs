@@ -221,7 +221,7 @@ function parseArgs(argv) {
       printHelp();
       process.exit(0);
     } else if (arg === '--version' || arg === '-v') {
-      printVersion('sbb-text-to-path');
+      printVersion('sbb-inkscape-text2path');
       process.exit(0);
     } else if (arg === '--batch' && i + 1 < argv.length) {
       args.batch = argv[++i];
