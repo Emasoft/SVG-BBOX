@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * sbb-text-to-path.cjs
+ * sbb-inkscape-text2path.cjs
  *
  * Convert text elements to paths in SVG files using Inkscape.
  * Requires Inkscape to be installed on your system.
  *
- * Part of the svg-bbox toolkit.
+ * Part of the svg-bbox toolkit - Inkscape Tools Collection.
  */
 
 const fs = require('fs');
@@ -40,7 +40,7 @@ const {
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-text-to-path.cjs - SVG Text to Path Converter                         ║
+║ sbb-inkscape-text2path.cjs - SVG Text to Path Converter                   ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
@@ -53,8 +53,8 @@ REQUIREMENTS:
   • Supported platforms: Windows, macOS, Linux
 
 USAGE:
-  node sbb-text-to-path.cjs input.svg [output.svg] [options]
-  node sbb-text-to-path.cjs --batch files.txt [options]
+  node sbb-inkscape-text2path.cjs input.svg [output.svg] [options]
+  node sbb-inkscape-text2path.cjs --batch files.txt [options]
 
 ARGUMENTS:
   input.svg             Input SVG file with text elements
@@ -78,25 +78,25 @@ OPTIONS:
 EXAMPLES:
 
   # Basic conversion (creates input-paths.svg, then compares with sbb-comparer)
-  node sbb-text-to-path.cjs drawing.svg
+  node sbb-inkscape-text2path.cjs drawing.svg
 
   # Specify output file
-  node sbb-text-to-path.cjs input.svg output.svg
+  node sbb-inkscape-text2path.cjs input.svg output.svg
 
   # Skip automatic comparison
-  node sbb-text-to-path.cjs input.svg output.svg --skip-comparison
+  node sbb-inkscape-text2path.cjs input.svg output.svg --skip-comparison
 
   # Batch conversion with comparison
-  node sbb-text-to-path.cjs --batch files.txt
+  node sbb-inkscape-text2path.cjs --batch files.txt
 
   # Batch conversion without comparison (faster)
-  node sbb-text-to-path.cjs --batch files.txt --skip-comparison
+  node sbb-inkscape-text2path.cjs --batch files.txt --skip-comparison
 
   # Overwrite existing files
-  node sbb-text-to-path.cjs input.svg output.svg --overwrite
+  node sbb-inkscape-text2path.cjs input.svg output.svg --overwrite
 
   # JSON output for automation
-  node sbb-text-to-path.cjs input.svg output.svg --json
+  node sbb-inkscape-text2path.cjs input.svg output.svg --json
 
 NOTES:
   • Original file is never modified
@@ -455,7 +455,7 @@ async function main() {
 
   // Display version (but not in JSON mode)
   if (!args.json) {
-    printInfo(`sbb-text-to-path v${getVersion()} | svg-bbox toolkit\n`);
+    printInfo(`sbb-inkscape-text2path v${getVersion()} | svg-bbox toolkit\n`);
   }
 
   // Find Inkscape installation (once for all conversions)

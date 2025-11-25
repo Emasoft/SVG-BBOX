@@ -21,7 +21,7 @@ const CLI_TIMEOUT = 30000;
 const CLI_TOOLS = {
   extractor: path.join(__dirname, '../../sbb-extractor.cjs'),
   comparer: path.join(__dirname, '../../sbb-comparer.cjs'),
-  textToPath: path.join(__dirname, '../../sbb-text-to-path.cjs')
+  textToPath: path.join(__dirname, '../../sbb-inkscape-text2path.cjs')
 };
 
 // Valid test SVG for security tests
