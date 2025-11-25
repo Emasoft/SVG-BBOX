@@ -45,6 +45,25 @@ const { execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
 const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
 
+// SECURITY: Import security utilities
+const {
+  validateFilePath,
+  validateOutputPath,
+  readSVGFileSafe,
+  sanitizeSVGContent,
+  SVGBBoxError,
+  ValidationError,
+  FileSystemError
+} = require('./lib/security-utils.cjs');
+
+const {
+  runCLI,
+  printSuccess,
+  printError,
+  printInfo,
+  printWarning
+} = require('./lib/cli-utils.cjs');
+
 // ---------- CLI parsing ----------
 
 function printHelp() {
@@ -264,31 +283,52 @@ function parseArgs(argv) {
 
 // ---------- core render logic ----------
 
+// SECURITY: Constants for timeouts
+const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
+const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+
+// SECURITY: Secure Puppeteer options
+const PUPPETEER_OPTIONS = {
+  headless: true,
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage'
+  ]
+};
+
 async function renderSvgWithModes(opts) {
   const { input, output } = opts;
 
-  const svgPath = path.resolve(input);
-  if (!fs.existsSync(svgPath)) {
-    throw new Error('SVG file does not exist: ' + svgPath);
-  }
+  // SECURITY: Validate and sanitize input path
+  const safePath = validateFilePath(input, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
 
-  const svgContent = fs.readFileSync(svgPath, 'utf8');
+  // SECURITY: Read SVG with size limit and validation
+  const svgContent = readSVGFileSafe(safePath);
+
+  // SECURITY: Sanitize SVG content (remove scripts, event handlers)
+  const sanitizedSvg = sanitizeSVGContent(svgContent);
 
   // Decide background CSS + omitBackground
   const bgLower = (opts.background || '').toString().toLowerCase();
   const isTransparentBg = bgLower === 'transparent';
   const bgCSS = isTransparentBg ? 'transparent' : (opts.background || 'white');
 
-  // Launch browser
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  let browser = null;
 
   try {
+    browser = await puppeteer.launch(PUPPETEER_OPTIONS);
     const page = await browser.newPage();
 
-    // Minimal HTML wrapper; SVG injected as raw markup
+    // SECURITY: Set page timeout
+    page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
+    page.setDefaultNavigationTimeout(BROWSER_TIMEOUT_MS);
+
+    // Create HTML with sanitized SVG
+    // NOTE: No CSP header - it breaks addScriptTag functionality
     const html = `
 <!DOCTYPE html>
 <html>
@@ -308,16 +348,19 @@ async function renderSvgWithModes(opts) {
   </style>
 </head>
 <body>
-${svgContent}
+${sanitizedSvg}
 </body>
 </html>`;
 
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, {
+      waitUntil: 'networkidle0',
+      timeout: BROWSER_TIMEOUT_MS
+    });
 
-    // Inject SvgVisualBBox.js into the page
-    const libPath = path.resolve(__dirname, 'SvgVisualBBox.js');
+    // Load SvgVisualBBox library
+    const libPath = path.join(__dirname, 'SvgVisualBBox.js');
     if (!fs.existsSync(libPath)) {
-      throw new Error('SvgVisualBBox.js not found at: ' + libPath);
+      throw new FileSystemError('SvgVisualBBox.js not found', { path: libPath });
     }
     await page.addScriptTag({ path: libPath });
 
@@ -339,7 +382,7 @@ ${svgContent}
       }
 
       // Ensure fonts are loaded as best as we can (with timeout)
-      await SvgVisualBBox.waitForDocumentFonts(document, 8000);
+      await SvgVisualBBox.waitForDocumentFonts(document, optsInPage.fontTimeout || 8000);
 
       const mode = (optsInPage.mode || 'visible').toLowerCase();
       const marginUser = (typeof optsInPage.margin === 'number' && optsInPage.margin > 0)
@@ -540,7 +583,8 @@ ${svgContent}
       scale: opts.scale,
       width: opts.width,
       height: opts.height,
-      margin: opts.margin
+      margin: opts.margin,
+      fontTimeout: FONT_TIMEOUT_MS
     });
 
     // Now set the Puppeteer viewport to match the chosen PNG size
@@ -553,9 +597,14 @@ ${svgContent}
     // Small delay to allow re-layout after we tweaked the SVG
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    // SECURITY: Validate output path
+    const safeOutPath = validateOutputPath(output, {
+      requiredExtensions: ['.png', '.jpg', '.jpeg']
+    });
+
     // Screenshot exactly the viewport area
     await page.screenshot({
-      path: output,
+      path: safeOutPath,
       type: 'png',
       fullPage: false,
       omitBackground: isTransparentBg,
@@ -567,45 +616,56 @@ ${svgContent}
       }
     });
 
-    console.log(`✓ Rendered: ${output}`);
-    console.log(`  mode: ${measure.mode}`);
-    console.log(`  viewBox: ${measure.viewBox}`);
+    printSuccess(`Rendered: ${safeOutPath}`);
+    printInfo(`mode: ${measure.mode}`);
+    printInfo(`viewBox: ${measure.viewBox}`);
     console.log('  bbox (original target):', measure.targetBBox);
     console.log('  bbox (with margin):', measure.expandedBBox);
-    console.log(`  size: ${measure.pixelWidth}×${measure.pixelHeight}px`);
+    printInfo(`size: ${measure.pixelWidth}×${measure.pixelHeight}px`);
     console.log(`  background: ${opts.background}`);
     console.log(`  margin (user units): ${opts.margin}`);
 
     // Auto-open PNG in Chrome/Chromium if requested
-    // CRITICAL: Must use Chrome/Chromium (other browsers have poor SVG support)
+    // CRITICAL: Must use Chrome/Chromium (other browsers have poor image rendering)
     if (opts.autoOpen) {
-      const absolutePath = path.resolve(output);
+      const absolutePath = path.resolve(safeOutPath);
 
       openInChrome(absolutePath).then(result => {
         if (result.success) {
-          console.log(`\n✓ Opened in Chrome: ${absolutePath}`);
+          printSuccess(`Opened in Chrome: ${absolutePath}`);
         } else {
-          console.log(`\n⚠️  ${result.error}`);
-          console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
+          printWarning(result.error);
+          printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
         }
       }).catch(err => {
-        console.log(`\n⚠️  Failed to auto-open: ${err.message}`);
-        console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
+        printWarning(`Failed to auto-open: ${err.message}`);
+        printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
       });
     }
+
   } finally {
-    await browser.close();
+    // SECURITY: Ensure browser is always closed
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeErr) {
+        // Force kill if close fails
+        if (browser.process()) {
+          browser.process().kill('SIGKILL');
+        }
+      }
+    }
   }
 }
 
 // ---------- entry point ----------
 
-(async () => {
+async function main() {
+  // Display version
+  printInfo(`sbb-render v${getVersion()} | svg-bbox toolkit\n`);
+
   const opts = parseArgs(process.argv);
-  try {
-    await renderSvgWithModes(opts);
-  } catch (err) {
-    console.error('Error:', err.message || err);
-    process.exit(1);
-  }
-})();
+  await renderSvgWithModes(opts);
+}
+
+runCLI(main);
