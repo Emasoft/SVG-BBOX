@@ -24,7 +24,7 @@ async function runComparer(svg1, svg2, args = []) {
   const svg1Path = path.join(FIXTURES_DIR, svg1);
   const svg2Path = path.join(FIXTURES_DIR, svg2);
 
-  const { stdout, stderr } = await execFilePromise('node', [
+  const { stdout, stderr: _stderr } = await execFilePromise('node', [
     COMPARER_PATH,
     svg1Path,
     svg2Path,

@@ -25,7 +25,7 @@ async function checkInkscapeAvailable() {
   try {
     await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
     return true;
-  } catch (err) {
+  } catch (_err) {
     return false;
   }
 }

@@ -1029,7 +1029,9 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     const parentTransforms = {};
     info.forEach(obj => {
       const el = rootSvg.getElementById(obj.id);
-      if (!el) return;
+      if (!el) {
+        return;
+      }
 
       // Collect transforms from all ancestor groups (bottom-up, then reverse for correct order)
       const transforms = [];
@@ -1109,14 +1111,14 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     // Display sprite sheet detection info
     if (result.spriteInfo && result.spriteInfo.isSprite) {
       console.log('');
-      console.log(`🎨 Sprite sheet detected!`);
+      console.log('🎨 Sprite sheet detected!');
       console.log(`   Sprites: ${result.spriteInfo.stats.count}`);
       if (result.spriteInfo.grid) {
         console.log(`   Grid: ${result.spriteInfo.grid.rows} rows × ${result.spriteInfo.grid.cols} cols`);
       }
       console.log(`   Avg size: ${result.spriteInfo.stats.avgSize.width.toFixed(1)} × ${result.spriteInfo.stats.avgSize.height.toFixed(1)}`);
       console.log(`   Uniformity: width CV=${result.spriteInfo.stats.uniformity.widthCV}, height CV=${result.spriteInfo.stats.uniformity.heightCV}`);
-      console.log(`   💡 Tip: Use --export-all to extract each sprite as a separate SVG file`);
+      console.log('   💡 Tip: Use --export-all to extract each sprite as a separate SVG file');
     }
 
     console.log('');
@@ -1201,8 +1203,8 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
         const parentTransform = parentTransforms[id] || '';
         const useElement = id
           ? (parentTransform
-              ? `<g transform="${parentTransform}"><use href="#${id}" /></g>`
-              : `<use href="#${id}" />`)
+            ? `<g transform="${parentTransform}"><use href="#${id}" /></g>`
+            : `<use href="#${id}" />`)
           : '';
 
         // ════════════════════════════════════════════════════════════════════════════════

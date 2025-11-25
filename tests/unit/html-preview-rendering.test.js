@@ -75,7 +75,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
     if (availableFonts.length < 3) {
       throw new Error(
         `Not enough fonts available on system. Found: ${availableFonts.join(', ')}. ` +
-        `Need at least 3 fonts for comprehensive testing.`
+        'Need at least 3 fonts for comprehensive testing.'
       );
     }
 
@@ -166,11 +166,12 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
         // Use SvgVisualBBox library to measure the <use> element
         const bbox = await page.evaluate(async () => {
           const useElement = document.querySelector('#preview use');
-          return await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(useElement, {
+          const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(useElement, {
             mode: 'unclipped',
             coarseFactor: 2,
             fineFactor: 8
           });
+          return result;
         });
 
         // Should successfully measure the text
@@ -212,11 +213,12 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
 
         const bbox = await page.evaluate(async () => {
           const useElement = document.querySelector('svg use');
-          return await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(useElement, {
+          const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(useElement, {
             mode: 'unclipped',
             coarseFactor: 2,
             fineFactor: 8
           });
+          return result;
         });
 
         expect(bbox).toBeTruthy();

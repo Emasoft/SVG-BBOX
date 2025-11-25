@@ -170,9 +170,7 @@ export async function getBBoxById(page, elementId, options = {}) {
     );
   } catch (error) {
     // Check if there's debug SVG data to save
-    const debugData = await page.evaluate(() => {
-      return window.__DEBUG_SVG_DATA__ || null;
-    });
+    const debugData = await page.evaluate(() => window.__DEBUG_SVG_DATA__ || null);
 
     if (debugData && debugData.content && debugData.filename) {
       // Save debug SVG to current directory

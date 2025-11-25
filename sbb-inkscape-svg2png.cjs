@@ -630,7 +630,7 @@ async function main() {
     convertDpiMethod: args.convertDpiMethod
   });
 
-  printSuccess(`✓ PNG export successful`);
+  printSuccess('✓ PNG export successful');
   console.log(`  Input:       ${result.inputPath}`);
   console.log(`  Output:      ${result.outputPath}`);
   console.log(`  Size:        ${(result.fileSize / 1024).toFixed(1)} KB`);
@@ -638,8 +638,12 @@ async function main() {
   // Export settings
   if (result.width || result.height) {
     const dims = [];
-    if (result.width) dims.push(`${result.width}px`);
-    if (result.height) dims.push(`${result.height}px`);
+    if (result.width) {
+      dims.push(`${result.width}px`);
+    }
+    if (result.height) {
+      dims.push(`${result.height}px`);
+    }
     console.log(`  Dimensions:  ${dims.join(' × ')}`);
   }
   if (result.dpi) {

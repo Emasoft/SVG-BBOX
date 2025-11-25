@@ -150,7 +150,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
 
       // Circular reference should be detected and stopped by browser
       // May render nothing or handle gracefully
-      const bboxCircular = await getBBoxById(page, 'circular-ref');
+      const _bboxCircular = await getBBoxById(page, 'circular-ref');
 
       // The fallback rect should always work
       const bboxFallback = await getBBoxById(page, 'fallback-rect');
@@ -255,7 +255,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
       const page = await createPageWithSvg('edge-cases/invalid-attrs/malformed-path.svg');
 
       // Malformed path may render partially or not at all
-      const bboxPath = await getBBoxById(page, 'bad-path');
+      const _bboxPath = await getBBoxById(page, 'bad-path');
 
       // Fallback rect should always work
       const bboxFallback = await getBBoxById(page, 'fallback-rect');
@@ -293,7 +293,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         try {
           const bbox = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(svg);
           return bbox;
-        } catch (e) {
+        } catch (_e) {
           // Expected: SVG root can't be cloned/queried by temporary ID
           return null;
         }
@@ -330,7 +330,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         try {
           const bbox = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(svg);
           return bbox;
-        } catch (e) {
+        } catch (_e) {
           // May throw error when trying to find SVG root in clone
           return null;
         }

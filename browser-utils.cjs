@@ -32,7 +32,7 @@ async function detectChrome() {
     const candidates = [
       { path: '/Applications/Google Chrome.app', name: 'Google Chrome' },
       { path: '/Applications/Chromium.app', name: 'Chromium' },
-      { path: '/Applications/Google Chrome Canary.app', name: 'Google Chrome Canary' },
+      { path: '/Applications/Google Chrome Canary.app', name: 'Google Chrome Canary' }
     ];
 
     for (const candidate of candidates) {
@@ -48,7 +48,7 @@ async function detectChrome() {
     // Windows: try common Chrome install locations
     const candidates = [
       { cmd: 'chrome.exe', name: 'Google Chrome' },
-      { cmd: 'chromium.exe', name: 'Chromium' },
+      { cmd: 'chromium.exe', name: 'Chromium' }
     ];
 
     for (const candidate of candidates) {
@@ -65,7 +65,7 @@ async function detectChrome() {
       { cmd: 'google-chrome', name: 'Google Chrome' },
       { cmd: 'google-chrome-stable', name: 'Google Chrome' },
       { cmd: 'chromium', name: 'Chromium' },
-      { cmd: 'chromium-browser', name: 'Chromium' },
+      { cmd: 'chromium-browser', name: 'Chromium' }
     ];
 
     for (const candidate of candidates) {

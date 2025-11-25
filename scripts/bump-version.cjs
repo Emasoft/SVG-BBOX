@@ -30,7 +30,7 @@ function parseVersion(version) {
   return {
     major: parseInt(match[1], 10),
     minor: parseInt(match[2], 10),
-    patch: parseInt(match[3], 10),
+    patch: parseInt(match[3], 10)
   };
 }
 
@@ -141,10 +141,10 @@ function createGitTag(newVersion, dryRun = false) {
 
     // Create annotated tag - NO USER INPUT, SAFE
     execSync(`git tag -a ${tagName} -m "Release ${newVersion}"`, {
-      stdio: 'inherit',
+      stdio: 'inherit'
     });
     console.log(`✓ Created git tag: ${tagName}`);
-    console.log(`  Push with: git push origin main --tags`);
+    console.log('  Push with: git push origin main --tags');
   } catch (error) {
     console.error(`✗ Failed to create git tag: ${error.message}`);
   }
@@ -202,17 +202,19 @@ EXAMPLES:
     const currentVersion = packageJson.version;
     const newVersion = bumpVersion(currentVersion, bumpType);
 
-    console.log(`\n📦 SVG-BBOX Version Bump\n`);
+    console.log('\n📦 SVG-BBOX Version Bump\n');
     console.log(`Current version: ${currentVersion}`);
     console.log(`New version:     ${newVersion}`);
 
     if (!dryRun) {
       updatePackageJson(newVersion);
       updateChangelog(newVersion);
-      if (createTag) createGitTag(newVersion, dryRun);
-      console.log(`\n✅ Version bump complete!\n`);
+      if (createTag) {
+        createGitTag(newVersion, dryRun);
+      }
+      console.log('\n✅ Version bump complete!\n');
     } else {
-      console.log(`\n🔍 DRY RUN - No changes made\n`);
+      console.log('\n🔍 DRY RUN - No changes made\n');
     }
   } catch (error) {
     console.error(`\n✗ Error: ${error.message}\n`);

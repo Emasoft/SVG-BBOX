@@ -15,11 +15,11 @@ const { promisify } = require('util');
 const puppeteer = require('puppeteer');
 const { getVersion } = require('./version.cjs');
 
-const execFilePromise = promisify(execFile);
+const _execFilePromise = promisify(execFile);
 
 // SECURITY: Constants for timeouts and limits
-const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
-const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
+const FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 // SECURITY: Import security utilities
 const {
@@ -30,15 +30,15 @@ const {
   writeFileSafe,
   SVGBBoxError,
   ValidationError,
-  FileSystemError
+  FileSystemError: _FileSystemError
 } = require('./lib/security-utils.cjs');
 
 const {
   runCLI,
   printSuccess,
-  printError,
+  printError: _printError,
   printInfo,
-  printWarning
+  printWarning: _printWarning
 } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -158,7 +158,7 @@ function parseArgs(argv) {
     sliceRule: 'xMidYMid',
     json: false,
     verbose: false,
-    batch: null  // Path to batch comparison file
+    batch: null // Path to batch comparison file
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -262,7 +262,7 @@ function readBatchFile(batchFilePath) {
   });
 
   const content = fs.readFileSync(safeBatchPath, 'utf-8');
-  const lines = content.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
+  const lines = content.split('\n').filter((line) => line.trim() && !line.trim().startsWith('#'));
 
   const pairs = [];
   for (let i = 0; i < lines.length; i++) {
@@ -272,7 +272,7 @@ function readBatchFile(batchFilePath) {
     if (parts.length !== 2) {
       throw new ValidationError(
         `Invalid batch file format at line ${i + 1}: expected 2 tab-separated columns, got ${parts.length}. ` +
-        `Format: svg1_path.svg<TAB>svg2_path.svg`
+          'Format: svg1_path.svg<TAB>svg2_path.svg'
       );
     }
 
@@ -280,9 +280,7 @@ function readBatchFile(batchFilePath) {
     const svg2 = parts[1].trim();
 
     if (!svg1 || !svg2) {
-      throw new ValidationError(
-        `Invalid batch file format at line ${i + 1}: empty SVG path`
-      );
+      throw new ValidationError(`Invalid batch file format at line ${i + 1}: empty SVG path`);
     }
 
     pairs.push({ svg1, svg2 });
@@ -329,8 +327,11 @@ async function analyzeSvg(svgPath, browser) {
   `);
 
   const analysis = await page.evaluate(() => {
+    // eslint-disable-next-line no-undef
     const svg = document.querySelector('svg');
-    if (!svg) return null;
+    if (!svg) {
+      return null;
+    }
 
     const result = {
       viewBox: null,
@@ -355,8 +356,12 @@ async function analyzeSvg(svgPath, browser) {
     // Get width/height attributes
     const widthAttr = svg.getAttribute('width');
     const heightAttr = svg.getAttribute('height');
-    if (widthAttr) result.width = parseFloat(widthAttr);
-    if (heightAttr) result.height = parseFloat(heightAttr);
+    if (widthAttr) {
+      result.width = parseFloat(widthAttr);
+    }
+    if (heightAttr) {
+      result.height = parseFloat(heightAttr);
+    }
 
     return result;
   });
@@ -390,8 +395,11 @@ async function getObjectBBox(svgPath, objectId, browser) {
   `);
 
   const bbox = await page.evaluate((id) => {
+    // eslint-disable-next-line no-undef
     const element = document.getElementById(id);
-    if (!element) return null;
+    if (!element) {
+      return null;
+    }
 
     const rect = element.getBBox();
     return {
@@ -433,21 +441,34 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       break;
 
     case 'viewbox-topleft':
-      if (analysis1.viewBox) align1 = { x: analysis1.viewBox.x, y: analysis1.viewBox.y };
-      if (analysis2.viewBox) align2 = { x: analysis2.viewBox.x, y: analysis2.viewBox.y };
+      if (analysis1.viewBox) {
+        align1 = { x: analysis1.viewBox.x, y: analysis1.viewBox.y };
+      }
+      if (analysis2.viewBox) {
+        align2 = { x: analysis2.viewBox.x, y: analysis2.viewBox.y };
+      }
       break;
 
     case 'viewbox-center':
-      if (analysis1.viewBox) align1 = { x: analysis1.viewBox.centerX, y: analysis1.viewBox.centerY };
-      if (analysis2.viewBox) align2 = { x: analysis2.viewBox.centerX, y: analysis2.viewBox.centerY };
+      if (analysis1.viewBox) {
+        align1 = { x: analysis1.viewBox.centerX, y: analysis1.viewBox.centerY };
+      }
+      if (analysis2.viewBox) {
+        align2 = { x: analysis2.viewBox.centerX, y: analysis2.viewBox.centerY };
+      }
       break;
 
-    case 'object':
+    case 'object': {
       const bbox1 = await getObjectBBox(svg1Path, args.alignmentParam, browser);
       const bbox2 = await getObjectBBox(svg2Path, args.alignmentParam, browser);
-      if (bbox1) align1 = bbox1;
-      if (bbox2) align2 = bbox2;
+      if (bbox1) {
+        align1 = bbox1;
+      }
+      if (bbox2) {
+        align2 = bbox2;
+      }
       break;
+    }
 
     case 'custom':
       align1 = args.alignmentParam;
@@ -485,7 +506,7 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       height2 = analysis2.viewBox?.height || analysis2.height || 600;
       break;
 
-    case 'scale':
+    case 'scale': {
       // Scale both to match the larger one (uniform scaling)
       width1 = analysis1.viewBox?.width || analysis1.width || 800;
       height1 = analysis1.viewBox?.height || analysis1.height || 600;
@@ -497,8 +518,9 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       width1 = width2 = maxWidth;
       height1 = height2 = maxHeight;
       break;
+    }
 
-    case 'stretch':
+    case 'stretch': {
       // Stretch both to match the larger one (non-uniform)
       width1 = analysis1.viewBox?.width || analysis1.width || 800;
       height1 = analysis1.viewBox?.height || analysis1.height || 600;
@@ -510,8 +532,9 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       width1 = width2 = stretchWidth;
       height1 = height2 = stretchHeight;
       break;
+    }
 
-    case 'clip':
+    case 'clip': {
       // Clip both to match the smaller one
       width1 = analysis1.viewBox?.width || analysis1.width || 800;
       height1 = analysis1.viewBox?.height || analysis1.height || 600;
@@ -523,6 +546,7 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       width1 = width2 = minWidth;
       height1 = height2 = minHeight;
       break;
+    }
 
     default:
       width1 = width2 = 800;
@@ -600,7 +624,7 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
   `);
 
   // Wait for fonts and rendering
-  await new Promise(resolve => setTimeout(resolve, FONT_TIMEOUT_MS));
+  await new Promise((resolve) => setTimeout(resolve, FONT_TIMEOUT_MS));
 
   await page.screenshot({
     path: safeOutputPath,
@@ -673,8 +697,11 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
       const bDiff = Math.abs(b1 - b2);
       const aDiff = Math.abs(a1 - a2);
 
-      const isDifferent = rDiff > thresholdValue || gDiff > thresholdValue ||
-                         bDiff > thresholdValue || aDiff > thresholdValue;
+      const isDifferent =
+        rDiff > thresholdValue ||
+        gDiff > thresholdValue ||
+        bDiff > thresholdValue ||
+        aDiff > thresholdValue;
 
       if (isDifferent) {
         differentPixels++;
@@ -710,7 +737,15 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
 // HTML REPORT GENERATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args, svgAnalysis1, svgAnalysis2) {
+async function generateHtmlReport(
+  svg1Path,
+  svg2Path,
+  diffPngPath,
+  result,
+  args,
+  svgAnalysis1,
+  svgAnalysis2
+) {
   // SECURITY: Validate and read SVG files
   const safeSvg1Path = validateFilePath(svg1Path, {
     requiredExtensions: ['.svg'],
@@ -742,8 +777,8 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
   // Get file modification dates
   const svg1Stats = fs.statSync(svg1Path);
   const svg2Stats = fs.statSync(svg2Path);
-  const formatDate = (date) => {
-    return date.toLocaleString('en-US', {
+  const formatDate = (date) =>
+    date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -751,13 +786,14 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       minute: '2-digit',
       second: '2-digit'
     });
-  };
   const svg1Modified = formatDate(svg1Stats.mtime);
   const svg2Modified = formatDate(svg2Stats.mtime);
 
   // Format viewBox info
   const formatViewBox = (vb) => {
-    if (!vb) return 'none';
+    if (!vb) {
+      return 'none';
+    }
     return `${vb.x} ${vb.y} ${vb.width} ${vb.height}`;
   };
 
@@ -1468,8 +1504,14 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  const png1Path = path.join(tempDir, `svg1_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`);
-  const png2Path = path.join(tempDir, `svg2_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`);
+  const png1Path = path.join(
+    tempDir,
+    `svg1_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`
+  );
+  const png2Path = path.join(
+    tempDir,
+    `svg2_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`
+  );
 
   try {
     await renderSvgToPng(safeSvg1Path, png1Path, params.svg1.width, params.svg1.height, browser);
@@ -1496,9 +1538,14 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
   } catch (error) {
     // Clean up temp files on error
     try {
-      if (fs.existsSync(png1Path)) fs.unlinkSync(png1Path);
-      if (fs.existsSync(png2Path)) fs.unlinkSync(png2Path);
-    } catch (cleanupErr) {
+      if (fs.existsSync(png1Path)) {
+        fs.unlinkSync(png1Path);
+      }
+      if (fs.existsSync(png2Path)) {
+        fs.unlinkSync(png2Path);
+      }
+      // eslint-disable-next-line no-unused-vars
+    } catch (_cleanupErr) {
       // Ignore cleanup errors
     }
     throw error;
@@ -1565,19 +1612,26 @@ async function main() {
       if (fs.existsSync(tempDir)) {
         try {
           fs.rmdirSync(tempDir);
-        } catch (err) {
+          // eslint-disable-next-line no-unused-vars
+        } catch (_err) {
           // Directory not empty or other error - ignore
         }
       }
 
       // Output batch results as JSON
-      console.log(JSON.stringify({
-        batchFile: args.batch,
-        totalComparisons: pairs.length,
-        successful: results.filter(r => !r.failed).length,
-        failed: results.filter(r => r.failed).length,
-        results
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            batchFile: args.batch,
+            totalComparisons: pairs.length,
+            successful: results.filter((r) => !r.failed).length,
+            failed: results.filter((r) => r.failed).length,
+            results
+          },
+          null,
+          2
+        )
+      );
 
       return;
     }
@@ -1599,22 +1653,29 @@ async function main() {
     if (fs.existsSync(tempDir)) {
       try {
         fs.rmdirSync(tempDir);
-      } catch (err) {
+        // eslint-disable-next-line no-unused-vars
+      } catch (_err) {
         // Directory not empty or other error - ignore
       }
     }
 
     // Output results
     if (args.json) {
-      console.log(JSON.stringify({
-        svg1: result.svg1,
-        svg2: result.svg2,
-        totalPixels: result.totalPixels,
-        differentPixels: result.differentPixels,
-        diffPercentage: result.diffPercentage,
-        threshold: result.threshold,
-        diffImage: result.diffImage
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            svg1: result.svg1,
+            svg2: result.svg2,
+            totalPixels: result.totalPixels,
+            differentPixels: result.differentPixels,
+            diffPercentage: result.diffPercentage,
+            threshold: result.threshold,
+            diffImage: result.diffImage
+          },
+          null,
+          2
+        )
+      );
     } else {
       console.log('\n╔════════════════════════════════════════════════════════════════════════╗');
       console.log('║ COMPARISON RESULTS                                                     ║');
@@ -1654,7 +1715,6 @@ async function main() {
       const { openInChrome } = require('./browser-utils.cjs');
       await openInChrome(htmlPath);
     }
-
   } catch (error) {
     throw new SVGBBoxError(`Comparison failed: ${error.message}`, error);
   } finally {
@@ -1662,7 +1722,8 @@ async function main() {
     if (browser) {
       try {
         await browser.close();
-      } catch (closeErr) {
+        // eslint-disable-next-line no-unused-vars
+      } catch (_closeErr) {
         // Force kill if close fails
         if (browser.process()) {
           browser.process().kill('SIGKILL');

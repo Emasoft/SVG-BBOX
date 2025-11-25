@@ -32,7 +32,6 @@ import { test, describe, expect } from 'vitest';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
-import path from 'path';
 import { JSDOM } from 'jsdom';
 
 const execFilePromise = promisify(execFile);
@@ -41,7 +40,7 @@ describe('HTML Preview Structure Validation', () => {
 
   test('export-svg-objects generates HTML with parent transform wrappers', async () => {
     // Generate HTML from sample SVG
-    const { stdout } = await execFilePromise('node', [
+    const { stdout: _stdout } = await execFilePromise('node', [
       'sbb-extractor.cjs',
       'samples/test_text_to_path_advanced.svg',
       '--list',

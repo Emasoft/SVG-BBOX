@@ -36,14 +36,14 @@ function getVersionInfo() {
     return {
       name: packageJson.name || 'svg-bbox',
       version: packageJson.version || '0.0.0',
-      description: packageJson.description || '',
+      description: packageJson.description || ''
     };
   } catch (error) {
     console.error('Error reading package.json:', error.message);
     return {
       name: 'svg-bbox',
       version: '0.0.0',
-      description: '',
+      description: ''
     };
   }
 }
@@ -80,7 +80,7 @@ module.exports = {
   getVersionInfo,
   printVersion,
   printVersionBanner,
-  hasVersionFlag,
+  hasVersionFlag
 };
 
 // If run directly, print version

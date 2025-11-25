@@ -126,7 +126,9 @@ const argParser = createArgParser({
 function repairSvgAttributes(svgMarkup, bbox) {
   // Parse SVG to extract root element
   const svgMatch = svgMarkup.match(/<svg([^>]*)>/);
-  if (!svgMatch) return svgMarkup;
+  if (!svgMatch) {
+    return svgMarkup;
+  }
 
   const attrs = svgMatch[1];
   const hasViewBox = /viewBox\s*=/.test(attrs);
@@ -161,7 +163,7 @@ function repairSvgAttributes(svgMarkup, bbox) {
   }
 
   if (!hasPreserveAspectRatio) {
-    newAttrs += ` preserveAspectRatio="xMidYMid meet"`;
+    newAttrs += ' preserveAspectRatio="xMidYMid meet"';
   }
 
   return svgMarkup.replace(/<svg([^>]*)>/, `<svg${newAttrs}>`);
@@ -180,7 +182,9 @@ function repairSvgAttributes(svgMarkup, bbox) {
 async function detectSpriteSheet(page) {
   return await page.evaluate(() => {
     const rootSvg = document.querySelector('svg');
-    if (!rootSvg) return { isSprite: false, sprites: [], grid: null };
+    if (!rootSvg) {
+      return { isSprite: false, sprites: [], grid: null };
+    }
 
     // Get all potential sprite elements (excluding defs, style, script, etc.)
     const children = Array.from(rootSvg.children).filter(el => {
@@ -385,7 +389,7 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
           objectIds = spriteInfo.sprites.map(s => s.id);
         }
 
-        printInfo(`Sprite sheet detected!`);
+        printInfo('Sprite sheet detected!');
         printInfo(`  Sprites: ${spriteInfo.stats.count}`);
         if (spriteInfo.grid) {
           printInfo(`  Grid: ${spriteInfo.grid.rows} rows × ${spriteInfo.grid.cols} cols`);
@@ -562,10 +566,14 @@ function parseListFile(listPath) {
     const trimmed = line.trim();
 
     // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
 
     const tokens = trimmed.split(/\s+/);
-    if (tokens.length === 0) continue;
+    if (tokens.length === 0) {
+      continue;
+    }
 
     const svgPath = tokens[0];
 
@@ -641,8 +649,12 @@ async function processList(listPath) {
  * @returns {string}
  */
 function formatBBox(bbox) {
-  if (!bbox) return 'null';
-  if (bbox.error) return `ERROR: ${bbox.error}`;
+  if (!bbox) {
+    return 'null';
+  }
+  if (bbox.error) {
+    return `ERROR: ${bbox.error}`;
+  }
   return `{x: ${bbox.x.toFixed(2)}, y: ${bbox.y.toFixed(2)}, width: ${bbox.width.toFixed(2)}, height: ${bbox.height.toFixed(2)}}`;
 }
 
@@ -725,12 +737,10 @@ async function main() {
 
     const result = await computeBBox(svgPath, objectIds, options.ignoreViewBox, options.spriteMode);
     allResults.push(result);
-  }
-  else if (mode === 'dir') {
+  } else if (mode === 'dir') {
     const filter = args.flags.filter || null;
     allResults = await processDirectory(args.flags.dir, filter, options.ignoreViewBox);
-  }
-  else if (mode === 'list') {
+  } else if (mode === 'list') {
     allResults = await processList(args.flags.list);
   }
 

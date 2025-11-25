@@ -110,7 +110,9 @@
    * @returns {string} Human-readable element description
    */
   function getElementDescription(el) {
-    if (!el) return 'null/undefined element';
+    if (!el) {
+      return 'null/undefined element';
+    }
 
     const parts = [];
 
@@ -148,7 +150,9 @@
    * @param {SVGSVGElement} svgRoot
    */
   function saveDebugSvgToGlobal(svgRoot) {
-    if (!svgRoot) return;
+    if (!svgRoot) {
+      return;
+    }
 
     try {
       const serializer = new XMLSerializer();
@@ -195,19 +199,19 @@
     const svgId = svgRoot && svgRoot.id ? svgRoot.id : 'svg';
     const debugFilename = `${svgId}_debug_${timestamp}.svg`;
 
-    return `\n` +
-      `⚠️  AUTO-GENERATED ID WARNING:\n` +
-      `   The IDs shown above were automatically assigned by sbb-extractor.cjs.\n` +
-      `   These IDs DO NOT EXIST in your original SVG file!\n` +
-      `\n` +
-      `   🔍 DEBUG SVG WILL BE AUTOMATICALLY SAVED:\n` +
+    return '\n' +
+      '⚠️  AUTO-GENERATED ID WARNING:\n' +
+      '   The IDs shown above were automatically assigned by sbb-extractor.cjs.\n' +
+      '   These IDs DO NOT EXIST in your original SVG file!\n' +
+      '\n' +
+      '   🔍 DEBUG SVG WILL BE AUTOMATICALLY SAVED:\n' +
       `   ${debugFilename}\n` +
-      `\n` +
-      `   To find this element in your original SVG:\n` +
-      `   1. Open the debug SVG file (saved automatically in current directory)\n` +
+      '\n' +
+      '   To find this element in your original SVG:\n' +
+      '   1. Open the debug SVG file (saved automatically in current directory)\n' +
       `   2. Search for the ID "${elementId}" to locate the problematic element\n` +
-      `   3. Note the element's position, visual appearance, and attributes\n` +
-      `   4. Find the corresponding element in your original SVG using these details\n`;
+      '   3. Note the element\'s position, visual appearance, and attributes\n' +
+      '   4. Find the corresponding element in your original SVG using these details\n';
   }
 
   /**
@@ -224,7 +228,7 @@
       const style = window.getComputedStyle(el);
       const fontFamily = style.fontFamily || style.getPropertyValue('font-family');
       return fontFamily || 'default';
-    } catch (e) {
+    } catch (_e) {
       return 'error detecting font';
     }
   }
@@ -350,15 +354,23 @@
       const clientRect = el.getBoundingClientRect();
       const svgRoot = el.ownerSVGElement || (el instanceof SVGSVGElement ? el : null);
 
-      if (!svgRoot || !clientRect) return null;
-      if (clientRect.width === 0 && clientRect.height === 0) return null;
+      if (!svgRoot || !clientRect) {
+        return null;
+      }
+      if (clientRect.width === 0 && clientRect.height === 0) {
+        return null;
+      }
 
       // Convert screen coordinates to SVG user coordinates
       const rootRect = svgRoot.getBoundingClientRect();
       const vb = svgRoot.viewBox && svgRoot.viewBox.baseVal;
 
-      if (!vb || vb.width <= 0 || vb.height <= 0) return null;
-      if (rootRect.width <= 0 || rootRect.height <= 0) return null;
+      if (!vb || vb.width <= 0 || vb.height <= 0) {
+        return null;
+      }
+      if (rootRect.width <= 0 || rootRect.height <= 0) {
+        return null;
+      }
 
       // Parse preserveAspectRatio attribute
       const scaling = parsePreserveAspectRatio(svgRoot, vb, rootRect);
@@ -380,8 +392,12 @@
         height = clientRect.height * scaling.scaleY;
       }
 
-      if (!isFinite(x) || !isFinite(y)) return null;
-      if (!isFinite(width) || !isFinite(height)) return null;
+      if (!isFinite(x) || !isFinite(y)) {
+        return null;
+      }
+      if (!isFinite(width) || !isFinite(height)) {
+        return null;
+      }
 
       return { x, y, width, height };
     } catch {
@@ -396,7 +412,7 @@
    * @param {SVGElement} el
    * @returns {SVGElement} - Returns the element itself, or parent <text> if appropriate
    */
-  function normalizeTargetForText(el) {
+  function _normalizeTargetForText(el) {
     const tagName = el.tagName.toLowerCase();
     if ((tagName === 'textpath' || tagName === 'tspan') && el.closest('text')) {
       return el.closest('text');
@@ -463,7 +479,7 @@
 
       if (DEBUG && typeof console !== 'undefined' && console.warn) {
         console.warn(
-          `[DEBUG rasterize] Canvas size exceeded maximum, scaling down uniformly:\n` +
+          '[DEBUG rasterize] Canvas size exceeded maximum, scaling down uniformly:\n' +
           `  Requested: ${requestedPixelWidth}×${requestedPixelHeight}\n` +
           `  Scaled:    ${pixelWidth}×${pixelHeight}\n` +
           `  Scale factor: ${scale.toFixed(3)} (${(scale * 100).toFixed(1)}%)\n` +
@@ -512,24 +528,24 @@
       const tempIdUsed = tmpId ? `Temporary ID used: "${tmpId}"` : `Element ID: ${el.id ? `"${el.id}"` : '(none)'}`;
       const autoIdWarning = getAutoIdWarning(el, svgRoot);
       throw new Error(
-        `❌ Cannot render SVG element: Element not found in cloned SVG\n` +
-        `\n` +
-        `ELEMENT DETAILS:\n` +
+        '❌ Cannot render SVG element: Element not found in cloned SVG\n' +
+        '\n' +
+        'ELEMENT DETAILS:\n' +
         `  ${elementInfo}\n` +
         `  ${tempIdUsed}\n` +
         `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
         autoIdWarning +
-        `\n` +
-        `This typically happens when:\n` +
-        `  1. The element IS the SVG root itself (not supported - query a child element instead)\n` +
-        `  2. The element was removed or modified during cloning\n` +
-        `  3. The element's ID conflicts with another element\n` +
-        `\n` +
-        `How to fix:\n` +
-        `  • If querying the root <svg>, query a child element instead\n` +
-        `  • Ensure the element has a unique 'id' attribute\n` +
-        `  • Check that the element exists in the DOM before calling this function\n` +
-        `  • Verify the element hasn't been dynamically removed`
+        '\n' +
+        'This typically happens when:\n' +
+        '  1. The element IS the SVG root itself (not supported - query a child element instead)\n' +
+        '  2. The element was removed or modified during cloning\n' +
+        '  3. The element\'s ID conflicts with another element\n' +
+        '\n' +
+        'How to fix:\n' +
+        '  • If querying the root <svg>, query a child element instead\n' +
+        '  • Ensure the element has a unique \'id\' attribute\n' +
+        '  • Check that the element exists in the DOM before calling this function\n' +
+        '  • Verify the element hasn\'t been dynamically removed'
       );
     }
 
@@ -684,25 +700,25 @@
 
         reject(new Error(
           `❌ Failed to render SVG as image: ${errorMsg}\n` +
-          `\n` +
-          `ELEMENT DETAILS:\n` +
+          '\n' +
+          'ELEMENT DETAILS:\n' +
           `  ${elementInfo}\n` +
           `  Font-family: ${fontInfo}\n` +
           `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
           autoIdWarning +
-          `\n` +
-          `This can happen when:\n` +
-          `  1. The SVG contains invalid XML syntax\n` +
-          `  2. Referenced resources (images, fonts) failed to load\n` +
-          `  3. The SVG uses unsupported features\n` +
-          `  4. Browser security policies blocked the rendering\n` +
-          `\n` +
-          `How to fix:\n` +
-          `  • Validate your SVG with an XML validator\n` +
-          `  • Check that all external resources (images, fonts) are accessible\n` +
-          `  • Ensure referenced elements (gradients, patterns, etc.) exist in <defs>\n` +
-          `  • If fonts are missing, ensure they are installed or embedded in the SVG\n` +
-          `  • Try simplifying the SVG to isolate the problematic element`
+          '\n' +
+          'This can happen when:\n' +
+          '  1. The SVG contains invalid XML syntax\n' +
+          '  2. Referenced resources (images, fonts) failed to load\n' +
+          '  3. The SVG uses unsupported features\n' +
+          '  4. Browser security policies blocked the rendering\n' +
+          '\n' +
+          'How to fix:\n' +
+          '  • Validate your SVG with an XML validator\n' +
+          '  • Check that all external resources (images, fonts) are accessible\n' +
+          '  • Ensure referenced elements (gradients, patterns, etc.) exist in <defs>\n' +
+          '  • If fonts are missing, ensure they are installed or embedded in the SVG\n' +
+          '  • Try simplifying the SVG to isolate the problematic element'
         ));
       };
     });
@@ -728,23 +744,23 @@
         const elementInfo = getElementDescription(el);
         const autoIdWarning = getAutoIdWarning(el, svgRoot);
         throw new Error(
-          `❌ Cannot render SVG: Canvas out of memory\n` +
-          `\n` +
-          `ELEMENT DETAILS:\n` +
+          '❌ Cannot render SVG: Canvas out of memory\n' +
+          '\n' +
+          'ELEMENT DETAILS:\n' +
           `  ${elementInfo}\n` +
           `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
           autoIdWarning +
-          `\n` +
-          `The SVG coordinates or dimensions are too large for canvas rasterization.\n` +
+          '\n' +
+          'The SVG coordinates or dimensions are too large for canvas rasterization.\n' +
           `Current viewBox: ${vb.x} ${vb.y} ${vb.width} ${vb.height}\n` +
           `Attempted canvas size: ${pixelWidth}×${pixelHeight} pixels\n` +
-          `\n` +
-          `How to fix:\n` +
-          `  • Reduce the viewBox dimensions to a reasonable size (< 10,000 units)\n` +
-          `  • Use smaller coordinates (avoid values > 100,000)\n` +
-          `  • Decrease the pixelsPerUnit scaling factor\n` +
-          `  • Split large SVG into smaller regions and process separately\n` +
-          `\n` +
+          '\n' +
+          'How to fix:\n' +
+          '  • Reduce the viewBox dimensions to a reasonable size (< 10,000 units)\n' +
+          '  • Use smaller coordinates (avoid values > 100,000)\n' +
+          '  • Decrease the pixelsPerUnit scaling factor\n' +
+          '  • Split large SVG into smaller regions and process separately\n' +
+          '\n' +
           `Original error: ${e.message}`
         );
       }
@@ -754,26 +770,26 @@
         const fontInfo = getFontDescription(el);
         const autoIdWarning = getAutoIdWarning(el, svgRoot);
         throw new Error(
-          `❌ Cannot read SVG pixels: Canvas is tainted by cross-origin resources\n` +
-          `\n` +
-          `ELEMENT DETAILS:\n` +
+          '❌ Cannot read SVG pixels: Canvas is tainted by cross-origin resources\n' +
+          '\n' +
+          'ELEMENT DETAILS:\n' +
           `  ${elementInfo}\n` +
           `  Font-family: ${fontInfo}\n` +
           `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
           autoIdWarning +
-          `\n` +
-          `This happens when your SVG references external resources without CORS:\n` +
-          `  • External images (PNG, JPG, etc.) from different domains\n` +
-          `  • Web fonts from CDNs without proper CORS headers\n` +
-          `  • SVG <use> elements referencing external files\n` +
-          `\n` +
-          `How to fix:\n` +
-          `  • Host images/fonts on the same domain as your page\n` +
-          `  • Configure CORS headers on external resources (Access-Control-Allow-Origin: *)\n` +
-          `  • Use data URLs for images instead of external URLs\n` +
-          `  • Embed fonts directly in the SVG using @font-face with data URLs\n` +
+          '\n' +
+          'This happens when your SVG references external resources without CORS:\n' +
+          '  • External images (PNG, JPG, etc.) from different domains\n' +
+          '  • Web fonts from CDNs without proper CORS headers\n' +
+          '  • SVG <use> elements referencing external files\n' +
+          '\n' +
+          'How to fix:\n' +
+          '  • Host images/fonts on the same domain as your page\n' +
+          '  • Configure CORS headers on external resources (Access-Control-Allow-Origin: *)\n' +
+          '  • Use data URLs for images instead of external URLs\n' +
+          '  • Embed fonts directly in the SVG using @font-face with data URLs\n' +
           `  • If using web fonts (like "${fontInfo}"), ensure they have CORS headers or embed them\n` +
-          `\n` +
+          '\n' +
           `Original error: ${e.message}`
         );
       }
@@ -783,25 +799,25 @@
       const fontInfo = getFontDescription(el);
       const autoIdWarning = getAutoIdWarning(el, svgRoot);
       throw new Error(
-        `❌ Cannot read SVG pixels from canvas\n` +
-        `\n` +
-        `ELEMENT DETAILS:\n` +
+        '❌ Cannot read SVG pixels from canvas\n' +
+        '\n' +
+        'ELEMENT DETAILS:\n' +
         `  ${elementInfo}\n` +
         `  Font-family: ${fontInfo}\n` +
         `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
         autoIdWarning +
-        `\n` +
+        '\n' +
         `Error: ${e && e.message ? e.message : 'unknown canvas error'}\n` +
-        `\n` +
-        `Common causes:\n` +
-        `  • Cross-origin images/fonts without CORS (canvas becomes "tainted")\n` +
-        `  • Canvas size too large (out of memory)\n` +
-        `  • Browser security restrictions\n` +
-        `\n` +
-        `How to fix:\n` +
-        `  • Check browser console for specific CORS errors\n` +
-        `  • Ensure all external resources are same-origin or have CORS enabled\n` +
-        `  • Try reducing the SVG size or complexity`
+        '\n' +
+        'Common causes:\n' +
+        '  • Cross-origin images/fonts without CORS (canvas becomes "tainted")\n' +
+        '  • Canvas size too large (out of memory)\n' +
+        '  • Browser security restrictions\n' +
+        '\n' +
+        'How to fix:\n' +
+        '  • Check browser console for specific CORS errors\n' +
+        '  • Ensure all external resources are same-origin or have CORS enabled\n' +
+        '  • Try reducing the SVG size or complexity'
       );
     }
 
@@ -811,7 +827,9 @@
       // Count non-transparent pixels for debugging
       let nonZeroAlpha = 0;
       for (let i = 3; i < data.length; i += 4) {
-        if (data[i] !== 0) nonZeroAlpha++;
+        if (data[i] !== 0) {
+          nonZeroAlpha++;
+        }
       }
       console.log('[DEBUG rasterize] Total pixels with alpha > 0:', nonZeroAlpha);
     }
@@ -864,9 +882,9 @@
 
     if (DEBUG && typeof console !== 'undefined' && console.log) {
       console.log('[DEBUG rasterize] Element:', el.id || el.tagName,
-                  'actualPPU:', actualPixelsPerUnit.toFixed(6),
-                  'pixelsPerUnit:', pixelsPerUnit.toFixed(6),
-                  'xMin:', xMin, 'userX:', userX.toFixed(6));
+        'actualPPU:', actualPixelsPerUnit.toFixed(6),
+        'pixelsPerUnit:', pixelsPerUnit.toFixed(6),
+        'xMin:', xMin, 'userX:', userX.toFixed(6));
     }
 
     return { x: userX, y: userY, width: userW, height: userH };
@@ -919,17 +937,17 @@
     if (!el) {
       const targetDesc = typeof target === 'string' ? `id="${target}"` : 'provided reference';
       throw new Error(
-        `❌ Cannot compute SVG bounding box: Element not found\n` +
-        `\n` +
-        `REQUESTED ELEMENT:\n` +
+        '❌ Cannot compute SVG bounding box: Element not found\n' +
+        '\n' +
+        'REQUESTED ELEMENT:\n' +
         `  ${targetDesc}\n` +
         `  Type: ${typeof target}\n` +
-        `\n` +
-        `How to fix:\n` +
-        `  • Check that the element exists in the DOM\n` +
-        `  • Verify the element ID is correct (case-sensitive)\n` +
-        `  • Ensure the element hasn't been removed from the DOM\n` +
-        `  • If passing an element reference, make sure it's not null/undefined`
+        '\n' +
+        'How to fix:\n' +
+        '  • Check that the element exists in the DOM\n' +
+        '  • Verify the element ID is correct (case-sensitive)\n' +
+        '  • Ensure the element hasn\'t been removed from the DOM\n' +
+        '  • If passing an element reference, make sure it\'s not null/undefined'
       );
     }
 
@@ -942,21 +960,21 @@
       // Can't use getAutoIdWarning here since we don't have svgRoot yet
       const autoIdNote = (el && el.id && isAutoGeneratedId(el.id))
         ? `\n⚠️  NOTE: This element has an AUTO-GENERATED ID ("${el.id}").\n` +
-          `   This ID was added by sbb-extractor.cjs and doesn't exist in your original SVG.\n\n`
+          '   This ID was added by sbb-extractor.cjs and doesn\'t exist in your original SVG.\n\n'
         : '';
       throw new Error(
-        `❌ Cannot compute SVG bounding box: Element is not inside an SVG tree\n` +
-        `\n` +
-        `ELEMENT DETAILS:\n` +
+        '❌ Cannot compute SVG bounding box: Element is not inside an SVG tree\n' +
+        '\n' +
+        'ELEMENT DETAILS:\n' +
         `  ${elementInfo}\n` +
         autoIdNote +
-        `This element is not connected to an <svg> root element.\n` +
-        `\n` +
-        `How to fix:\n` +
-        `  • Ensure the element is inside an <svg> tag in the DOM\n` +
-        `  • Check that you're not querying a detached/orphaned element\n` +
-        `  • If creating elements programmatically, append them to the SVG tree first\n` +
-        `  • Verify the element hasn't been removed from the document`
+        'This element is not connected to an <svg> root element.\n' +
+        '\n' +
+        'How to fix:\n' +
+        '  • Ensure the element is inside an <svg> tag in the DOM\n' +
+        '  • Check that you\'re not querying a detached/orphaned element\n' +
+        '  • If creating elements programmatically, append them to the SVG tree first\n' +
+        '  • Verify the element hasn\'t been removed from the document'
       );
     }
 
@@ -1174,15 +1192,15 @@
   async function getSvgElementsUnionVisualBBox(targets, options) {
     if (!Array.isArray(targets) || targets.length === 0) {
       throw new Error(
-        `Cannot compute union bounding box: Invalid targets parameter\n` +
-        `\n` +
-        `Expected: Non-empty array of SVG elements or element IDs\n` +
+        'Cannot compute union bounding box: Invalid targets parameter\n' +
+        '\n' +
+        'Expected: Non-empty array of SVG elements or element IDs\n' +
         `Received: ${Array.isArray(targets) ? 'empty array' : typeof targets}\n` +
-        `\n` +
-        `How to fix:\n` +
-        `  • Pass an array with at least one element\n` +
-        `  • Example: ['element1', 'element2'] or [el1, el2]\n` +
-        `  • Ensure the array is not empty before calling this function`
+        '\n' +
+        'How to fix:\n' +
+        '  • Pass an array with at least one element\n' +
+        '  • Example: [\'element1\', \'element2\'] or [el1, el2]\n' +
+        '  • Ensure the array is not empty before calling this function'
       );
     }
 
@@ -1202,16 +1220,16 @@
         const prevId = svgRoot.id ? `id="${svgRoot.id}"` : '(no id)';
         const currId = bbox.svgRoot.id ? `id="${bbox.svgRoot.id}"` : '(no id)';
         throw new Error(
-          `Cannot compute union bounding box: Elements from different SVG documents\n` +
-          `\n` +
-          `All elements must belong to the same <svg> root element.\n` +
+          'Cannot compute union bounding box: Elements from different SVG documents\n' +
+          '\n' +
+          'All elements must belong to the same <svg> root element.\n' +
           `Previous SVG: ${prevId}\n` +
           `Current SVG:  ${currId}\n` +
-          `\n` +
-          `How to fix:\n` +
-          `  • Ensure all elements are children of the same <svg> root\n` +
-          `  • If you have multiple SVGs, compute bbox for each separately\n` +
-          `  • Check that elements haven't been moved between different SVG trees`
+          '\n' +
+          'How to fix:\n' +
+          '  • Ensure all elements are children of the same <svg> root\n' +
+          '  • If you have multiple SVGs, compute bbox for each separately\n' +
+          '  • Check that elements haven\'t been moved between different SVG trees'
         );
       }
       bboxes.push(bbox);
@@ -1299,14 +1317,14 @@
       const targetDesc = typeof svgRootOrId === 'string' ? `id="${svgRootOrId}"` : 'provided reference';
       throw new Error(
         `Cannot compute viewBox expansion: Invalid SVG root (${targetDesc})\n` +
-        `\n` +
-        `Expected: Root <svg> element or its ID\n` +
+        '\n' +
+        'Expected: Root <svg> element or its ID\n' +
         `Received: ${svgRoot ? svgRoot.tagName : 'null/undefined'}\n` +
-        `\n` +
-        `How to fix:\n` +
-        `  • Pass the root <svg> element or its ID string\n` +
-        `  • Ensure the element is actually an <svg> tag, not a child element\n` +
-        `  • Check that the element exists in the DOM`
+        '\n' +
+        'How to fix:\n' +
+        '  • Pass the root <svg> element or its ID string\n' +
+        '  • Ensure the element is actually an <svg> tag, not a child element\n' +
+        '  • Check that the element exists in the DOM'
       );
     }
 
@@ -1315,16 +1333,16 @@
       const svgId = svgRoot.id ? `id="${svgRoot.id}"` : '(no id)';
       throw new Error(
         `Cannot compute viewBox expansion: SVG missing valid viewBox (${svgId})\n` +
-        `\n` +
-        `The root <svg> element must have a viewBox attribute with valid dimensions.\n` +
+        '\n' +
+        'The root <svg> element must have a viewBox attribute with valid dimensions.\n' +
         `Current viewBox: ${svgRoot.getAttribute('viewBox') || '(none)'}\n` +
-        `\n` +
-        `How to fix:\n` +
-        `  • Add a viewBox attribute to your <svg> tag\n` +
-        `  • Example: <svg viewBox="0 0 800 600" ...>\n` +
-        `  • Ensure viewBox has 4 numbers: x, y, width, height\n` +
-        `  • Width and height must be greater than 0\n` +
-        `  • Use the sbb-fix-viewbox.cjs tool to auto-generate viewBox`
+        '\n' +
+        'How to fix:\n' +
+        '  • Add a viewBox attribute to your <svg> tag\n' +
+        '  • Example: <svg viewBox="0 0 800 600" ...>\n' +
+        '  • Ensure viewBox has 4 numbers: x, y, width, height\n' +
+        '  • Width and height must be greater than 0\n' +
+        '  • Use the sbb-fix-viewbox.cjs tool to auto-generate viewBox'
       );
     }
 
@@ -1857,9 +1875,15 @@
               visibility: el.style.visibility,
               opacity: el.style.opacity
             };
-            if (state.display !== undefined) el.style.display = state.display;
-            if (state.visibility !== undefined) el.style.visibility = state.visibility;
-            if (state.opacity !== undefined) el.style.opacity = state.opacity;
+            if (state.display !== undefined) {
+              el.style.display = state.display;
+            }
+            if (state.visibility !== undefined) {
+              el.style.visibility = state.visibility;
+            }
+            if (state.opacity !== undefined) {
+              el.style.opacity = state.opacity;
+            }
           }
         });
       }
@@ -1883,9 +1907,15 @@
           if (typeof state === 'string') {
             el.style.display = state;
           } else {
-            if (state.display !== undefined) el.style.display = state.display;
-            if (state.visibility !== undefined) el.style.visibility = state.visibility;
-            if (state.opacity !== undefined) el.style.opacity = state.opacity;
+            if (state.display !== undefined) {
+              el.style.display = state.display;
+            }
+            if (state.visibility !== undefined) {
+              el.style.visibility = state.visibility;
+            }
+            if (state.opacity !== undefined) {
+              el.style.opacity = state.opacity;
+            }
           }
         }
       });

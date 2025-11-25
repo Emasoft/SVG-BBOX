@@ -475,8 +475,12 @@ describe('Security Utils', () => {
         assert.ok(path.basename(tempDir1).startsWith('test-prefix-'));
       } finally {
         // Cleanup (don't rely on automatic cleanup for tests)
-        if (fs.existsSync(tempDir1)) fs.rmSync(tempDir1, { recursive: true });
-        if (fs.existsSync(tempDir2)) fs.rmSync(tempDir2, { recursive: true });
+        if (fs.existsSync(tempDir1)) {
+          fs.rmSync(tempDir1, { recursive: true });
+        }
+        if (fs.existsSync(tempDir2)) {
+          fs.rmSync(tempDir2, { recursive: true });
+        }
       }
     });
 
@@ -488,7 +492,9 @@ describe('Security Utils', () => {
         assert.ok(fs.existsSync(tempDir));
         assert.ok(path.basename(tempDir).startsWith('svg-bbox-'));
       } finally {
-        if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true });
+        if (fs.existsSync(tempDir)) {
+          fs.rmSync(tempDir, { recursive: true });
+        }
       }
     });
   });

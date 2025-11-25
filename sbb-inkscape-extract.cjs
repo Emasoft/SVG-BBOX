@@ -200,7 +200,7 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     // of pixels. Possible values are "none" (no change, document will render at 94% of its original
     // size), "scale-viewbox" (document will be rescaled globally, individual lengths will stay
     // untouched) and "scale-document" (each length will be re-scaled individually).
-    `--convert-dpi-method=none`,
+    '--convert-dpi-method=none',
 
     // Input SVG file
     safeInputPath
@@ -267,7 +267,7 @@ async function main() {
     args.margin
   );
 
-  printSuccess(`✓ Object extracted successfully`);
+  printSuccess('✓ Object extracted successfully');
   console.log(`  Input:     ${result.inputPath}`);
   console.log(`  Object ID: ${result.objectId}`);
   console.log(`  Output:    ${result.outputPath}`);

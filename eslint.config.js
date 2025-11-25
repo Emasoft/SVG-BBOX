@@ -21,7 +21,7 @@ export default [
     ]
   },
 
-  // Configuration for all JavaScript files
+  // Configuration for ES module JavaScript files
   {
     files: ['**/*.js'],
     languageOptions: {
@@ -63,6 +63,60 @@ export default [
       'no-console': 'off', // Allow console.log in Node.js scripts
       'no-debugger': 'error',
       'no-alert': 'warn',
+      'no-var': 'error',
+      'prefer-const': 'error',
+      'prefer-arrow-callback': 'warn',
+      'arrow-body-style': ['warn', 'as-needed'],
+      'no-duplicate-imports': 'error',
+      'no-useless-constructor': 'warn',
+
+      // Code quality
+      'eqeqeq': ['error', 'always', { null: 'ignore' }],
+      'curly': ['error', 'all'],
+      'brace-style': ['error', '1tbs'],
+      'no-throw-literal': 'error',
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-new-wrappers': 'error',
+      'no-return-await': 'error',
+
+      // Style (minimal, Prettier handles most)
+      'semi': ['error', 'always'],
+      'quotes': ['error', 'single', { avoidEscape: true }],
+      'comma-dangle': ['error', 'never'],
+      'indent': ['error', 2, { SwitchCase: 1 }],
+      'max-len': ['warn', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }]
+    }
+  },
+
+  // Configuration for CommonJS files (.cjs)
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        // Node.js globals
+        process: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'writable',
+        Buffer: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearTimeout: 'readonly',
+        clearInterval: 'readonly'
+      }
+    },
+    rules: {
+      // Best practices
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-console': 'off', // Allow console.log in Node.js scripts
+      'no-debugger': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
       'prefer-arrow-callback': 'warn',

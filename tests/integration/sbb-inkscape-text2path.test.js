@@ -25,7 +25,7 @@ async function checkInkscapeAvailable() {
   try {
     await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
     return true;
-  } catch (err) {
+  } catch (_err) {
     return false;
   }
 }
@@ -175,7 +175,7 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
       expect(fs.existsSync(outputPath)).toBe(true);
 
       // Second conversion with --overwrite should succeed
-      const { stdout } = await execFilePromise('node', [
+      const { stdout: _stdout } = await execFilePromise('node', [
         TEXT2PATH_PATH,
         inputPath,
         outputPath,
@@ -203,7 +203,7 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
       fs.writeFileSync(batchFile, batchContent);
 
       // Run batch conversion
-      const { stdout } = await execFilePromise('node', [
+      const { stdout: _stdout2 } = await execFilePromise('node', [
         TEXT2PATH_PATH,
         '--batch', batchFile,
         '--skip-comparison',
@@ -218,8 +218,12 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
       expect(fs.existsSync(output2)).toBe(true);
 
       // Clean up batch outputs
-      if (fs.existsSync(output1)) fs.unlinkSync(output1);
-      if (fs.existsSync(output2)) fs.unlinkSync(output2);
+      if (fs.existsSync(output1)) {
+        fs.unlinkSync(output1);
+      }
+      if (fs.existsSync(output2)) {
+        fs.unlinkSync(output2);
+      }
     });
   });
 
