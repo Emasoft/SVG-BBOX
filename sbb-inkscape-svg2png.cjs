@@ -1,14 +1,10 @@
 #!/usr/bin/env node
 /**
- * sbb-inkscape-svg2png.cjs
+ * sbb-inkscape-exportpng.cjs
  *
- * Simple SVG to PNG converter using Inkscape.
- *
- * WARNING: This tool uses Inkscape's rendering engine which has known issues
- * with font bounding box calculations. For accurate bbox computation, use the
- * native svg-bbox tools (sbb-render, sbb-getbbox) instead.
- *
- * This tool is provided for completeness and comparison purposes only.
+ * Export SVG files to PNG format using Inkscape with comprehensive control
+ * over all export parameters including color modes, compression, antialiasing,
+ * background, and area settings.
  *
  * Requires Inkscape to be installed on your system.
  *
@@ -35,8 +31,7 @@ const {
   runCLI,
   printSuccess,
   printError,
-  printInfo,
-  printWarning
+  printInfo
 } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -46,75 +41,111 @@ const {
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-inkscape-svg2png.cjs - Basic SVG to PNG Converter               ║
+║ sbb-inkscape-exportpng.cjs - Advanced SVG to PNG Export Tool        ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
-⚠️  WARNING: Inkscape has known issues with font bounding box calculations.
-   For accurate bbox computation, use native svg-bbox tools instead:
-   • sbb-render.cjs - Native SVG rendering with accurate bbox
-   • sbb-getbbox.cjs - Precise bounding box calculation
-
-   This tool is provided for completeness and comparison purposes only.
-
 DESCRIPTION:
-  Simple SVG to PNG converter using Inkscape's rendering engine.
-  Provides basic conversion with optional width, height, and DPI settings.
+  Export SVG files to PNG format using Inkscape with comprehensive control
+  over all export parameters including dimensions, DPI, color modes,
+  compression, antialiasing, background, and export areas.
 
 USAGE:
-  node sbb-inkscape-svg2png.cjs input.svg [options]
-  node sbb-inkscape-svg2png.cjs --batch <file> [options]
+  node sbb-inkscape-exportpng.cjs input.svg [options]
+  node sbb-inkscape-exportpng.cjs --batch <file> [options]
 
-OPTIONS:
+DIMENSION & RESOLUTION OPTIONS:
   --output <file>           Output PNG file (default: <input>.png)
   --width <pixels>          Export width in pixels
   --height <pixels>         Export height in pixels
   --dpi <dpi>               Export DPI (default: 96)
+                            96 DPI = 1 SVG user unit (px) = 1 bitmap pixel
+  --margin <pixels>         Margin around export area in pixels
+
+EXPORT AREA OPTIONS:
   --area-drawing            Export bounding box of all objects (default)
   --area-page               Export full SVG page/viewBox area
-  --batch <file>            Batch conversion mode using file list
+  --area-snap               Snap export area outwards to nearest integer px
+                            (preserves pixel alignment for pixel-snapped graphics)
+  --id <object-id>          Export specific object by ID (with --area-drawing)
+
+COLOR & QUALITY OPTIONS:
+  --color-mode <mode>       Bit depth and color type:
+                            Gray_1, Gray_2, Gray_4, Gray_8, Gray_16
+                            RGB_8, RGB_16
+                            GrayAlpha_8, GrayAlpha_16
+                            RGBA_8, RGBA_16 (default)
+  --compression <0-9>       PNG compression level (default: 6)
+                            0=no compression, 9=maximum compression
+  --antialias <0-3>         Antialiasing level (default: 2)
+                            0=none, 3=maximum
+
+BACKGROUND OPTIONS:
+  --background <color>      Background color (SVG color string)
+                            Examples: "#ff007f", "rgb(255,0,128)", "white"
+  --background-opacity <n>  Background opacity: 0.0-1.0 or 1-255
+                            (default: 255 = fully opaque if --background set)
+
+LEGACY FILE HANDLING:
+  --convert-dpi <method>    Method for legacy (pre-0.92) files (default: none)
+                            none          - No change (renders at 94% size)
+                            scale-viewbox - Rescale globally
+                            scale-document - Rescale each length individually
+
+BATCH PROCESSING:
+  --batch <file>            Batch export mode using file list
                             Format: svg_path.svg (one file per line)
+                            All export options apply to each file
+
+OTHER OPTIONS:
   --help                    Show this help
   --version                 Show version
 
 EXAMPLES:
 
-  # Basic PNG conversion
-  node sbb-inkscape-svg2png.cjs icon.svg
+  # Basic PNG export (default: area-drawing, 96 DPI)
+  node sbb-inkscape-exportpng.cjs icon.svg
 
-  # Convert with specific dimensions
-  node sbb-inkscape-svg2png.cjs icon.svg --width 512 --height 512
+  # Export with specific dimensions
+  node sbb-inkscape-exportpng.cjs icon.svg --width 512 --height 512
 
-  # Convert at high DPI
-  node sbb-inkscape-svg2png.cjs icon.svg --dpi 300
+  # Export at high DPI with margin
+  node sbb-inkscape-exportpng.cjs icon.svg --dpi 300 --margin 10
 
-  # Export full page area
-  node sbb-inkscape-svg2png.cjs document.svg --area-page
+  # Export specific object by ID
+  node sbb-inkscape-exportpng.cjs sprite.svg --id icon_home --output home.png
 
-  # Batch conversion from file list
-  node sbb-inkscape-svg2png.cjs --batch icons.txt --width 256 --height 256
+  # Export full page area with white background
+  node sbb-inkscape-exportpng.cjs document.svg --area-page \\
+    --background white --background-opacity 1.0
+
+  # High-quality export with maximum compression
+  node sbb-inkscape-exportpng.cjs logo.svg --width 1024 --height 1024 \\
+    --antialias 3 --compression 9
+
+  # Export to grayscale 8-bit PNG
+  node sbb-inkscape-exportpng.cjs drawing.svg --color-mode Gray_8
+
+  # Pixel-perfect export with snap
+  node sbb-inkscape-exportpng.cjs pixel-art.svg --area-snap --dpi 96
+
+  # Batch export with shared settings
+  node sbb-inkscape-exportpng.cjs --batch icons.txt \\
+    --width 256 --height 256 --compression 9
 
 OUTPUT:
-  Creates PNG file(s) from SVG input.
+  Creates PNG file(s) from SVG input with specified parameters.
 
   Exit codes:
-  • 0: Conversion successful
+  • 0: Export successful
   • 1: Error occurred
   • 2: Invalid arguments
 
-COMPARISON WITH NATIVE TOOLS:
-  Use native svg-bbox tools for production work:
-
-  Instead of:
-    node sbb-inkscape-svg2png.cjs input.svg
-
-  Use:
-    node sbb-render.cjs input.svg output.png
-
-  The native tools provide:
-  • Accurate font bounding box calculations
-  • Reliable text rendering
-  • Consistent cross-platform results
-  • Better performance
+NOTES:
+  - By default, exported area is the bounding box of all objects (--area-drawing)
+  - Default DPI of 96 means 1 SVG user unit = 1 bitmap pixel
+  - --area-snap is useful for preserving pixel alignment in pixel art
+  - Legacy file handling only affects pre-Inkscape 0.92 files
+  - Text baseline spacing is never converted (--no-convert-text-baseline-spacing)
 `);
 }
 
@@ -131,11 +162,26 @@ function parseArgs(argv) {
   const args = {
     input: null,
     output: null,
+    // Dimensions
     width: null,
     height: null,
     dpi: null,
-    areaDrawing: true,
+    margin: null,
+    // Export area
+    areaDrawing: true,  // Default
     areaPage: false,
+    areaSnap: false,
+    objectId: null,
+    // Color & Quality
+    colorMode: null,
+    compression: null,
+    antialias: null,
+    // Background
+    background: null,
+    backgroundOpacity: null,
+    // Legacy handling
+    convertDpiMethod: 'none',
+    // Batch
     batch: null
   };
 
@@ -146,7 +192,7 @@ function parseArgs(argv) {
       printHelp();
       process.exit(0);
     } else if (arg === '--version' || arg === '-v') {
-      printVersion('sbb-inkscape-svg2png');
+      printVersion('sbb-inkscape-exportpng');
       process.exit(0);
     } else if (arg === '--output' && i + 1 < argv.length) {
       args.output = argv[++i];
@@ -168,12 +214,67 @@ function parseArgs(argv) {
         console.error('Error: --dpi must be a positive number');
         process.exit(2);
       }
+    } else if (arg === '--margin' && i + 1 < argv.length) {
+      args.margin = parseFloat(argv[++i]);
+      if (isNaN(args.margin) || args.margin < 0) {
+        console.error('Error: --margin must be a non-negative number');
+        process.exit(2);
+      }
     } else if (arg === '--area-drawing') {
       args.areaDrawing = true;
       args.areaPage = false;
     } else if (arg === '--area-page') {
       args.areaPage = true;
       args.areaDrawing = false;
+    } else if (arg === '--area-snap') {
+      args.areaSnap = true;
+    } else if (arg === '--id' && i + 1 < argv.length) {
+      args.objectId = argv[++i];
+    } else if (arg === '--color-mode' && i + 1 < argv.length) {
+      args.colorMode = argv[++i];
+      const validModes = [
+        'Gray_1', 'Gray_2', 'Gray_4', 'Gray_8', 'Gray_16',
+        'RGB_8', 'RGB_16',
+        'GrayAlpha_8', 'GrayAlpha_16',
+        'RGBA_8', 'RGBA_16'
+      ];
+      if (!validModes.includes(args.colorMode)) {
+        console.error(`Error: --color-mode must be one of: ${validModes.join(', ')}`);
+        process.exit(2);
+      }
+    } else if (arg === '--compression' && i + 1 < argv.length) {
+      args.compression = parseInt(argv[++i], 10);
+      if (isNaN(args.compression) || args.compression < 0 || args.compression > 9) {
+        console.error('Error: --compression must be between 0 and 9');
+        process.exit(2);
+      }
+    } else if (arg === '--antialias' && i + 1 < argv.length) {
+      args.antialias = parseInt(argv[++i], 10);
+      if (isNaN(args.antialias) || args.antialias < 0 || args.antialias > 3) {
+        console.error('Error: --antialias must be between 0 and 3');
+        process.exit(2);
+      }
+    } else if (arg === '--background' && i + 1 < argv.length) {
+      args.background = argv[++i];
+    } else if (arg === '--background-opacity' && i + 1 < argv.length) {
+      args.backgroundOpacity = parseFloat(argv[++i]);
+      if (isNaN(args.backgroundOpacity) || args.backgroundOpacity < 0) {
+        console.error('Error: --background-opacity must be >= 0');
+        process.exit(2);
+      }
+      // Convert 0.0-1.0 range to 0-255 range if needed
+      if (args.backgroundOpacity <= 1.0) {
+        args.backgroundOpacity = Math.round(args.backgroundOpacity * 255);
+      } else if (args.backgroundOpacity > 255) {
+        console.error('Error: --background-opacity must be 0.0-1.0 or 1-255');
+        process.exit(2);
+      }
+    } else if (arg === '--convert-dpi' && i + 1 < argv.length) {
+      args.convertDpiMethod = argv[++i];
+      if (!['none', 'scale-viewbox', 'scale-document'].includes(args.convertDpiMethod)) {
+        console.error('Error: --convert-dpi must be "none", "scale-viewbox", or "scale-document"');
+        process.exit(2);
+      }
     } else if (arg === '--batch' && i + 1 < argv.length) {
       args.batch = argv[++i];
     } else if (!arg.startsWith('-')) {
@@ -192,8 +293,8 @@ function parseArgs(argv) {
   // Validate required arguments
   if (!args.batch && !args.input) {
     console.error('Error: Input SVG file required (or use --batch <file>)');
-    console.error('Usage: node sbb-inkscape-svg2png.cjs input.svg [options]');
-    console.error('   or: node sbb-inkscape-svg2png.cjs --batch <file> [options]');
+    console.error('Usage: node sbb-inkscape-exportpng.cjs input.svg [options]');
+    console.error('   or: node sbb-inkscape-exportpng.cjs --batch <file> [options]');
     process.exit(2);
   }
 
@@ -217,7 +318,7 @@ function parseArgs(argv) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Read and parse batch conversion file (one SVG path per line)
+ * Read and parse batch export file (one SVG path per line)
  * Returns array of SVG file paths
  */
 function readBatchFile(batchFilePath) {
@@ -240,10 +341,10 @@ function readBatchFile(batchFilePath) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// INKSCAPE SVG TO PNG CONVERSION
+// INKSCAPE PNG EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) {
+async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
   // SECURITY: Validate input file path
   const safeInputPath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
@@ -259,12 +360,22 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
     width = null,
     height = null,
     dpi = null,
+    margin = null,
     areaDrawing = true,
-    areaPage = false
+    areaPage = false,
+    areaSnap = false,
+    objectId = null,
+    colorMode = null,
+    compression = null,
+    antialias = null,
+    background = null,
+    backgroundOpacity = null,
+    convertDpiMethod = 'none'
   } = options;
 
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
+  // Uncomment the optional parameters when you need them. Do not remove the comments.
   const inkscapeArgs = [
     // Export as PNG format
     '--export-type=png',
@@ -284,7 +395,7 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
     // of pixels. Possible values are "none" (no change, document will render at 94% of its original
     // size), "scale-viewbox" (document will be rescaled globally, individual lengths will stay
     // untouched) and "scale-document" (each length will be re-scaled individually).
-    '--convert-dpi-method=none',
+    `--convert-dpi-method=${convertDpiMethod}`,
 
     // Output filename
     `--export-filename=${safeOutputPath}`
@@ -300,6 +411,24 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
     // document (or of the exported object if --export-id is used). With this option, the exported
     // image will display all the visible objects of the document without margins or cropping.
     inkscapeArgs.push('--export-area-drawing');
+  }
+
+  // Area snap (optional)
+  if (areaSnap) {
+    // The option 'export-area-snap' will snap the export area outwards to the nearest integer px
+    // values. If you are using the default export resolution of 96 dpi and your graphics are
+    // pixel-snapped to minimize antialiasing, this switch allows you to preserve this alignment
+    // even if you are exporting some object's bounding box (with --export-area-drawing) which is
+    // itself not pixel-aligned.
+    inkscapeArgs.push('--export-area-snap');
+  }
+
+  // Export specific object by ID (optional)
+  if (objectId) {
+    // Specify the ID of the object to export
+    inkscapeArgs.push(`--export-id=${objectId}`);
+    // Export only the specified object (no other objects)
+    inkscapeArgs.push('--export-id-only');
   }
 
   // Dimensions and DPI (optional)
@@ -318,6 +447,42 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
   if (height !== null) {
     // Export height in pixels
     inkscapeArgs.push(`--export-height=${height}`);
+  }
+  if (margin !== null) {
+    // Margin around export area in pixels
+    inkscapeArgs.push(`--export-margin=${margin}`);
+  }
+
+  // Color mode, compression, antialiasing (optional)
+  if (colorMode !== null) {
+    // Set the color mode (bit depth and color type) for exported bitmaps
+    // (Gray_1/Gray_2/Gray_4/Gray_8/Gray_16/RGB_8/RGB_16/GrayAlpha_8/GrayAlpha_16/RGBA_8/RGBA_16)
+    inkscapeArgs.push(`--export-png-color-mode=${colorMode}`);
+  }
+  if (compression !== null) {
+    // Compression LEVEL: (0 to 9); default is 6.
+    inkscapeArgs.push(`--export-png-compression=${compression}`);
+  }
+  if (antialias !== null) {
+    // Antialiasing LEVEL: (0 to 3); default is 2.
+    inkscapeArgs.push(`--export-png-antialias=${antialias}`);
+  }
+
+  // Background color and opacity (optional)
+  if (background !== null) {
+    // Background color of exported PNG. This may be any SVG supported color string,
+    // for example "#ff007f" or "rgb(255, 0, 128)".
+    inkscapeArgs.push(`--export-background=${background}`);
+  }
+  if (backgroundOpacity !== null) {
+    // Opacity of the background of exported PNG. This may be a value either between 0.0 and 1.0
+    // (0.0 meaning full transparency, 1.0 full opacity) or greater than 1 up to 255 (255 meaning
+    // full opacity). If not set but the --export-background option is used, then the value of 255
+    // (full opacity) will be used.
+    inkscapeArgs.push(`--export-background-opacity=${backgroundOpacity}`);
+  } else if (background !== null) {
+    // Default to fully opaque if background set but opacity not specified
+    inkscapeArgs.push('--export-background-opacity=255');
   }
 
   // Add input file as last argument
@@ -344,8 +509,18 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
       fileSize: stats.size,
       width,
       height,
-      dpi: dpi || 96,
-      areaMode: areaPage ? 'page' : 'drawing',
+      dpi,
+      margin,
+      areaDrawing,
+      areaPage,
+      areaSnap,
+      objectId,
+      colorMode,
+      compression,
+      antialias,
+      background,
+      backgroundOpacity,
+      convertDpiMethod,
       stdout: stdout.trim(),
       stderr: stderr.trim()
     };
@@ -359,7 +534,7 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
     } else if (error.killed) {
       throw new SVGBBoxError('Inkscape process timed out (30s limit)');
     } else {
-      throw new SVGBBoxError(`Inkscape conversion failed: ${error.message}`, error);
+      throw new SVGBBoxError(`Inkscape PNG export failed: ${error.message}`, error);
     }
   }
 }
@@ -371,13 +546,9 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
 async function main() {
   const args = parseArgs(process.argv);
 
-  printInfo(`sbb-inkscape-svg2png v${getVersion()} | svg-bbox toolkit\n`);
+  printInfo(`sbb-inkscape-exportpng v${getVersion()} | svg-bbox toolkit\n`);
 
-  // Show accuracy warning
-  printWarning('⚠️  Inkscape has known issues with font bounding boxes.');
-  printWarning('   For accurate results, use native svg-bbox tools (sbb-render, sbb-getbbox).\n');
-
-  // BATCH MODE: Convert multiple SVG files
+  // BATCH MODE: Export multiple SVG files
   if (args.batch) {
     const svgFiles = readBatchFile(args.batch);
 
@@ -389,15 +560,24 @@ async function main() {
       const inputBase = path.basename(svgPath, path.extname(svgPath));
       const pngPath = `${inputBase}.png`;
 
-      console.log(`[${i + 1}/${svgFiles.length}] Converting ${svgPath}...`);
+      console.log(`[${i + 1}/${svgFiles.length}] Exporting ${svgPath}...`);
 
       try {
-        const result = await convertSvgToPngWithInkscape(svgPath, pngPath, {
+        const result = await exportPngWithInkscape(svgPath, pngPath, {
           width: args.width,
           height: args.height,
           dpi: args.dpi,
+          margin: args.margin,
           areaDrawing: args.areaDrawing,
-          areaPage: args.areaPage
+          areaPage: args.areaPage,
+          areaSnap: args.areaSnap,
+          objectId: args.objectId,
+          colorMode: args.colorMode,
+          compression: args.compression,
+          antialias: args.antialias,
+          background: args.background,
+          backgroundOpacity: args.backgroundOpacity,
+          convertDpiMethod: args.convertDpiMethod
         });
 
         results.push({
@@ -431,43 +611,81 @@ async function main() {
   }
 
   // SINGLE FILE MODE
-  console.log(`Converting ${args.input} to PNG...\n`);
+  console.log(`Exporting ${args.input} to PNG...`);
 
-  const result = await convertSvgToPngWithInkscape(args.input, args.output, {
+  const result = await exportPngWithInkscape(args.input, args.output, {
     width: args.width,
     height: args.height,
     dpi: args.dpi,
+    margin: args.margin,
     areaDrawing: args.areaDrawing,
-    areaPage: args.areaPage
+    areaPage: args.areaPage,
+    areaSnap: args.areaSnap,
+    objectId: args.objectId,
+    colorMode: args.colorMode,
+    compression: args.compression,
+    antialias: args.antialias,
+    background: args.background,
+    backgroundOpacity: args.backgroundOpacity,
+    convertDpiMethod: args.convertDpiMethod
   });
 
-  printSuccess(`✓ PNG conversion successful`);
+  printSuccess(`✓ PNG export successful`);
   console.log(`  Input:       ${result.inputPath}`);
   console.log(`  Output:      ${result.outputPath}`);
   console.log(`  Size:        ${(result.fileSize / 1024).toFixed(1)} KB`);
-  console.log(`  DPI:         ${result.dpi}`);
-  console.log(`  Export area: ${result.areaMode}`);
 
+  // Export settings
   if (result.width || result.height) {
     const dims = [];
     if (result.width) dims.push(`${result.width}px`);
     if (result.height) dims.push(`${result.height}px`);
     console.log(`  Dimensions:  ${dims.join(' × ')}`);
   }
+  if (result.dpi) {
+    console.log(`  DPI:         ${result.dpi}`);
+  }
+  if (result.margin) {
+    console.log(`  Margin:      ${result.margin}px`);
+  }
+
+  // Area mode
+  const areaMode = result.areaPage ? 'page' : 'drawing';
+  const areaExtra = result.areaSnap ? ' (snap)' : '';
+  console.log(`  Export area: ${areaMode}${areaExtra}`);
+
+  if (result.objectId) {
+    console.log(`  Object ID:   ${result.objectId}`);
+  }
+
+  // Color & quality
+  if (result.colorMode) {
+    console.log(`  Color mode:  ${result.colorMode}`);
+  }
+  if (result.compression !== null) {
+    console.log(`  Compression: ${result.compression}/9`);
+  }
+  if (result.antialias !== null) {
+    console.log(`  Antialias:   ${result.antialias}/3`);
+  }
+
+  // Background
+  if (result.background) {
+    const opacity = result.backgroundOpacity !== null ? ` (opacity: ${result.backgroundOpacity}/255)` : '';
+    console.log(`  Background:  ${result.background}${opacity}`);
+  }
+
+  if (result.convertDpiMethod !== 'none') {
+    console.log(`  DPI method:  ${result.convertDpiMethod}`);
+  }
 
   // Show Inkscape warnings if any
   if (result.stderr) {
     printInfo(`\nInkscape warnings:\n${result.stderr}`);
   }
-
-  // Reminder about native tools
-  console.log('\n' + '─'.repeat(78));
-  printInfo('💡 For production use, consider native svg-bbox tools:');
-  console.log('   node sbb-render.cjs input.svg output.png');
-  console.log('─'.repeat(78));
 }
 
 // SECURITY: Run with CLI error handling
 runCLI(main);
 
-module.exports = { main, convertSvgToPngWithInkscape };
+module.exports = { main, exportPngWithInkscape };

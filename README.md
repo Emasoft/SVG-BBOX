@@ -139,8 +139,7 @@ After installation, the following CLI commands are available:
 **Inkscape Integration Tools** ⚠️ *(For comparison only - see warnings below)*:
 - `sbb-inkscape-text2path` - Convert text to paths using Inkscape
 - `sbb-inkscape-extract` - Extract objects by ID using Inkscape
-- `sbb-inkscape-svg2png` - Simple SVG to PNG using Inkscape
-- `sbb-inkscape-exportpng` - Advanced PNG export using Inkscape
+- `sbb-inkscape-svg2png` - SVG to PNG export using Inkscape
 
 > **⚠️ Accuracy Warning:** Inkscape tools have known issues with font bounding boxes.
 > Use core tools for production. Inkscape tools are for comparison purposes only.
@@ -915,43 +914,12 @@ node sbb-inkscape-extract.cjs sprite.svg --id icon_home --margin 10
 
 ⚠️ **Note:** For more reliable object extraction with accurate bounding boxes, use `sbb-extractor.cjs --extract` instead.
 
-##### 3. `sbb-inkscape-svg2png.cjs` - Simple SVG to PNG Converter
-
-Basic SVG to PNG conversion using Inkscape.
-
-```bash
-node sbb-inkscape-svg2png.cjs input.svg [options]
-```
-
-**Options:**
-- `--output <file>` - Output PNG file
-- `--width <pixels>` - Export width
-- `--height <pixels>` - Export height
-- `--dpi <dpi>` - Export DPI (default: 96)
-- `--area-drawing` - Export bounding box of objects (default)
-- `--area-page` - Export full SVG page/viewBox
-- `--batch <file>` - Batch mode
-
-**Example:**
-```bash
-# Basic conversion
-node sbb-inkscape-svg2png.cjs icon.svg
-
-# With specific dimensions
-node sbb-inkscape-svg2png.cjs icon.svg --width 512 --height 512
-
-# High DPI export
-node sbb-inkscape-svg2png.cjs icon.svg --dpi 300
-```
-
-⚠️ **Note:** For production use with accurate rendering, use `sbb-render.cjs` instead.
-
-##### 4. `sbb-inkscape-exportpng.cjs` - Advanced PNG Export
+##### 3. `sbb-inkscape-svg2png.cjs` - SVG to PNG Export
 
 Comprehensive PNG export with full control over all Inkscape parameters.
 
 ```bash
-node sbb-inkscape-exportpng.cjs input.svg [options]
+node sbb-inkscape-svg2png.cjs input.svg [options]
 ```
 
 **Dimension & Resolution Options:**
@@ -983,23 +951,23 @@ node sbb-inkscape-exportpng.cjs input.svg [options]
 **Examples:**
 ```bash
 # High-quality export with maximum compression
-node sbb-inkscape-exportpng.cjs logo.svg \
+node sbb-inkscape-svg2png.cjs logo.svg \
   --width 1024 --height 1024 \
   --antialias 3 --compression 9
 
 # Export with white background
-node sbb-inkscape-exportpng.cjs document.svg \
+node sbb-inkscape-svg2png.cjs document.svg \
   --area-page \
   --background white --background-opacity 1.0
 
 # Grayscale export
-node sbb-inkscape-exportpng.cjs drawing.svg --color-mode Gray_8
+node sbb-inkscape-svg2png.cjs drawing.svg --color-mode Gray_8
 
 # Pixel-perfect export
-node sbb-inkscape-exportpng.cjs pixel-art.svg --area-snap --dpi 96
+node sbb-inkscape-svg2png.cjs pixel-art.svg --area-snap --dpi 96
 
 # Batch export with shared settings
-node sbb-inkscape-exportpng.cjs --batch icons.txt \
+node sbb-inkscape-svg2png.cjs --batch icons.txt \
   --width 256 --height 256 --compression 9
 ```
 
