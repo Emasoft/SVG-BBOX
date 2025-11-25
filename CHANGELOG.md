@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multiple resolution modes (viewbox, nominal, full, scale, stretch, clip)
   - Diff PNG output (white=different, black=identical)
   - JSON output mode for automation
+  - Batch comparison mode with tab-separated input files
+- Three Inkscape integration CLI tools (for comparison purposes):
+  - `sbb-inkscape-text2path` - Convert text to paths using Inkscape
+  - `sbb-inkscape-extract` - Extract objects by ID using Inkscape
+  - `sbb-inkscape-svg2png` - SVG to PNG export using Inkscape
+  - All tools include comprehensive parameter documentation
+  - WARNING: Inkscape tools have known issues with font bounding boxes
+- Added `lib/` directory with shared utilities:
+  - `lib/security-utils.cjs` - Path validation and security checks
+  - `lib/cli-utils.cjs` - CLI formatting and error handling
+- Comprehensive integration tests for all Inkscape tools (26 tests)
+- Updated README with detailed Inkscape tools documentation
 - Added `pngjs` dependency for PNG manipulation
 
 ## [1.0.1] - 2025-11-24
