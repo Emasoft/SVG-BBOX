@@ -110,7 +110,35 @@ All tools work **cross-platform** (Windows, macOS, Linux) and handle **file path
 
 ## 📦 Installation
 
-### Via npm (Recommended)
+### Via CDN (Browser - No Build Tools Required!)
+
+For direct browser usage, use the minified UMD build from a CDN:
+
+```html
+<!-- Via unpkg (Recommended) -->
+<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+
+<!-- Via jsdelivr -->
+<script src="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+
+<!-- Then use the global SvgVisualBBox object -->
+<script>
+  (async () => {
+    // Wait for fonts to load
+    await SvgVisualBBox.waitForDocumentFonts(document, 5000);
+
+    // Get bbox for an SVG element
+    const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('my-svg-id');
+    console.log('BBox:', bbox);
+  })();
+</script>
+```
+
+**File sizes:**
+- Original: 72.9 KB
+- Minified (CDN): 25.3 KB *(65.3% reduction)*
+
+### Via npm (Recommended for Node.js/Build Tools)
 
 ```bash
 # Install globally for CLI commands
