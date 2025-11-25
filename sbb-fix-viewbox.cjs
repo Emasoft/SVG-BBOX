@@ -24,9 +24,9 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { execFile } = require('child_process');
+const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
+const { getVersion, printVersion, hasVersionFlag: _hasVersionFlag } = require('./version.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -35,15 +35,15 @@ const {
   readSVGFileSafe,
   sanitizeSVGContent,
   writeFileSafe,
-  SVGBBoxError,
-  ValidationError,
+  SVGBBoxError: _SVGBBoxError,
+  ValidationError: _ValidationError,
   FileSystemError
 } = require('./lib/security-utils.cjs');
 
 const {
   runCLI,
   printSuccess,
-  printError,
+  printError: _printError,
   printInfo,
   printWarning
 } = require('./lib/cli-utils.cjs');
@@ -217,13 +217,16 @@ ${sanitizedSvg}
 
     // Wait for fonts to load (with timeout)
     await page.evaluate(async (timeout) => {
+      /* eslint-disable no-undef */
       if (window.SvgVisualBBox && window.SvgVisualBBox.waitForDocumentFonts) {
         await window.SvgVisualBBox.waitForDocumentFonts(document, timeout);
       }
+      /* eslint-enable no-undef */
     }, FONT_TIMEOUT_MS);
 
     // Run the fix inside the browser context
     const fixedSvgString = await page.evaluate(async () => {
+      /* eslint-disable no-undef */
       const SvgVisualBBox = window.SvgVisualBBox;
       if (!SvgVisualBBox) {
         throw new Error('SvgVisualBBox not found on window. Did the script load?');
@@ -305,6 +308,7 @@ ${sanitizedSvg}
       // 4) Serialize the fixed <svg> back to string
       const serializer = new XMLSerializer();
       // In case the original file had extra stuff around the root, we just output the <svg> itself.
+      /* eslint-enable no-undef */
       return serializer.serializeToString(svg);
     });
 

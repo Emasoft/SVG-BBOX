@@ -607,7 +607,7 @@ ${sanitizedSvg}
     if (browser) {
       try {
         await browser.close();
-      } catch (closeErr) {
+      } catch {
         // Force kill if close fails
         if (browser.process()) {
           browser.process().kill('SIGKILL');
@@ -620,439 +620,444 @@ ${sanitizedSvg}
 // -------- LIST mode: data + HTML with filters & rename UI --------
 
 async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath, jsonMode, autoOpen) {
-  const result = await withPageForSvg(inputPath, async (page) => await page.evaluate(async (assignIds) => {
-    const SvgVisualBBox = window.SvgVisualBBox;
-    if (!SvgVisualBBox) {
-      throw new Error('SvgVisualBBox not found.');
-    }
+  const result = await withPageForSvg(inputPath, async (page) => {
+    const evalResult = await page.evaluate(async (assignIds) => {
+      /* eslint-disable no-undef */
+      const SvgVisualBBox = window.SvgVisualBBox;
+      if (!SvgVisualBBox) {
+        throw new Error('SvgVisualBBox not found.');
+      }
 
-    const rootSvg = document.querySelector('svg');
-    if (!rootSvg) {
-      throw new Error('No <svg> found');
-    }
+      const rootSvg = document.querySelector('svg');
+      if (!rootSvg) {
+        throw new Error('No <svg> found');
+      }
 
-    const serializer = new XMLSerializer();
+      const serializer = new XMLSerializer();
 
-    // Sprite sheet detection function (runs in browser context)
-    function detectSpriteSheet(rootSvg) {
-      const children = Array.from(rootSvg.children).filter(el => {
-        const tag = el.tagName.toLowerCase();
-        return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
+      // Sprite sheet detection function (runs in browser context)
+      function detectSpriteSheet(rootSvg) {
+        const children = Array.from(rootSvg.children).filter(el => {
+          const tag = el.tagName.toLowerCase();
+          return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
                tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
-      });
+        });
 
-      if (children.length < 3) {
-        return { isSprite: false, sprites: [], grid: null, stats: null };
-      }
-
-      const sprites = [];
-      for (const child of children) {
-        const id = child.id || `auto_${child.tagName}_${sprites.length}`;
-        const bbox = child.getBBox ? child.getBBox() : null;
-
-        if (bbox && bbox.width > 0 && bbox.height > 0) {
-          sprites.push({
-            id,
-            tag: child.tagName.toLowerCase(),
-            x: bbox.x,
-            y: bbox.y,
-            width: bbox.width,
-            height: bbox.height,
-            hasId: !!child.id
-          });
+        if (children.length < 3) {
+          return { isSprite: false, sprites: [], grid: null, stats: null };
         }
-      }
 
-      if (sprites.length < 3) {
-        return { isSprite: false, sprites: [], grid: null, stats: null };
-      }
+        const sprites = [];
+        for (const child of children) {
+          const id = child.id || `auto_${child.tagName}_${sprites.length}`;
+          const bbox = child.getBBox ? child.getBBox() : null;
 
-      const widths = sprites.map(s => s.width);
-      const heights = sprites.map(s => s.height);
-      const areas = sprites.map(s => s.width * s.height);
+          if (bbox && bbox.width > 0 && bbox.height > 0) {
+            sprites.push({
+              id,
+              tag: child.tagName.toLowerCase(),
+              x: bbox.x,
+              y: bbox.y,
+              width: bbox.width,
+              height: bbox.height,
+              hasId: !!child.id
+            });
+          }
+        }
 
-      const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
-      const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
-      const avgArea = areas.reduce((a, b) => a + b, 0) / areas.length;
+        if (sprites.length < 3) {
+          return { isSprite: false, sprites: [], grid: null, stats: null };
+        }
 
-      const widthStdDev = Math.sqrt(
-        widths.reduce((sum, w) => sum + Math.pow(w - avgWidth, 2), 0) / widths.length
-      );
-      const heightStdDev = Math.sqrt(
-        heights.reduce((sum, h) => sum + Math.pow(h - avgHeight, 2), 0) / heights.length
-      );
-      const areaStdDev = Math.sqrt(
-        areas.reduce((sum, a) => sum + Math.pow(a - avgArea, 2), 0) / areas.length
-      );
+        const widths = sprites.map(s => s.width);
+        const heights = sprites.map(s => s.height);
+        const areas = sprites.map(s => s.width * s.height);
 
-      const widthCV = widthStdDev / avgWidth;
-      const heightCV = heightStdDev / avgHeight;
-      const areaCV = areaStdDev / avgArea;
+        const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
+        const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
+        const avgArea = areas.reduce((a, b) => a + b, 0) / areas.length;
 
-      const idPatterns = [
-        /^icon[-_]/i,
-        /^sprite[-_]/i,
-        /^symbol[-_]/i,
-        /^glyph[-_]/i,
-        /[-_]\d+$/,
-        /^\d+$/
-      ];
+        const widthStdDev = Math.sqrt(
+          widths.reduce((sum, w) => sum + Math.pow(w - avgWidth, 2), 0) / widths.length
+        );
+        const heightStdDev = Math.sqrt(
+          heights.reduce((sum, h) => sum + Math.pow(h - avgHeight, 2), 0) / heights.length
+        );
+        const areaStdDev = Math.sqrt(
+          areas.reduce((sum, a) => sum + Math.pow(a - avgArea, 2), 0) / areas.length
+        );
 
-      const hasCommonPattern = sprites.filter(s =>
-        s.hasId && idPatterns.some(p => p.test(s.id))
-      ).length / sprites.length > 0.5;
+        const widthCV = widthStdDev / avgWidth;
+        const heightCV = heightStdDev / avgHeight;
+        const areaCV = areaStdDev / avgArea;
 
-      const xPositions = [...new Set(sprites.map(s => Math.round(s.x)))].sort((a, b) => a - b);
-      const yPositions = [...new Set(sprites.map(s => Math.round(s.y)))].sort((a, b) => a - b);
+        const idPatterns = [
+          /^icon[-_]/i,
+          /^sprite[-_]/i,
+          /^symbol[-_]/i,
+          /^glyph[-_]/i,
+          /[-_]\d+$/,
+          /^\d+$/
+        ];
 
-      const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
+        const hasCommonPattern = sprites.filter(s =>
+          s.hasId && idPatterns.some(p => p.test(s.id))
+        ).length / sprites.length > 0.5;
 
-      const isSpriteSheet = (
-        (widthCV < 0.3 && heightCV < 0.3) ||
+        const xPositions = [...new Set(sprites.map(s => Math.round(s.x)))].sort((a, b) => a - b);
+        const yPositions = [...new Set(sprites.map(s => Math.round(s.y)))].sort((a, b) => a - b);
+
+        const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
+
+        const isSpriteSheet = (
+          (widthCV < 0.3 && heightCV < 0.3) ||
         (areaCV < 0.3) ||
         hasCommonPattern ||
         isGridArranged
-      );
+        );
 
-      return {
-        isSprite: isSpriteSheet,
-        sprites: sprites.map(s => ({ id: s.id, tag: s.tag })),
-        grid: isGridArranged ? {
-          rows: yPositions.length,
-          cols: xPositions.length
-        } : null,
-        stats: {
-          count: sprites.length,
-          avgSize: { width: avgWidth, height: avgHeight },
-          uniformity: {
-            widthCV: widthCV.toFixed(3),
-            heightCV: heightCV.toFixed(3),
-            areaCV: areaCV.toFixed(3)
-          },
-          hasCommonPattern,
-          isGridArranged
-        }
-      };
-    }
-
-    // Detect if this is a sprite sheet
-    const spriteInfo = detectSpriteSheet(rootSvg);
-
-    const selector = [
-      'g', 'path', 'rect', 'circle', 'ellipse',
-      'polygon', 'polyline', 'text', 'image', 'use', 'symbol'
-    ].join(',');
-
-    const els = Array.from(rootSvg.querySelectorAll(selector));
-
-    const seenIds = new Set();
-    function ensureUniqueId(base) {
-      let id = base;
-      let counter = 1;
-      while (seenIds.has(id) || document.getElementById(id)) {
-        id = base + '_' + (counter++);
-      }
-      seenIds.add(id);
-      return id;
-    }
-
-    for (const el of els) {
-      if (el.id) {
-        seenIds.add(el.id);
-      }
-    }
-
-    const info = [];
-    let changed = false;
-
-    for (const el of els) {
-      let id = el.id || null;
-
-      if (assignIds && !id) {
-        const base = 'auto_id_' + el.tagName.toLowerCase();
-        const newId = ensureUniqueId(base);
-        el.setAttribute('id', newId);
-        id = newId;
-        changed = true;
-      }
-
-      // Compute group ancestors (IDs of ancestor <g>)
-      const groupIds = [];
-      let parent = el.parentElement;
-      while (parent && parent !== rootSvg) {
-        if (parent.tagName && parent.tagName.toLowerCase() === 'g' && parent.id) {
-          groupIds.push(parent.id);
-        }
-        parent = parent.parentElement;
-      }
-
-      // Compute visual bbox (may fail / be null)
-      let bbox = null;
-      let bboxError = null;
-      try {
-        const b = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-          mode: 'unclipped',
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true,
-          fontTimeoutMs: 15000  // Longer timeout for font loading
-        });
-        if (b) {
-          bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
-        } else {
-          // Check if it's a text element - likely font issue
-          const tagLower = el.tagName && el.tagName.toLowerCase();
-          if (tagLower === 'text') {
-            bboxError = 'No visible pixels (likely missing fonts)';
-          } else {
-            bboxError = 'No visible pixels detected';
+        return {
+          isSprite: isSpriteSheet,
+          sprites: sprites.map(s => ({ id: s.id, tag: s.tag })),
+          grid: isGridArranged ? {
+            rows: yPositions.length,
+            cols: xPositions.length
+          } : null,
+          stats: {
+            count: sprites.length,
+            avgSize: { width: avgWidth, height: avgHeight },
+            uniformity: {
+              widthCV: widthCV.toFixed(3),
+              heightCV: heightCV.toFixed(3),
+              areaCV: areaCV.toFixed(3)
+            },
+            hasCommonPattern,
+            isGridArranged
           }
-        }
-      } catch (err) {
-        bboxError = err.message || 'BBox measurement failed';
+        };
       }
 
-      info.push({
-        tagName: el.tagName,
-        id,
-        bbox,
-        bboxError,
-        groups: groupIds
+      // Detect if this is a sprite sheet
+      const spriteInfo = detectSpriteSheet(rootSvg);
+
+      const selector = [
+        'g', 'path', 'rect', 'circle', 'ellipse',
+        'polygon', 'polyline', 'text', 'image', 'use', 'symbol'
+      ].join(',');
+
+      const els = Array.from(rootSvg.querySelectorAll(selector));
+
+      const seenIds = new Set();
+      function ensureUniqueId(base) {
+        let id = base;
+        let counter = 1;
+        while (seenIds.has(id) || document.getElementById(id)) {
+          id = base + '_' + (counter++);
+        }
+        seenIds.add(id);
+        return id;
+      }
+
+      for (const el of els) {
+        if (el.id) {
+          seenIds.add(el.id);
+        }
+      }
+
+      const info = [];
+      let changed = false;
+
+      for (const el of els) {
+        let id = el.id || null;
+
+        if (assignIds && !id) {
+          const base = 'auto_id_' + el.tagName.toLowerCase();
+          const newId = ensureUniqueId(base);
+          el.setAttribute('id', newId);
+          id = newId;
+          changed = true;
+        }
+
+        // Compute group ancestors (IDs of ancestor <g>)
+        const groupIds = [];
+        let parent = el.parentElement;
+        while (parent && parent !== rootSvg) {
+          if (parent.tagName && parent.tagName.toLowerCase() === 'g' && parent.id) {
+            groupIds.push(parent.id);
+          }
+          parent = parent.parentElement;
+        }
+
+        // Compute visual bbox (may fail / be null)
+        let bbox = null;
+        let bboxError = null;
+        try {
+          const b = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+            mode: 'unclipped',
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true,
+            fontTimeoutMs: 15000  // Longer timeout for font loading
+          });
+          if (b) {
+            bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
+          } else {
+          // Check if it's a text element - likely font issue
+            const tagLower = el.tagName && el.tagName.toLowerCase();
+            if (tagLower === 'text') {
+              bboxError = 'No visible pixels (likely missing fonts)';
+            } else {
+              bboxError = 'No visible pixels detected';
+            }
+          }
+        } catch (err) {
+          bboxError = err.message || 'BBox measurement failed';
+        }
+
+        info.push({
+          tagName: el.tagName,
+          id,
+          bbox,
+          bboxError,
+          groups: groupIds
+        });
+      }
+
+      let fixedSvgString = null;
+      if (assignIds && changed) {
+        fixedSvgString = serializer.serializeToString(rootSvg);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════════
+      // CRITICAL FIX #1: Remove viewBox/width/height/x/y from hidden container SVG
+      // ═══════════════════════════════════════════════════════════════════════════════
+      //
+      // WHY THIS IS NECESSARY:
+      // The hidden SVG container (which holds all element definitions for <use> references)
+      // MUST NOT have viewBox, width, height, x, or y attributes because they constrain
+      // the coordinate system and cause incorrect clipping of referenced elements.
+      //
+      // WHAT HAPPENS IF WE DON'T REMOVE THESE:
+      // 1. The viewBox creates a "viewport coordinate system" for the container
+      // 2. When <use href="#element-id" /> references an element, the browser tries to
+      //    fit it within the container's viewBox
+      // 3. Elements with coordinates outside the container viewBox get clipped
+      // 4. This causes preview SVGs to show partial/empty content even though their
+      //    individual viewBox is correct
+      //
+      // EXAMPLE OF THE BUG:
+      // - Container has viewBox="0 0 1037.227 2892.792"
+      // - Element rect1851 has bbox at x=42.34, y=725.29 (inside container viewBox) ✓
+      // - Element text8 has bbox at x=-455.64 (OUTSIDE container viewBox, negative!) ✗
+      // - Result: text8 preview appears empty because container viewBox clips it
+      //
+      // HOW WE TESTED THIS:
+      // 1. Generated HTML with container viewBox → text8, text9, rect1851 broken
+      // 2. Removed container viewBox → All previews showed correctly
+      // 3. Extracted objects to individual SVG files (--extract) → All worked perfectly
+      //    (proving bbox calculations are correct, issue is HTML-specific)
+      //
+      // WHY THIS FIX IS CORRECT:
+      // According to SVG spec, a <use> element inherits the coordinate system from
+      // its context (the preview SVG), NOT from the element's original container.
+      // By removing the container's viewBox, we allow <use> to work purely with
+      // the preview SVG's viewBox, which is correctly sized to the element's bbox.
+      //
+      // COMPREHENSIVE TESTS PROVING THIS FIX:
+      // See tests/unit/html-preview-rendering.test.js
+      // - "Elements with negative coordinates get clipped when container has viewBox"
+      //   → Proves faulty method (container with viewBox) clips elements
+      // - "Elements with negative coordinates render fully when container has NO viewBox"
+      //   → Proves correct method (no viewBox) works
+      // - "EDGE CASE: Element far outside container viewBox (negative coordinates)"
+      //   → Tests real bug from text8 at x=-455.64
+      // - "EDGE CASE: Element with coordinates in all quadrants"
+      //   → Tests negative X, negative Y, positive X, positive Y
+      const clonedForMarkup = rootSvg.cloneNode(true);
+      clonedForMarkup.removeAttribute('viewBox');
+      clonedForMarkup.removeAttribute('width');
+      clonedForMarkup.removeAttribute('height');
+      clonedForMarkup.removeAttribute('x');
+      clonedForMarkup.removeAttribute('y');
+      const rootSvgMarkup = serializer.serializeToString(clonedForMarkup);
+
+      // ═══════════════════════════════════════════════════════════════════════════════
+      // CRITICAL FIX #2: Collect parent group transforms for <use> elements
+      // ═══════════════════════════════════════════════════════════════════════════════
+      //
+      // ROOT CAUSE OF THE TRANSFORM BUG (discovered after extensive testing):
+      // ───────────────────────────────────────────────────────────────────────────────
+      // When using <use href="#element-id" />, SVG does NOT apply parent group transforms!
+      // This is a fundamental SVG specification behavior that MUST be handled explicitly.
+      //
+      // DETAILED EXPLANATION:
+      // In the original SVG document, elements inherit transforms from their parent groups:
+      //
+      //   <g id="g37" transform="translate(-13.613145,-10.209854)">
+      //     <text id="text8" transform="scale(0.86535508,1.155595)">Λοπ</text>
+      //   </g>
+      //
+      // When the browser renders this, text8's FINAL transform matrix is:
+      //   1. Apply g37's translate(-13.613145,-10.209854)
+      //   2. Apply text8's scale(0.86535508,1.155595)
+      //   3. Render text content
+      //
+      // But when HTML preview creates:
+      //   <svg viewBox="-455.64 1474.75 394.40 214.40">
+      //     <use href="#text8" />
+      //   </svg>
+      //
+      // The <use> element ONLY applies text8's LOCAL transform:
+      //   ✓ scale(0.86535508,1.155595) from text8's transform attribute
+      //   ✗ MISSING translate(-13.613145,-10.209854) from parent g37!
+      //
+      // RESULT: Preview is shifted/mispositioned by exactly the parent transform amount
+      //
+      // REAL-WORLD EXAMPLE FROM test_text_to_path_advanced.svg:
+      // ───────────────────────────────────────────────────────────────────────────────
+      // Elements that BROKE in HTML preview:
+      // - text8: Has parent g37 with translate(-13.613145,-10.209854)
+      //   → Preview shifted 13.6 pixels left, 10.2 pixels up
+      // - text9: Has parent g37 with translate(-13.613145,-10.209854)
+      //   → Preview shifted 13.6 pixels left, 10.2 pixels up
+      // - rect1851: Has parent g1 with translate(-1144.8563,517.64642)
+      //   → Preview shifted 1144.8 pixels left, 517.6 pixels down (appeared empty!)
+      //
+      // Elements that WORKED in HTML preview:
+      // - text37: Direct child of root SVG, NO parent group
+      //   → No parent transforms to miss, worked perfectly
+      // - text2: Has parent g6 with translate(0,0)
+      //   → Parent transform is identity, no visible shift
+      //
+      // HOW WE DEBUGGED THIS:
+      // ───────────────────────────────────────────────────────────────────────────────
+      // 1. Initial hypothesis: bbox calculation wrong
+      //    TEST: Extracted text8 to individual SVG file with --extract --margin 0
+      //    RESULT: Extracted SVG rendered PERFECTLY in browser! ✓
+      //    CONCLUSION: Bbox calculations are correct, bug is HTML-specific ✓
+      //
+      // 2. Second hypothesis: viewBox constraining coordinates
+      //    TEST: Removed viewBox from hidden container SVG
+      //    RESULT: Still broken! ✗
+      //    CONCLUSION: Not the root cause
+      //
+      // 3. Third hypothesis: width/height conflicting with viewBox
+      //    TEST: Removed width/height from preview SVGs
+      //    RESULT: Still broken! ✗
+      //    CONCLUSION: Not the root cause
+      //
+      // 4. Fourth hypothesis: <use> element not inheriting transforms
+      //    COMPARISON: Analyzed working vs broken elements:
+      //    - text37 (works): No parent group
+      //    - text2 (works): Parent g6 has translate(0,0)
+      //    - text8 (broken): Parent g37 has translate(-13.613145,-10.209854)
+      //    - text9 (broken): Parent g37 has translate(-13.613145,-10.209854)
+      //    PATTERN: All broken elements have non-identity parent transforms! ✓
+      //    CONCLUSION: This is the root cause! ✓
+      //
+      // THE SOLUTION:
+      // ───────────────────────────────────────────────────────────────────────────────
+      // Wrap <use> in a <g> element with explicitly collected parent transforms:
+      //
+      //   <svg viewBox="-455.64 1474.75 394.40 214.40">
+      //     <g transform="translate(-13.613145,-10.209854)">  ← Parent transform
+      //       <use href="#text8" />  ← Element with local scale transform
+      //     </g>
+      //   </svg>
+      //
+      // Now the transform chain is COMPLETE:
+      //   1. Apply wrapper <g>'s translate (parent transform from g37)
+      //   2. Apply text8's scale (local transform from text8)
+      //   3. Render text content
+      //
+      // This exactly matches the original SVG's transform chain! ✓
+      //
+      // VERIFICATION THAT THIS FIX WORKS:
+      // ───────────────────────────────────────────────────────────────────────────────
+      // After implementing this fix:
+      // - text8 preview: Renders perfectly, text fully visible ✓
+      // - text9 preview: Renders perfectly, text fully visible ✓
+      // - rect1851 preview: Renders perfectly, red oval fully visible ✓
+      // - All other elements: Still working correctly ✓
+      //
+      // User confirmation: "yes, it worked!"
+      //
+      // IMPLEMENTATION DETAILS:
+      // ───────────────────────────────────────────────────────────────────────────────
+      // We collect transforms by walking UP the DOM tree from each element to the root:
+      // 1. Start at element's parent
+      // 2. For each ancestor group until root SVG:
+      //    a. Get transform attribute if present
+      //    b. Prepend to list (unshift) to maintain parent→child order
+      // 3. Join all transforms with spaces
+      // 4. Store in parentTransforms[id] for use in HTML generation
+      //
+      // Example transform collection for text8:
+      //   text8 → g37 (transform="translate(-13.613145,-10.209854)") → root SVG
+      //   parentTransforms["text8"] = "translate(-13.613145,-10.209854)"
+      //
+      // Example transform collection for deeply nested element:
+      //   elem → g3 (transform="rotate(45)") → g2 (transform="scale(2)") → g1 (transform="translate(10,20)") → root
+      //   parentTransforms["elem"] = "translate(10,20) scale(2) rotate(45)"
+      //   (Note: parent→child order is preserved!)
+      //
+      // WHY THIS APPROACH IS CORRECT:
+      // ───────────────────────────────────────────────────────────────────────────────
+      // SVG transform matrices multiply from RIGHT to LEFT (parent first, then child):
+      //   final_matrix = child_matrix × parent_matrix
+      //
+      // When we write:
+      //   <g transform="translate(10,20) scale(2) rotate(45)">
+      //
+      // The browser computes:
+      //   matrix = rotate(45) × scale(2) × translate(10,20)
+      //
+      // By collecting parent→child order and letting the browser parse it,
+      // we get the exact same transform chain as the original SVG! ✓
+      //
+      // COMPREHENSIVE TESTS PROVING THIS FIX:
+      // See tests/unit/html-preview-rendering.test.js
+      // - "Element with parent translate transform renders incorrectly without wrapper"
+      //   → Proves faulty method (<use> alone) is shifted by parent transform amount
+      // - "Element with multiple nested parent transforms requires all transforms"
+      //   → Tests complex case: translate(100,200) scale(2,2) rotate(45) chain
+      // - "EDGE CASE: Element with no parent transforms (direct child of root)"
+      //   → Tests text37 from test_text_to_path_advanced.svg (works without wrapper)
+      // - "EDGE CASE: Element with identity parent transform (translate(0,0))"
+      //   → Tests text2 from test_text_to_path_advanced.svg (no-op transform)
+      // - "EDGE CASE: Large parent transform (rect1851 bug - shifted 1144px)"
+      //   → Tests rect1851 real bug: translate(-1144.8563,517.64642) made it empty!
+      // - "REAL-WORLD REGRESSION TEST: text8, text9, rect1851"
+      //   → Tests exact production bug with all three broken elements
+      //   → User confirmation: "yes, it worked!"
+      const parentTransforms = {};
+      info.forEach(obj => {
+        const el = rootSvg.getElementById(obj.id);
+        if (!el) {
+          return;
+        }
+
+        // Collect transforms from all ancestor groups (bottom-up, then reverse for correct order)
+        const transforms = [];
+        let node = el.parentNode;
+        while (node && node !== rootSvg) {
+          const transform = node.getAttribute('transform');
+          if (transform) {
+            transforms.unshift(transform);  // Prepend to maintain parent→child order
+          }
+          node = node.parentNode;
+        }
+
+        if (transforms.length > 0) {
+          parentTransforms[obj.id] = transforms.join(' ');
+        }
       });
-    }
 
-    let fixedSvgString = null;
-    if (assignIds && changed) {
-      fixedSvgString = serializer.serializeToString(rootSvg);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════════
-    // CRITICAL FIX #1: Remove viewBox/width/height/x/y from hidden container SVG
-    // ═══════════════════════════════════════════════════════════════════════════════
-    //
-    // WHY THIS IS NECESSARY:
-    // The hidden SVG container (which holds all element definitions for <use> references)
-    // MUST NOT have viewBox, width, height, x, or y attributes because they constrain
-    // the coordinate system and cause incorrect clipping of referenced elements.
-    //
-    // WHAT HAPPENS IF WE DON'T REMOVE THESE:
-    // 1. The viewBox creates a "viewport coordinate system" for the container
-    // 2. When <use href="#element-id" /> references an element, the browser tries to
-    //    fit it within the container's viewBox
-    // 3. Elements with coordinates outside the container viewBox get clipped
-    // 4. This causes preview SVGs to show partial/empty content even though their
-    //    individual viewBox is correct
-    //
-    // EXAMPLE OF THE BUG:
-    // - Container has viewBox="0 0 1037.227 2892.792"
-    // - Element rect1851 has bbox at x=42.34, y=725.29 (inside container viewBox) ✓
-    // - Element text8 has bbox at x=-455.64 (OUTSIDE container viewBox, negative!) ✗
-    // - Result: text8 preview appears empty because container viewBox clips it
-    //
-    // HOW WE TESTED THIS:
-    // 1. Generated HTML with container viewBox → text8, text9, rect1851 broken
-    // 2. Removed container viewBox → All previews showed correctly
-    // 3. Extracted objects to individual SVG files (--extract) → All worked perfectly
-    //    (proving bbox calculations are correct, issue is HTML-specific)
-    //
-    // WHY THIS FIX IS CORRECT:
-    // According to SVG spec, a <use> element inherits the coordinate system from
-    // its context (the preview SVG), NOT from the element's original container.
-    // By removing the container's viewBox, we allow <use> to work purely with
-    // the preview SVG's viewBox, which is correctly sized to the element's bbox.
-    //
-    // COMPREHENSIVE TESTS PROVING THIS FIX:
-    // See tests/unit/html-preview-rendering.test.js
-    // - "Elements with negative coordinates get clipped when container has viewBox"
-    //   → Proves faulty method (container with viewBox) clips elements
-    // - "Elements with negative coordinates render fully when container has NO viewBox"
-    //   → Proves correct method (no viewBox) works
-    // - "EDGE CASE: Element far outside container viewBox (negative coordinates)"
-    //   → Tests real bug from text8 at x=-455.64
-    // - "EDGE CASE: Element with coordinates in all quadrants"
-    //   → Tests negative X, negative Y, positive X, positive Y
-    const clonedForMarkup = rootSvg.cloneNode(true);
-    clonedForMarkup.removeAttribute('viewBox');
-    clonedForMarkup.removeAttribute('width');
-    clonedForMarkup.removeAttribute('height');
-    clonedForMarkup.removeAttribute('x');
-    clonedForMarkup.removeAttribute('y');
-    const rootSvgMarkup = serializer.serializeToString(clonedForMarkup);
-
-    // ═══════════════════════════════════════════════════════════════════════════════
-    // CRITICAL FIX #2: Collect parent group transforms for <use> elements
-    // ═══════════════════════════════════════════════════════════════════════════════
-    //
-    // ROOT CAUSE OF THE TRANSFORM BUG (discovered after extensive testing):
-    // ───────────────────────────────────────────────────────────────────────────────
-    // When using <use href="#element-id" />, SVG does NOT apply parent group transforms!
-    // This is a fundamental SVG specification behavior that MUST be handled explicitly.
-    //
-    // DETAILED EXPLANATION:
-    // In the original SVG document, elements inherit transforms from their parent groups:
-    //
-    //   <g id="g37" transform="translate(-13.613145,-10.209854)">
-    //     <text id="text8" transform="scale(0.86535508,1.155595)">Λοπ</text>
-    //   </g>
-    //
-    // When the browser renders this, text8's FINAL transform matrix is:
-    //   1. Apply g37's translate(-13.613145,-10.209854)
-    //   2. Apply text8's scale(0.86535508,1.155595)
-    //   3. Render text content
-    //
-    // But when HTML preview creates:
-    //   <svg viewBox="-455.64 1474.75 394.40 214.40">
-    //     <use href="#text8" />
-    //   </svg>
-    //
-    // The <use> element ONLY applies text8's LOCAL transform:
-    //   ✓ scale(0.86535508,1.155595) from text8's transform attribute
-    //   ✗ MISSING translate(-13.613145,-10.209854) from parent g37!
-    //
-    // RESULT: Preview is shifted/mispositioned by exactly the parent transform amount
-    //
-    // REAL-WORLD EXAMPLE FROM test_text_to_path_advanced.svg:
-    // ───────────────────────────────────────────────────────────────────────────────
-    // Elements that BROKE in HTML preview:
-    // - text8: Has parent g37 with translate(-13.613145,-10.209854)
-    //   → Preview shifted 13.6 pixels left, 10.2 pixels up
-    // - text9: Has parent g37 with translate(-13.613145,-10.209854)
-    //   → Preview shifted 13.6 pixels left, 10.2 pixels up
-    // - rect1851: Has parent g1 with translate(-1144.8563,517.64642)
-    //   → Preview shifted 1144.8 pixels left, 517.6 pixels down (appeared empty!)
-    //
-    // Elements that WORKED in HTML preview:
-    // - text37: Direct child of root SVG, NO parent group
-    //   → No parent transforms to miss, worked perfectly
-    // - text2: Has parent g6 with translate(0,0)
-    //   → Parent transform is identity, no visible shift
-    //
-    // HOW WE DEBUGGED THIS:
-    // ───────────────────────────────────────────────────────────────────────────────
-    // 1. Initial hypothesis: bbox calculation wrong
-    //    TEST: Extracted text8 to individual SVG file with --extract --margin 0
-    //    RESULT: Extracted SVG rendered PERFECTLY in browser! ✓
-    //    CONCLUSION: Bbox calculations are correct, bug is HTML-specific ✓
-    //
-    // 2. Second hypothesis: viewBox constraining coordinates
-    //    TEST: Removed viewBox from hidden container SVG
-    //    RESULT: Still broken! ✗
-    //    CONCLUSION: Not the root cause
-    //
-    // 3. Third hypothesis: width/height conflicting with viewBox
-    //    TEST: Removed width/height from preview SVGs
-    //    RESULT: Still broken! ✗
-    //    CONCLUSION: Not the root cause
-    //
-    // 4. Fourth hypothesis: <use> element not inheriting transforms
-    //    COMPARISON: Analyzed working vs broken elements:
-    //    - text37 (works): No parent group
-    //    - text2 (works): Parent g6 has translate(0,0)
-    //    - text8 (broken): Parent g37 has translate(-13.613145,-10.209854)
-    //    - text9 (broken): Parent g37 has translate(-13.613145,-10.209854)
-    //    PATTERN: All broken elements have non-identity parent transforms! ✓
-    //    CONCLUSION: This is the root cause! ✓
-    //
-    // THE SOLUTION:
-    // ───────────────────────────────────────────────────────────────────────────────
-    // Wrap <use> in a <g> element with explicitly collected parent transforms:
-    //
-    //   <svg viewBox="-455.64 1474.75 394.40 214.40">
-    //     <g transform="translate(-13.613145,-10.209854)">  ← Parent transform
-    //       <use href="#text8" />  ← Element with local scale transform
-    //     </g>
-    //   </svg>
-    //
-    // Now the transform chain is COMPLETE:
-    //   1. Apply wrapper <g>'s translate (parent transform from g37)
-    //   2. Apply text8's scale (local transform from text8)
-    //   3. Render text content
-    //
-    // This exactly matches the original SVG's transform chain! ✓
-    //
-    // VERIFICATION THAT THIS FIX WORKS:
-    // ───────────────────────────────────────────────────────────────────────────────
-    // After implementing this fix:
-    // - text8 preview: Renders perfectly, text fully visible ✓
-    // - text9 preview: Renders perfectly, text fully visible ✓
-    // - rect1851 preview: Renders perfectly, red oval fully visible ✓
-    // - All other elements: Still working correctly ✓
-    //
-    // User confirmation: "yes, it worked!"
-    //
-    // IMPLEMENTATION DETAILS:
-    // ───────────────────────────────────────────────────────────────────────────────
-    // We collect transforms by walking UP the DOM tree from each element to the root:
-    // 1. Start at element's parent
-    // 2. For each ancestor group until root SVG:
-    //    a. Get transform attribute if present
-    //    b. Prepend to list (unshift) to maintain parent→child order
-    // 3. Join all transforms with spaces
-    // 4. Store in parentTransforms[id] for use in HTML generation
-    //
-    // Example transform collection for text8:
-    //   text8 → g37 (transform="translate(-13.613145,-10.209854)") → root SVG
-    //   parentTransforms["text8"] = "translate(-13.613145,-10.209854)"
-    //
-    // Example transform collection for deeply nested element:
-    //   elem → g3 (transform="rotate(45)") → g2 (transform="scale(2)") → g1 (transform="translate(10,20)") → root
-    //   parentTransforms["elem"] = "translate(10,20) scale(2) rotate(45)"
-    //   (Note: parent→child order is preserved!)
-    //
-    // WHY THIS APPROACH IS CORRECT:
-    // ───────────────────────────────────────────────────────────────────────────────
-    // SVG transform matrices multiply from RIGHT to LEFT (parent first, then child):
-    //   final_matrix = child_matrix × parent_matrix
-    //
-    // When we write:
-    //   <g transform="translate(10,20) scale(2) rotate(45)">
-    //
-    // The browser computes:
-    //   matrix = rotate(45) × scale(2) × translate(10,20)
-    //
-    // By collecting parent→child order and letting the browser parse it,
-    // we get the exact same transform chain as the original SVG! ✓
-    //
-    // COMPREHENSIVE TESTS PROVING THIS FIX:
-    // See tests/unit/html-preview-rendering.test.js
-    // - "Element with parent translate transform renders incorrectly without wrapper"
-    //   → Proves faulty method (<use> alone) is shifted by parent transform amount
-    // - "Element with multiple nested parent transforms requires all transforms"
-    //   → Tests complex case: translate(100,200) scale(2,2) rotate(45) chain
-    // - "EDGE CASE: Element with no parent transforms (direct child of root)"
-    //   → Tests text37 from test_text_to_path_advanced.svg (works without wrapper)
-    // - "EDGE CASE: Element with identity parent transform (translate(0,0))"
-    //   → Tests text2 from test_text_to_path_advanced.svg (no-op transform)
-    // - "EDGE CASE: Large parent transform (rect1851 bug - shifted 1144px)"
-    //   → Tests rect1851 real bug: translate(-1144.8563,517.64642) made it empty!
-    // - "REAL-WORLD REGRESSION TEST: text8, text9, rect1851"
-    //   → Tests exact production bug with all three broken elements
-    //   → User confirmation: "yes, it worked!"
-    const parentTransforms = {};
-    info.forEach(obj => {
-      const el = rootSvg.getElementById(obj.id);
-      if (!el) {
-        return;
-      }
-
-      // Collect transforms from all ancestor groups (bottom-up, then reverse for correct order)
-      const transforms = [];
-      let node = el.parentNode;
-      while (node && node !== rootSvg) {
-        const transform = node.getAttribute('transform');
-        if (transform) {
-          transforms.unshift(transform);  // Prepend to maintain parent→child order
-        }
-        node = node.parentNode;
-      }
-
-      if (transforms.length > 0) {
-        parentTransforms[obj.id] = transforms.join(' ');
-      }
-    });
-
-    return { info, fixedSvgString, rootSvgMarkup, parentTransforms, spriteInfo };
-  }, assignIds));
+      /* eslint-enable no-undef */
+      return { info, fixedSvgString, rootSvgMarkup, parentTransforms, spriteInfo };
+    }, assignIds);
+    return evalResult;
+  });
 
   // Build HTML listing file
   const html = buildListHtml(
