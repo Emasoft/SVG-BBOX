@@ -61,14 +61,14 @@ async function build() {
   const minifiedSize = fs.statSync(OUTPUT_FILE).size;
   const reduction = ((1 - minifiedSize / originalSize) * 100).toFixed(1);
 
-  console.log(`✅ Minification complete!`);
+  console.log('✅ Minification complete!');
   console.log(`   Original: ${(originalSize / 1024).toFixed(1)} KB`);
   console.log(`   Minified: ${(minifiedSize / 1024).toFixed(1)} KB`);
   console.log(`   Reduction: ${reduction}%`);
   console.log(`\n📍 Output: ${OUTPUT_FILE}`);
-  console.log(`\n🌐 CDN URLs after publishing:`);
-  console.log(`   unpkg:    https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js`);
-  console.log(`   jsdelivr: https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js`);
+  console.log('\n🌐 CDN URLs after publishing:');
+  console.log('   unpkg:    https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js');
+  console.log('   jsdelivr: https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js');
 }
 
 function getVersion() {

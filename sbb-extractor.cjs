@@ -152,13 +152,13 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { execFile } = require('child_process');
+const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
+const { getVersion, printVersion: _printVersion, hasVersionFlag: _hasVersionFlag } = require('./version.cjs');
 
 // SECURITY: Constants for timeouts and limits
 const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
-const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+const _FONT_TIMEOUT_MS = 8000;     // 8 seconds
 
 // SECURITY: Import security utilities
 const {
@@ -171,15 +171,15 @@ const {
   validateRenameMapping,
   SVGBBoxError,
   ValidationError,
-  FileSystemError
+  FileSystemError: _FileSystemError
 } = require('./lib/security-utils.cjs');
 
 const {
   runCLI,
-  printSuccess,
-  printError,
+  printSuccess: _printSuccess,
+  printError: _printError,
   printInfo,
-  printWarning
+  printWarning: _printWarning
 } = require('./lib/cli-utils.cjs');
 
 // -------- CLI parsing --------
@@ -549,6 +549,7 @@ ${sanitizedSvg}
 
     // Shared "initial import": normalize viewBox + width/height in memory.
     await page.evaluate(async () => {
+      /* eslint-disable no-undef */
       const SvgVisualBBox = window.SvgVisualBBox;
       if (!SvgVisualBBox) {
         throw new Error('SvgVisualBBox not found.');
@@ -561,6 +562,7 @@ ${sanitizedSvg}
 
       // SECURITY: Wait for fonts with timeout
       await SvgVisualBBox.waitForDocumentFonts(document, 8000);
+      /* eslint-enable no-undef */
 
       const vbVal = rootSvg.viewBox && rootSvg.viewBox.baseVal;
       if (!vbVal || !vbVal.width || !vbVal.height) {

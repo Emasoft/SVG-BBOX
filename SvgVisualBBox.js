@@ -228,7 +228,7 @@
       const style = window.getComputedStyle(el);
       const fontFamily = style.fontFamily || style.getPropertyValue('font-family');
       return fontFamily || 'default';
-    } catch (_e) {
+    } catch {
       return 'error detecting font';
     }
   }
