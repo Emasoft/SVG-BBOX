@@ -17,6 +17,30 @@ const { getVersion } = require('./version.cjs');
 
 const execFilePromise = promisify(execFile);
 
+// SECURITY: Constants for timeouts and limits
+const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
+const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+
+// SECURITY: Import security utilities
+const {
+  validateFilePath,
+  validateOutputPath,
+  readSVGFileSafe,
+  sanitizeSVGContent,
+  writeFileSafe,
+  SVGBBoxError,
+  ValidationError,
+  FileSystemError
+} = require('./lib/security-utils.cjs');
+
+const {
+  runCLI,
+  printSuccess,
+  printError,
+  printInfo,
+  printWarning
+} = require('./lib/cli-utils.cjs');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -209,8 +233,18 @@ function parseArgs(argv) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function analyzeSvg(svgPath, browser) {
-  const svgContent = fs.readFileSync(svgPath, 'utf-8');
+  // SECURITY: Read and sanitize SVG
+  const safePath = validateFilePath(svgPath, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const svgContent = readSVGFileSafe(safePath);
+  const sanitizedSvg = sanitizeSVGContent(svgContent);
+
   const page = await browser.newPage();
+
+  // SECURITY: Set page timeout
+  page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
 
   await page.setContent(`
     <!DOCTYPE html>
@@ -222,7 +256,7 @@ async function analyzeSvg(svgPath, browser) {
       </style>
     </head>
     <body>
-      ${svgContent}
+      ${sanitizedSvg}
     </body>
     </html>
   `);
@@ -265,8 +299,18 @@ async function analyzeSvg(svgPath, browser) {
 }
 
 async function getObjectBBox(svgPath, objectId, browser) {
-  const svgContent = fs.readFileSync(svgPath, 'utf-8');
+  // SECURITY: Read and sanitize SVG
+  const safePath = validateFilePath(svgPath, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const svgContent = readSVGFileSafe(safePath);
+  const sanitizedSvg = sanitizeSVGContent(svgContent);
+
   const page = await browser.newPage();
+
+  // SECURITY: Set page timeout
+  page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
 
   await page.setContent(`
     <!DOCTYPE html>
@@ -274,7 +318,7 @@ async function getObjectBBox(svgPath, objectId, browser) {
     <head>
       <style>body { margin: 0; padding: 0; }</style>
     </head>
-    <body>${svgContent}</body>
+    <body>${sanitizedSvg}</body>
     </html>
   `);
 
@@ -436,8 +480,23 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
-  const svgContent = fs.readFileSync(svgPath, 'utf-8');
+  // SECURITY: Read and sanitize SVG
+  const safePath = validateFilePath(svgPath, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const svgContent = readSVGFileSafe(safePath);
+  const sanitizedSvg = sanitizeSVGContent(svgContent);
+
+  // SECURITY: Validate output path
+  const safeOutputPath = validateOutputPath(outputPath, {
+    requiredExtensions: ['.png']
+  });
+
   const page = await browser.newPage();
+
+  // SECURITY: Set page timeout
+  page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
 
   await page.setViewport({ width: Math.ceil(width), height: Math.ceil(height) });
 
@@ -459,16 +518,16 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
       </style>
     </head>
     <body>
-      ${svgContent}
+      ${sanitizedSvg}
     </body>
     </html>
   `);
 
   // Wait for fonts and rendering
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, FONT_TIMEOUT_MS));
 
   await page.screenshot({
-    path: outputPath,
+    path: safeOutputPath,
     type: 'png',
     omitBackground: true
   });
@@ -481,12 +540,27 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function compareImages(png1Path, png2Path, diffPath, threshold) {
+  // SECURITY: Validate PNG input paths
+  const safePng1Path = validateFilePath(png1Path, {
+    requiredExtensions: ['.png'],
+    mustExist: true
+  });
+  const safePng2Path = validateFilePath(png2Path, {
+    requiredExtensions: ['.png'],
+    mustExist: true
+  });
+
+  // SECURITY: Validate diff output path
+  const safeDiffPath = validateOutputPath(diffPath, {
+    requiredExtensions: ['.png']
+  });
+
   // Read PNG files using a simple PNG library approach
   // For now, we'll use a Node.js implementation
   const { PNG } = require('pngjs');
 
-  const png1Data = fs.readFileSync(png1Path);
-  const png2Data = fs.readFileSync(png2Path);
+  const png1Data = fs.readFileSync(safePng1Path);
+  const png2Data = fs.readFileSync(safePng2Path);
 
   const png1 = PNG.sync.read(png1Data);
   const png2 = PNG.sync.read(png2Data);
@@ -543,9 +617,9 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
     }
   }
 
-  // Write diff image
+  // SECURITY: Write diff image with safe write
   const buffer = PNG.sync.write(diff);
-  fs.writeFileSync(diffPath, buffer);
+  writeFileSafe(safeDiffPath, buffer);
 
   const diffPercentage = (differentPixels / totalPixels) * 100;
 
@@ -561,10 +635,28 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args, svgAnalysis1, svgAnalysis2) {
-  // Read files and convert to base64 for embedding
-  const svg1Content = fs.readFileSync(svg1Path, 'utf-8');
-  const svg2Content = fs.readFileSync(svg2Path, 'utf-8');
-  const diffPngBuffer = fs.readFileSync(diffPngPath);
+  // SECURITY: Validate and read SVG files
+  const safeSvg1Path = validateFilePath(svg1Path, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const safeSvg2Path = validateFilePath(svg2Path, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const svg1Content = readSVGFileSafe(safeSvg1Path);
+  const svg2Content = readSVGFileSafe(safeSvg2Path);
+
+  // SECURITY: Sanitize SVG content (for embedding in HTML)
+  const sanitizedSvg1 = sanitizeSVGContent(svg1Content);
+  const sanitizedSvg2 = sanitizeSVGContent(svg2Content);
+
+  // SECURITY: Validate diff PNG path
+  const safeDiffPngPath = validateFilePath(diffPngPath, {
+    requiredExtensions: ['.png'],
+    mustExist: true
+  });
+  const diffPngBuffer = fs.readFileSync(safeDiffPngPath);
   const diffPngBase64 = diffPngBuffer.toString('base64');
 
   // Get relative paths for links
@@ -1168,7 +1260,7 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
           <div class="file-modified" data-tooltip="File last modified timestamp from filesystem">${svg1Modified}</div>
         </div>
         <div class="svg-container" data-tooltip="Embedded SVG preview. Dotted border shows SVG boundaries.">
-          ${svg1Content}
+          ${sanitizedSvg1}
         </div>
         <div class="info-panel" data-tooltip="SVG attributes extracted from the file">
           <div class="info-row">
@@ -1198,7 +1290,7 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
           <div class="file-modified" data-tooltip="File last modified timestamp from filesystem">${svg2Modified}</div>
         </div>
         <div class="svg-container" data-tooltip="Embedded SVG preview. Dotted border shows SVG boundaries.">
-          ${svg2Content}
+          ${sanitizedSvg2}
         </div>
         <div class="info-panel" data-tooltip="SVG attributes extracted from the file">
           <div class="info-row">
@@ -1247,9 +1339,13 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
   const svg2Base = path.basename(svg2Path, path.extname(svg2Path));
   const htmlPath = `${svg1Base}_vs_${svg2Base}_comparison.html`;
 
-  fs.writeFileSync(htmlPath, html, 'utf-8');
+  // SECURITY: Validate and write HTML output
+  const safeHtmlPath = validateOutputPath(htmlPath, {
+    requiredExtensions: ['.html']
+  });
+  writeFileSafe(safeHtmlPath, html, 'utf-8');
 
-  return htmlPath;
+  return safeHtmlPath;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1257,44 +1353,48 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function main() {
+  // Display version
+  printInfo(`sbb-comparer v${getVersion()} | svg-bbox toolkit\n`);
+
   const args = parseArgs(process.argv);
 
-  // Verify input files exist
-  if (!fs.existsSync(args.svg1)) {
-    console.error(`Error: File not found: ${args.svg1}`);
-    process.exit(1);
-  }
-  if (!fs.existsSync(args.svg2)) {
-    console.error(`Error: File not found: ${args.svg2}`);
-    process.exit(1);
-  }
+  // SECURITY: Validate input SVG files
+  const safeSvg1Path = validateFilePath(args.svg1, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const safeSvg2Path = validateFilePath(args.svg2, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
 
   if (args.verbose && !args.json) {
     console.log('Starting SVG comparison...');
-    console.log(`SVG 1: ${args.svg1}`);
-    console.log(`SVG 2: ${args.svg2}`);
+    console.log(`SVG 1: ${safeSvg1Path}`);
+    console.log(`SVG 2: ${safeSvg2Path}`);
     console.log(`Alignment: ${args.alignment}`);
     console.log(`Resolution: ${args.resolution}`);
     console.log(`Threshold: ${args.threshold}/256`);
   }
 
-  let browser;
+  let browser = null;
   try {
-    // Launch browser
+    // SECURITY: Launch browser with security args and timeout
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      timeout: BROWSER_TIMEOUT_MS
     });
 
     // Calculate render parameters
     if (args.verbose && !args.json) {
       console.log('Analyzing SVG files...');
     }
-    const params = await calculateRenderParams(args.svg1, args.svg2, args, browser);
+    const params = await calculateRenderParams(safeSvg1Path, safeSvg2Path, args, browser);
 
     // Store SVG analysis for HTML report
-    const svgAnalysis1 = await analyzeSvg(args.svg1, browser);
-    const svgAnalysis2 = await analyzeSvg(args.svg2, browser);
+    const svgAnalysis1 = await analyzeSvg(safeSvg1Path, browser);
+    const svgAnalysis2 = await analyzeSvg(safeSvg2Path, browser);
 
     // Render SVGs to PNG
     const tempDir = path.join(process.cwd(), '.tmp-compare');
@@ -1308,12 +1408,12 @@ async function main() {
     if (args.verbose && !args.json) {
       console.log('Rendering SVG 1 to PNG...');
     }
-    await renderSvgToPng(args.svg1, png1Path, params.svg1.width, params.svg1.height, browser);
+    await renderSvgToPng(safeSvg1Path, png1Path, params.svg1.width, params.svg1.height, browser);
 
     if (args.verbose && !args.json) {
       console.log('Rendering SVG 2 to PNG...');
     }
-    await renderSvgToPng(args.svg2, png2Path, params.svg2.width, params.svg2.height, browser);
+    await renderSvgToPng(safeSvg2Path, png2Path, params.svg2.width, params.svg2.height, browser);
 
     // Compare images
     if (args.verbose && !args.json) {
@@ -1356,8 +1456,8 @@ async function main() {
         console.log('Generating HTML report...');
       }
       const htmlPath = await generateHtmlReport(
-        args.svg1,
-        args.svg2,
+        safeSvg1Path,
+        safeSvg2Path,
         args.outDiff,
         result,
         args,
@@ -1365,7 +1465,7 @@ async function main() {
         svgAnalysis2
       );
 
-      console.log(`  HTML report:        ${htmlPath}`);
+      printSuccess(`HTML report: ${htmlPath}`);
 
       // Auto-open in browser
       if (args.verbose) {
@@ -1376,24 +1476,23 @@ async function main() {
     }
 
   } catch (error) {
-    console.error('Error:', error.message);
-    if (args.verbose) {
-      console.error(error.stack);
-    }
-    process.exit(1);
+    throw new SVGBBoxError(`Comparison failed: ${error.message}`, error);
   } finally {
+    // SECURITY: Ensure browser is always closed
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (closeErr) {
+        // Force kill if close fails
+        if (browser.process()) {
+          browser.process().kill('SIGKILL');
+        }
+      }
     }
   }
 }
 
-// Run if called directly
-if (require.main === module) {
-  main().catch(error => {
-    console.error('Fatal error:', error);
-    process.exit(1);
-  });
-}
+// SECURITY: Run with CLI error handling
+runCLI(main);
 
 module.exports = { main };
