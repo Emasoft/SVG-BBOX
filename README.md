@@ -41,10 +41,10 @@ The native SVG `.getBBox()` method is fundamentally broken:
 **Our approach:** Measure what the browser actually paints, pixel by pixel. No
 geometry guesswork, no lies.
 
-### Visual Comparison: Real-World Example
+### Visual Comparison: Real-World Examples
 
-Here's what happens when extracting italic text with the `.New York` font from
-an SVG document. The same text element extracted using three different methods:
+Here's what happens when extracting different SVG elements using three different
+methods. Both examples demonstrate the same fundamental issues.
 
 <table>
   <tr>
@@ -67,22 +67,42 @@ an SVG document. The same text element extracted using three different methods:
     <td>⚠️ Width: 730px<br/>Height: 74px<br/><em>Oversized vertically by 30%</em></td>
     <td>✅ Width: 729px<br/>Height: 57px<br/><em>Pixel-perfect accuracy</em></td>
   </tr>
+  <tr>
+    <td colspan="3"><hr/><strong>Example 2: Oval Badge with Dashed Stroke</strong> (<a href="assets/test_oval_badge.svg">source SVG</a>)</td>
+  </tr>
+  <tr>
+    <td><em>N/A</em><br/><small>(Inkscape not tested)</small></td>
+    <td><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" /></td>
+    <td><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" /></td>
+  </tr>
+  <tr>
+    <td align="center">—</td>
+    <td align="center"><a href="assets/oval_badge_getbbox.svg">SVG</a></td>
+    <td align="center"><a href="assets/oval_badge_svgvisualbbox.svg">SVG</a></td>
+  </tr>
+  <tr>
+    <td>—</td>
+    <td>❌ Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
+    <td>✅ Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
+  </tr>
 </table>
 
-> **Note:** SVG files use the `.New York` font which may not be installed on
-> your system. PNGs are provided so you can see the true rendering. The original
-> font could be embedded using WOFF2, but that's beyond our scope here.
+> **Note:** Example 1 uses the `.New York` font which may not be installed on
+> your system. PNGs are provided so you can see the true rendering for both
+> examples.
 
 **Why the differences?**
 
 - **Inkscape:** Uses font metrics that don't account for italic overflow,
   ligatures, and actual glyph rendering. Recenters coordinates, losing the
-  original document context.
-- **`.getBBox()`:** Uses geometric calculations that ignore stroke width and
-  approximate text bounds using font metrics. Oversizes vertically due to
-  ascender/descender metrics that don't match actual ink.
-- **SvgVisualBBox:** Rasterizes and measures actual pixel data. What you see is
-  exactly what you get.
+  original document context. (Example 1)
+- **`.getBBox()`:** Uses geometric calculations that completely ignore stroke
+  width (Example 2: missing 78px) and approximate text bounds using font metrics
+  (Example 1: wrong vertical bounds). Both demonstrate geometric vs visual
+  measurement.
+- **SvgVisualBBox:** Rasterizes and measures actual pixel data. Captures
+  complete visual bounds including strokes, filters, and text overflow. What you
+  see is exactly what you get.
 
 ---
 
