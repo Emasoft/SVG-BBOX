@@ -3,11 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.2] - 2025-11-26
+
 ### Added
+
 - **CDN Distribution Support**:
   - Minified UMD build (`SvgVisualBBox.min.js`) for CDN usage
   - 65.3% size reduction (72.9 KB → 25.3 KB)
@@ -38,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.1] - 2025-11-24
 
 ### Added
+
 - Initial public release
 - Core library `SvgVisualBBox.js` with visual bbox computation
 - CLI tool `sbb-getbbox` for computing visual bounding boxes
@@ -52,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: README, CONTRIBUTING, DEVELOPING, SECURITY
 
 ### Features
+
 - Two-pass rasterization for high-precision bbox measurement
 - Clipped and unclipped bbox modes
 - Font-aware text bounds (complex scripts, ligatures, textPath)
@@ -66,8 +72,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2025-01-XX
 
 ### Added
+
 - Initial release
 
-[Unreleased]: https://github.com/Emasoft/SVG-BBOX/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Emasoft/SVG-BBOX/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.0
