@@ -63,9 +63,9 @@ methods:
     <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="height: 100px; width: auto;" /></td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 48px; font-weight: bold;">WRONG</span></td>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 48px; font-weight: bold;">WRONG</span></td>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">✅<br/><span style="font-size: 48px; font-weight: bold;">CORRECT</span></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 48px; font-weight: bold; color: #DC143C;">WRONG</span></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 48px; font-weight: bold; color: #DC143C;">WRONG</span></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">✅<br/><span style="font-size: 48px; font-weight: bold; color: #228B22;">CORRECT</span></td>
   </tr>
   <tr>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
