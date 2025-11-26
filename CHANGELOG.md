@@ -3,13 +3,14 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.0.7] - 2025-11-26
 
 ### Bug Fixes
 
-- *(ci)* Create .npmrc with auth token for pnpm publish
+- _(ci)_ Create .npmrc with auth token for pnpm publish
 
 ### Features
 
@@ -21,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Run Prettier on README.md to fix CI formatting check
 - Format README with Prettier
-- *(types)* Add proper type assertions for SVGGraphicsElement in sbb-getbbox-extract
+- _(types)_ Add proper type assertions for SVGGraphicsElement in
+  sbb-getbbox-extract
 
 ### Documentation
 
@@ -74,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Miscellaneous Tasks
 
-- Add *_dev/ pattern to gitignore and npmignore
+- Add \*\_dev/ pattern to gitignore and npmignore
 - Repository maintenance and improvements
 - Add npm publish workflow
 - Bump version to 1.0.4
@@ -87,33 +89,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Correct ESLint indentation errors
 - Resolve all TypeScript type checking errors
 - Move all test temp files from /tmp to project directories
-- *(ci)* Update pnpm version to 9 in GitHub Actions
+- _(ci)_ Update pnpm version to 9 in GitHub Actions
 - Comment out NPM_TOKEN line in .npmrc for local publishing
 - Move browser-based tests from unit to integration directory
-- *(ci)* Add --no-sandbox flag to Puppeteer launch in integration tests
-- *(e2e)* Fix Playwright ESM import error by using CommonJS for E2E tests
-- *(e2e)* Fix temp directory race conditions in E2E tests
-- *(test)* Increase sbb-comparer timeout for CI environments
-- *(core)* Fix <use> element and SVG root rendering bugs
-- *(types)* Add type cast for cloneNode to satisfy TypeScript
-- *(security)* Add shell metacharacter validation for batch file paths
-- *(lint)* Remove duplicate SHELL_METACHARACTERS export
+- _(ci)_ Add --no-sandbox flag to Puppeteer launch in integration tests
+- _(e2e)_ Fix Playwright ESM import error by using CommonJS for E2E tests
+- _(e2e)_ Fix temp directory race conditions in E2E tests
+- _(test)_ Increase sbb-comparer timeout for CI environments
+- _(core)_ Fix <use> element and SVG root rendering bugs
+- _(types)_ Add type cast for cloneNode to satisfy TypeScript
+- _(security)_ Add shell metacharacter validation for batch file paths
+- _(lint)_ Remove duplicate SHELL_METACHARACTERS export
 - Use proper error classes in validateFilePath for consistent stderr output
-- *(tests)* Use semicolon instead of $() to avoid shell expansion in tests
-- *(tests)* Replace backticks with pipe to avoid shell expansion
-- *(tests)* Use ampersand instead of semicolon for shell metacharacter test
-- *(tests)* Skip html-preview-structure tests on Node 18
-- *(lint)* Remove unused skipOnNode18 variable
-- *(tests)* Use pipe character for text-to-path test - same as comparer
-- *(tests)* Use dynamic import to prevent jsdom loading on Node 18
-- *(format)* Run Prettier on html-preview-structure.test.js
-- *(ci)* Resolve integration test failures on CI
-- *(coverage)* Configure coverage for server-side code only
+- _(tests)_ Use semicolon instead of $() to avoid shell expansion in tests
+- _(tests)_ Replace backticks with pipe to avoid shell expansion
+- _(tests)_ Use ampersand instead of semicolon for shell metacharacter test
+- _(tests)_ Skip html-preview-structure tests on Node 18
+- _(lint)_ Remove unused skipOnNode18 variable
+- _(tests)_ Use pipe character for text-to-path test - same as comparer
+- _(tests)_ Use dynamic import to prevent jsdom loading on Node 18
+- _(format)_ Run Prettier on html-preview-structure.test.js
+- _(ci)_ Resolve integration test failures on CI
+- _(coverage)_ Configure coverage for server-side code only
 
 ### Documentation
 
-- *(core)* Add comprehensive lessons-learned comments
-- *(core)* Enhanced wrong vs. right solution documentation
+- _(core)_ Add comprehensive lessons-learned comments
+- _(core)_ Enhanced wrong vs. right solution documentation
 
 ### Features
 
@@ -132,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Styling
 
-- *(e2e)* Fix ESLint arrow-body-style warnings in E2E tests
+- _(e2e)_ Fix ESLint arrow-body-style warnings in E2E tests
 
 ## [1.0.2] - 2025-11-26
 
@@ -162,7 +164,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhance HTML comparison report with dark mode and branding
 - Add comprehensive tooltips to HTML comparison report
 - Improve sbb-comparer HTML tooltips and fix SVG border sizing
-- Add browser API with showTrueBBoxBorder() function and comprehensive documentation
+- Add browser API with showTrueBBoxBorder() function and comprehensive
+  documentation
 - Add setViewBoxOnObjects() for viewBox reframing
 - Apply comprehensive security fixes to sbb-getbbox.cjs
 - Apply comprehensive security fixes to sbb-fix-viewbox.cjs
@@ -193,7 +196,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rename sbb-export to sbb-extractor
 - Improve option naming and add symbol resolution
-- Comprehensive test improvement - modularization, cross-platform, error handling
+- Comprehensive test improvement - modularization, cross-platform, error
+  handling
 - Rename sbb-text-to-path to sbb-inkscape-text2path
 - Consolidate to 3 Inkscape tools, rename exportpng to svg2png
 
@@ -234,7 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add comprehensive documentation for HTML preview border solution
 - Add getbbox.cjs documentation to README
 - Improve help screens for all CLI tools
-- Fix README to use correct sbb-* command names
+- Fix README to use correct sbb-\* command names
 - Add comprehensive cross-platform compatibility section
 
 ### Features
@@ -258,7 +262,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Testing
 
-- Add comprehensive HTML preview rendering tests with all faulty methods documented
+- Add comprehensive HTML preview rendering tests with all faulty methods
+  documented
 - Rewrite tests to use runtime font detection (no hardcoded fonts)
 - Add comprehensive Playwright E2E tests for HTML list interactive features
 
