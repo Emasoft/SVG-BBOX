@@ -47,10 +47,10 @@ Here's what happens when extracting different SVG elements using three different
 methods. Both examples demonstrate the same fundamental issues.
 
 <table style="background-color: white; color: black; border: 1px solid black; table-layout: fixed; width: 100%;">
-  <tr style="height: 30px;">
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; padding: 5px; height: 30px; vertical-align: middle; text-align: center;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="height: 20px; width: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; padding: 5px; height: 30px; vertical-align: middle; text-align: center;"><img src="assets/chrome-logo.svg" alt="Chrome" style="height: 20px; width: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; padding: 5px; height: 30px; vertical-align: middle; text-align: center;"><img src="assets/svgvisualbbox-logo.svg" alt="SvgVisualBBox" style="height: 20px; width: auto;" /></th>
+  <tr>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="height: 20px; width: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center;"><img src="assets/chrome-logo.svg" alt="Chrome" style="height: 20px; width: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center;"><img src="assets/svgvisualbbox-logo.svg" alt="SvgVisualBBox" style="height: 20px; width: auto;" /></th>
   </tr>
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%;">Inkscape BBox</th>
