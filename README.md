@@ -47,10 +47,10 @@ Here's what happens when extracting different SVG elements using three different
 methods. Both examples demonstrate the same fundamental issues.
 
 <table style="background-color: white; color: black; border: 1px solid black; table-layout: fixed; width: 100%;">
-  <tr>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; padding: 5px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" height="20" width="auto" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; padding: 5px;"><img src="assets/chrome-logo.svg" alt="Chrome" height="20" width="auto" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; padding: 5px;"><img src="assets/svgvisualbbox-logo.svg" alt="SvgVisualBBox" height="20" width="auto" /></th>
+  <tr style="height: 30px;">
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; padding: 5px; height: 30px; line-height: 20px; vertical-align: middle;"><img src="assets/inkscape-logo.svg" alt="Inkscape" height="20" width="auto" style="vertical-align: middle;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; padding: 5px; height: 30px; line-height: 20px; vertical-align: middle;"><img src="assets/chrome-logo.svg" alt="Chrome" height="20" width="auto" style="vertical-align: middle;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; padding: 5px; height: 30px; line-height: 20px; vertical-align: middle;"><img src="assets/svgvisualbbox-logo.svg" alt="SvgVisualBBox" height="20" width="auto" style="vertical-align: middle;" /></th>
   </tr>
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%;">Inkscape BBox</th>
