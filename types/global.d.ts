@@ -5,13 +5,24 @@ declare global {
   interface Window {
     SvgVisualBBox?: {
       waitForDocumentFonts: (doc?: Document, timeoutMs?: number) => Promise<void>;
-      getSvgElementVisualBBoxTwoPassAggressive: (target: string | Element, options?: any) => Promise<any>;
+      getSvgElementVisualBBoxTwoPassAggressive: (
+        target: string | Element,
+        options?: any
+      ) => Promise<any>;
       getSvgElementsUnionVisualBBox: (targets: (string | Element)[], options?: any) => Promise<any>;
       getSvgElementVisibleAndFullBBoxes: (target: string | Element, options?: any) => Promise<any>;
       showTrueBBoxBorder: (target: string | Element, options?: any) => Promise<any>;
-      setViewBoxOnObjects: (target: string | Element, objectIds: string | string[], options?: any) => Promise<any>;
+      setViewBoxOnObjects: (
+        target: string | Element,
+        objectIds: string | string[],
+        options?: any
+      ) => Promise<any>;
       listSvgObjects: (target: string | Element, options?: any) => Promise<any>;
-      exportSvgObjects: (target: string | Element, objectIds: string | string[], options?: any) => Promise<any>;
+      exportSvgObjects: (
+        target: string | Element,
+        objectIds: string | string[],
+        options?: any
+      ) => Promise<any>;
     };
   }
 

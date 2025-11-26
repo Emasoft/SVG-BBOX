@@ -27,7 +27,15 @@
     "strictPropertyInitialization": false,
     "noImplicitThis": false
   },
-  "include": ["*.js", "*.cjs", "*.mjs", "tests/**/*.js", "tests/**/*.cjs", "tests/**/*.mjs", "types/**/*.d.ts"],
+  "include": [
+    "*.js",
+    "*.cjs",
+    "*.mjs",
+    "tests/**/*.js",
+    "tests/**/*.cjs",
+    "tests/**/*.mjs",
+    "types/**/*.d.ts"
+  ],
   "exclude": [
     "node_modules",
     "coverage",
