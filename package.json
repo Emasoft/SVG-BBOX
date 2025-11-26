@@ -20,6 +20,7 @@
   "bin": {
     "svg-bbox": "svg-bbox.cjs",
     "sbb-getbbox": "sbb-getbbox.cjs",
+    "sbb-getbbox-extract": "sbb-getbbox-extract.cjs",
     "sbb-extractor": "sbb-extractor.cjs",
     "sbb-fix-viewbox": "sbb-fix-viewbox.cjs",
     "sbb-render": "sbb-render.cjs",

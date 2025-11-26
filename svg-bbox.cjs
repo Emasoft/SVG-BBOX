@@ -40,6 +40,11 @@ const TOOLS = [
     example: 'sbb-getbbox input.svg --json'
   },
   {
+    name: 'sbb-getbbox-extract',
+    description: 'Extract elements using Chrome .getBBox() (for comparison)',
+    example: 'sbb-getbbox-extract input.svg --id text39 --output out.svg'
+  },
+  {
     name: 'sbb-extractor',
     description: 'Extract individual objects from SVG files with their bounding boxes',
     example: 'sbb-extractor input.svg --out-dir ./extracted'
