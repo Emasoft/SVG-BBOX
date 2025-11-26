@@ -457,8 +457,21 @@
 
     const vb = roi;
 
+    // CRITICAL: Assign temporary ID to element BEFORE cloning so it's findable in the clone
+    const hadId = !!el.id;
+    let tmpId;
+    if (!hadId) {
+      tmpId = '__svg_visual_bbox_tmp_' + Math.random().toString(36).slice(2);
+      el.id = tmpId;
+    }
+
     // Clone the root <svg> so we don't touch the real DOM
     const clonedSvg = /** @type {SVGSVGElement} */ (svgRoot.cloneNode(true));
+
+    // Remove temp ID from original element immediately after cloning
+    if (!hadId) {
+      el.removeAttribute('id');
+    }
 
     if (!clonedSvg.getAttribute('xmlns')) {
       clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
@@ -525,18 +538,14 @@
       });
     }
 
-    // Map target element to cloned SVG
-    const hadId = !!el.id;
-    let tmpId;
-    if (!hadId) {
-      tmpId = '__svg_visual_bbox_tmp_' + Math.random().toString(36).slice(2);
-      el.id = tmpId;
-    }
-
-    const cloneTarget = clonedSvg.getElementById(el.id);
-
-    if (!hadId) {
-      el.removeAttribute('id');
+    // Special case: if the target element IS the SVG root itself
+    let cloneTarget;
+    if (el === svgRoot) {
+      cloneTarget = clonedSvg;
+    } else {
+      // Use the saved ID (either original or temp) to find the cloned element
+      const idToFind = tmpId || el.id;
+      cloneTarget = clonedSvg.getElementById(idToFind);
     }
 
     if (!cloneTarget) {
@@ -602,7 +611,25 @@
       for (const refAttr of [xlinkHref, href]) {
         if (refAttr && refAttr.startsWith('#')) {
           const refId = refAttr.substring(1);
-          const refEl = clonedSvg.getElementById(refId);
+          let refEl = clonedSvg.getElementById(refId);
+
+          // CRITICAL: Handle cross-SVG references (e.g., <use href="#id"/> referencing hidden container)
+          if (!refEl) {
+            // Element not in cloned SVG - try to find it in the original document
+            const originalRefEl = document.getElementById(refId);
+            if (originalRefEl) {
+              // Clone the referenced element and add it to a <defs> section in the cloned SVG
+              let defs = clonedSvg.querySelector('defs');
+              if (!defs) {
+                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                clonedSvg.insertBefore(defs, clonedSvg.firstChild);
+              }
+              refEl = originalRefEl.cloneNode(true);
+              defs.appendChild(refEl);
+              allowed.add(defs);
+            }
+          }
+
           if (refEl && !allowed.has(refEl)) {
             allowed.add(refEl);
             // Also add ancestors of referenced element (might be in <defs>)
