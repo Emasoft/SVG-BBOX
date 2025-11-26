@@ -52,6 +52,9 @@ test.afterAll(async () => {
 });
 
 test.describe('HTML List Interactive Features', () => {
+  // Run tests in this file serially to avoid race conditions with shared HTML file
+  test.describe.configure({ mode: 'serial' });
+
   test('Page loads correctly with all interactive elements', async ({ page }) => {
     await page.goto(`file://${path.resolve(TEST_HTML)}`);
 

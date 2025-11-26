@@ -258,10 +258,13 @@ const baseScenarios = [
 ];
 
 test.beforeAll(async () => {
+  // Create temp directory first
+  await fs.mkdir(TEMP_DIR, { recursive: true });
+
   // Skip if file already exists (avoid race condition)
   try {
     await fs.access(testPagePath);
-    console.log('Test page already exists');
+    console.log('Test page already exists: ' + testPagePath);
     return;
   } catch {
     // File doesn't exist, create it
