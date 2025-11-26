@@ -65,7 +65,7 @@ methods:
   <tr>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 48px; font-weight: bold; color: #DC143C;">WRONG</span></td>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 48px; font-weight: bold; color: #DC143C;">WRONG</span></td>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">✅<br/><span style="font-size: 48px; font-weight: bold; color: #228B22;">CORRECT</span></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">✅<br/><span style="font-size: 48px; font-weight: bold; color: #00C851;">CORRECT</span></td>
   </tr>
   <tr>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
