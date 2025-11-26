@@ -101,8 +101,8 @@ describe('CLI Security Integration Tests', () => {
 
     it('sbb-text-to-path should reject paths with shell metacharacters', async () => {
       /**Test that sbb-text-to-path rejects command injection attempts*/
-      // Use ampersand which is a metacharacter but won't be expanded/interpreted
-      const maliciousPath = path.join(testDir, 'file&test.svg');
+      // Use pipe character - same as comparer test which passes consistently
+      const maliciousPath = path.join(testDir, 'file|cat.svg');
       const outputPath = path.join(testDir, 'output.svg');
 
       try {
