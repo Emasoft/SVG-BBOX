@@ -80,7 +80,8 @@ describe('CLI Security Integration Tests', () => {
     it('sbb-comparer should reject paths with shell metacharacters', async () => {
       /**Test that sbb-comparer rejects command injection attempts*/
       const validPath = path.join(testDir, 'valid.svg');
-      const maliciousPath = path.join(testDir, 'file`whoami`.svg');
+      // Use pipe instead of backticks to avoid shell expansion issues
+      const maliciousPath = path.join(testDir, 'file|cat.svg');
       testFiles.push(validPath);
 
       fs.writeFileSync(validPath, VALID_TEST_SVG);
