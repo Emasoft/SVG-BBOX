@@ -72,10 +72,8 @@ test-cli-security-temp/
 tests/.tmp-e2e-*/
 
 # Development directories
-docs_dev/
-scripts_dev/
-libs_dev/
-examples_dev/
+# Development folders (never delete content, but don't commit)
+*_dev/
 
 # AI assistant instructions (private)
 CLAUDE.md

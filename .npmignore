@@ -15,10 +15,8 @@ playwright.config.js
 .vitest/
 
 # Development files
-docs_dev/
-scripts_dev/
-libs_dev/
-examples_dev/
+# Development folders (excluded from npm package)
+*_dev/
 TESTING-SETUP-SUMMARY.md
 DEVELOPING.md
 .prettierrc.json
