@@ -57,10 +57,10 @@ methods. Both examples demonstrate the same fundamental issues.
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%;">Chrome <code style="background-color: white; color: black;">.getBBox()</code></th>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%;"><strong>SvgVisualBBox</strong></th>
   </tr>
-  <tr>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" style="max-height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" style="max-height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" style="max-height: 200px; width: auto;" /></td>
+  <tr style="height: 200px;">
+    <td style="background-color: white; color: black; border: 1px solid black; height: 200px; vertical-align: middle;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" style="height: 200px; width: auto; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; height: 200px; vertical-align: middle;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" style="height: 200px; width: auto; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; height: 200px; vertical-align: middle;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" style="height: 200px; width: auto; display: block; margin: 0 auto;" /></td>
   </tr>
   <tr>
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/text39_inkscape.svg">SVG</a></td>
@@ -75,10 +75,10 @@ methods. Both examples demonstrate the same fundamental issues.
   <tr>
     <td colspan="3" style="background-color: white; color: black; border: 1px solid black;"><hr/><strong>Example 2: Oval Badge with Dashed Stroke</strong> (<a href="assets/test_oval_badge.svg">source SVG</a>)</td>
   </tr>
-  <tr>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="max-height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="max-height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="max-height: 200px; width: auto;" /></td>
+  <tr style="height: 200px;">
+    <td style="background-color: white; color: black; border: 1px solid black; height: 200px; vertical-align: middle;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="height: 200px; width: auto; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; height: 200px; vertical-align: middle;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="height: 200px; width: auto; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; height: 200px; vertical-align: middle;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="height: 200px; width: auto; display: block; margin: 0 auto;" /></td>
   </tr>
   <tr>
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
