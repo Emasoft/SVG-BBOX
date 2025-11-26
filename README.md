@@ -1058,9 +1058,9 @@ Fix missing/inconsistent viewBox and sizes.
 
 #### Features
 
-**ViewBox repair**
-Fixes SVGs with missing or inconsistent `viewBox`, `width`, and `height`
-attributes. Uses pixel-accurate visual bounds to compute correct values.
+**ViewBox repair** Fixes SVGs with missing or inconsistent `viewBox`, `width`,
+and `height` attributes. Uses pixel-accurate visual bounds to compute correct
+values.
 
 #### Syntax
 
