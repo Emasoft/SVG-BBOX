@@ -58,9 +58,9 @@ methods. Both examples demonstrate the same fundamental issues.
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%;"><strong>SvgVisualBBox</strong></th>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" style="width: 100%; height: auto; display: block;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" style="width: 100%; height: auto; display: block;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" style="width: 100%; height: auto; display: block;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" style="width: 100%; height: auto; max-height: 26px; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" style="width: 100%; height: auto; max-height: 26px; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" style="width: 100%; height: auto; max-height: 26px; display: block; margin: 0 auto;" /></td>
   </tr>
   <tr>
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/text39_inkscape.svg">SVG</a></td>
@@ -76,9 +76,9 @@ methods. Both examples demonstrate the same fundamental issues.
     <td colspan="3" style="background-color: white; color: black; border: 1px solid black;"><hr/><strong>Example 2: Oval Badge with Dashed Stroke</strong> (<a href="assets/test_oval_badge.svg">source SVG</a>)</td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="width: 100%; height: auto; display: block;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="width: 100%; height: auto; display: block;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="width: 100%; height: auto; display: block;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="width: 100%; height: auto; max-height: 100px; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="width: 100%; height: auto; max-height: 100px; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="width: 100%; height: auto; max-height: 100px; display: block; margin: 0 auto;" /></td>
   </tr>
   <tr>
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
