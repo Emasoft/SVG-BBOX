@@ -50,7 +50,7 @@ methods:
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="width: 80%; height: auto;" /></th>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="width: 80%; height: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/SvgVisualBBox_logo_landscape.svg" alt="SvgVisualBBox" style="width: 80%; height: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/SvgVisualBBox_logo_no_text_portrait.svg" alt="SvgVisualBBox" style="width: 80%; height: auto;" /></th>
   </tr>
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: left; padding: 8px;">Inkscape BBox</th>
