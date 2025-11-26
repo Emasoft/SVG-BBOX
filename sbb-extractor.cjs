@@ -735,9 +735,9 @@ async function listAndAssignIds(
           sprites: sprites.map((s) => ({ id: s.id, tag: s.tag })),
           grid: isGridArranged
             ? {
-                rows: yPositions.length,
-                cols: xPositions.length
-              }
+              rows: yPositions.length,
+              cols: xPositions.length
+            }
             : null,
           stats: {
             count: sprites.length,

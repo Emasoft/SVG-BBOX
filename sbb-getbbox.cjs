@@ -289,11 +289,11 @@ async function detectSpriteSheet(page) {
       sprites: sprites.map((s) => ({ id: s.id, tag: s.tag })),
       grid: isGridArranged
         ? {
-            rows: yPositions.length,
-            cols: xPositions.length,
-            xPositions,
-            yPositions
-          }
+          rows: yPositions.length,
+          cols: xPositions.length,
+          xPositions,
+          yPositions
+        }
         : null,
       stats: {
         count: sprites.length,
