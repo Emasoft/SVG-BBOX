@@ -75,40 +75,20 @@ function updatePackageJson(newVersion) {
 }
 
 /**
- * Update version in CHANGELOG.md
+ * Update version in CHANGELOG.md using git-cliff
  * @param {string} newVersion - New version string
  */
 function updateChangelog(newVersion) {
   const changelogPath = path.join(__dirname, '..', 'CHANGELOG.md');
 
-  if (!fs.existsSync(changelogPath)) {
-    console.log('⚠️  CHANGELOG.md not found, skipping');
-    return;
+  try {
+    // Generate changelog using git-cliff
+    execSync(`git cliff --tag v${newVersion} --output ${changelogPath}`, { stdio: 'inherit' });
+    console.log(`✓ Updated CHANGELOG.md with version ${newVersion} using git-cliff`);
+  } catch (error) {
+    console.error(`⚠️  Failed to update CHANGELOG with git-cliff: ${error.message}`);
+    console.log('  Skipping changelog update');
   }
-
-  let content = fs.readFileSync(changelogPath, 'utf8');
-  const date = new Date().toISOString().split('T')[0];
-
-  // Replace [Unreleased] with new version
-  content = content.replace(/## \[Unreleased\]/, `## [Unreleased]\n\n## [${newVersion}] - ${date}`);
-
-  // Update comparison links at bottom
-  const lines = content.split('\n');
-  const lastLinkIndex = lines.findIndex((line) => line.match(/^\[Unreleased\]:/));
-
-  if (lastLinkIndex !== -1) {
-    lines[lastLinkIndex] =
-      `[Unreleased]: https://github.com/Emasoft/SVG-BBOX/compare/v${newVersion}...HEAD`;
-    lines.splice(
-      lastLinkIndex + 1,
-      0,
-      `[${newVersion}]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v${newVersion}`
-    );
-    content = lines.join('\n');
-  }
-
-  fs.writeFileSync(changelogPath, content);
-  console.log(`✓ Updated CHANGELOG.md with version ${newVersion}`);
 }
 
 /**

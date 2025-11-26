@@ -570,6 +570,8 @@ After installation, the following CLI commands are available:
 **Core Tools (Recommended):**
 
 - `sbb-getbbox` - Compute visual bounding boxes
+- `sbb-getbbox-extract` - Extract using Chrome's native .getBBox() (for
+  comparison)
 - `sbb-extractor` - List, extract, and export SVG objects
 - `sbb-fix-viewbox` - Fix missing viewBox/dimensions
 - `sbb-render` - Render SVG to PNG
