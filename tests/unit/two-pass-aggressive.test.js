@@ -81,8 +81,8 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
       // The bbox is calculated from actual rendered pixels, which includes the transform.
       // Ancestor transforms are removed during cloning to prevent double-application,
       // so the bbox reflects the element's position AS RENDERED (with transforms applied).
-      expect(bbox.x).toBeCloseTo(50, 0);  // 30 + 20 (transform)
-      expect(bbox.y).toBeCloseTo(50, 0);  // 30 + 20 (transform)
+      expect(bbox.x).toBeCloseTo(50, 0); // 30 + 20 (transform)
+      expect(bbox.y).toBeCloseTo(50, 0); // 30 + 20 (transform)
       expect(bbox.width).toBeCloseTo(60, 1);
       expect(bbox.height).toBeCloseTo(40, 1);
 

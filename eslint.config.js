@@ -71,8 +71,8 @@ export default [
       'no-useless-constructor': 'warn',
 
       // Code quality
-      'eqeqeq': ['error', 'always', { null: 'ignore' }],
-      'curly': ['error', 'all'],
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      curly: ['error', 'all'],
       'brace-style': ['error', '1tbs'],
       'no-throw-literal': 'error',
       'no-eval': 'error',
@@ -82,11 +82,14 @@ export default [
       'no-return-await': 'error',
 
       // Style (minimal, Prettier handles most)
-      'semi': ['error', 'always'],
-      'quotes': ['error', 'single', { avoidEscape: true }],
+      semi: ['error', 'always'],
+      quotes: ['error', 'single', { avoidEscape: true }],
       'comma-dangle': ['error', 'never'],
-      'indent': ['error', 2, { SwitchCase: 1 }],
-      'max-len': ['warn', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }]
+      indent: ['error', 2, { SwitchCase: 1 }],
+      'max-len': [
+        'warn',
+        { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }
+      ]
     }
   },
 
@@ -125,8 +128,8 @@ export default [
       'no-useless-constructor': 'warn',
 
       // Code quality
-      'eqeqeq': ['error', 'always', { null: 'ignore' }],
-      'curly': ['error', 'all'],
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      curly: ['error', 'all'],
       'brace-style': ['error', '1tbs'],
       'no-throw-literal': 'error',
       'no-eval': 'error',
@@ -136,17 +139,27 @@ export default [
       'no-return-await': 'error',
 
       // Style (minimal, Prettier handles most)
-      'semi': ['error', 'always'],
-      'quotes': ['error', 'single', { avoidEscape: true }],
+      semi: ['error', 'always'],
+      quotes: ['error', 'single', { avoidEscape: true }],
       'comma-dangle': ['error', 'never'],
-      'indent': ['error', 2, { SwitchCase: 1 }],
-      'max-len': ['warn', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }]
+      indent: ['error', 2, { SwitchCase: 1 }],
+      'max-len': [
+        'warn',
+        { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }
+      ]
     }
   },
 
   // Configuration for test files
   {
-    files: ['tests/**/*.js', '**/*.test.js', '**/*.spec.js'],
+    files: [
+      'tests/**/*.js',
+      'tests/**/*.mjs',
+      '**/*.test.js',
+      '**/*.test.mjs',
+      '**/*.spec.js',
+      '**/*.spec.mjs'
+    ],
     plugins: {
       vitest: vitestPlugin
     },
@@ -161,6 +174,7 @@ export default [
     },
     languageOptions: {
       globals: {
+        // Test framework globals
         describe: 'readonly',
         it: 'readonly',
         test: 'readonly',
@@ -169,7 +183,18 @@ export default [
         afterEach: 'readonly',
         beforeAll: 'readonly',
         afterAll: 'readonly',
-        vi: 'readonly'
+        vi: 'readonly',
+        // Node.js globals
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        // Browser globals (for E2E tests using Playwright)
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        Element: 'readonly'
       }
     }
   },

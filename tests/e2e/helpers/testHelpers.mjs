@@ -24,7 +24,7 @@ export const TEST_CONFIG = {
   SIZE_TOLERANCE: 2,
 
   // Thresholds
-  MIN_POSITION_CHANGE: 50,
+  MIN_POSITION_CHANGE: 50
 };
 
 /**
@@ -79,7 +79,7 @@ export function transformCoordinates(content, offsetX, offsetY) {
 
   // Transform rotate() transform coordinates: rotate(angle x y) -> rotate(angle x+offsetX y+offsetY)
   transformed = transformed.replace(
-    /rotate\(([^\s]+)\s+([^\s]+)\s+([^\)]+)\)/g,
+    /rotate\(([^\s]+)\s+([^\s]+)\s+([^)]+)\)/g,
     (match, angle, x, y) => {
       const newX = parseFloat(x) + offsetX;
       const newY = parseFloat(y) + offsetY;

@@ -90,16 +90,11 @@ function updateChangelog(newVersion) {
   const date = new Date().toISOString().split('T')[0];
 
   // Replace [Unreleased] with new version
-  content = content.replace(
-    /## \[Unreleased\]/,
-    `## [Unreleased]\n\n## [${newVersion}] - ${date}`
-  );
+  content = content.replace(/## \[Unreleased\]/, `## [Unreleased]\n\n## [${newVersion}] - ${date}`);
 
   // Update comparison links at bottom
   const lines = content.split('\n');
-  const lastLinkIndex = lines.findIndex((line) =>
-    line.match(/^\[Unreleased\]:/)
-  );
+  const lastLinkIndex = lines.findIndex((line) => line.match(/^\[Unreleased\]:/));
 
   if (lastLinkIndex !== -1) {
     lines[lastLinkIndex] =

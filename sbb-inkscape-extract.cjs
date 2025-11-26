@@ -21,15 +21,10 @@ const {
   validateFilePath,
   validateOutputPath,
   SVGBBoxError,
-  ValidationError
+  ValidationError: _ValidationError
 } = require('./lib/security-utils.cjs');
 
-const {
-  runCLI,
-  printSuccess,
-  printError,
-  printInfo
-} = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printError: _printError, printInfo } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELP TEXT
@@ -234,12 +229,11 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
       stdout: stdout.trim(),
       stderr: stderr.trim()
     };
-
   } catch (error) {
     if (error.code === 'ENOENT') {
       throw new SVGBBoxError(
         'Inkscape not found. Please install Inkscape and ensure it is in your PATH.\n' +
-        'Download from: https://inkscape.org/release/'
+          'Download from: https://inkscape.org/release/'
       );
     } else if (error.killed) {
       throw new SVGBBoxError('Inkscape process timed out (30s limit)');

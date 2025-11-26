@@ -8,7 +8,6 @@
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 
@@ -25,7 +24,8 @@ const CLI_TOOLS = {
 };
 
 // Valid test SVG for security tests
-const VALID_TEST_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="blue"/></svg>';
+const VALID_TEST_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="blue"/></svg>';
 
 describe('CLI Security Integration Tests', () => {
   let testDir;
@@ -135,8 +135,8 @@ describe('CLI Security Integration Tests', () => {
         const errorOutput = (err.stderr || '') + (err.message || '');
         assert.ok(
           errorOutput.includes('outside allowed directories') ||
-          errorOutput.includes('File not found') ||
-          errorOutput.includes('Invalid file extension'),
+            errorOutput.includes('File not found') ||
+            errorOutput.includes('Invalid file extension'),
           `Should reject with security or validation error. Got: ${errorOutput}`
         );
       }
@@ -158,8 +158,8 @@ describe('CLI Security Integration Tests', () => {
       } catch (err) {
         assert.ok(
           err.stderr.includes('outside allowed directories') ||
-          err.stderr.includes('File not found') ||
-          err.stderr.includes('Invalid file extension'),
+            err.stderr.includes('File not found') ||
+            err.stderr.includes('Invalid file extension'),
           'Should reject with security or validation error'
         );
       }
@@ -177,9 +177,8 @@ describe('CLI Security Integration Tests', () => {
       testFiles.push(largePath);
 
       // Create an 11MB SVG file (exceeds 10MB limit)
-      const largeContent = '<svg xmlns="http://www.w3.org/2000/svg">' +
-        'A'.repeat(11 * 1024 * 1024) +
-        '</svg>';
+      const largeContent =
+        '<svg xmlns="http://www.w3.org/2000/svg">' + 'A'.repeat(11 * 1024 * 1024) + '</svg>';
       fs.writeFileSync(largePath, largeContent);
 
       try {
@@ -206,16 +205,21 @@ describe('CLI Security Integration Tests', () => {
       /**Test that script tags are sanitized from SVG input*/
       const maliciousPath = path.join(testDir, 'malicious.svg');
       // Add id to rect so sbb-extractor can process it
-      const maliciousSVG = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("XSS")</script><rect id="r1" x="10" y="10" width="50" height="50"/></svg>';
+      const maliciousSVG =
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("XSS")</script><rect id="r1" x="10" y="10" width="50" height="50"/></svg>';
       testFiles.push(maliciousPath);
 
       fs.writeFileSync(maliciousPath, maliciousSVG);
 
       // sbb-extractor should process it (sanitization happens internally)
-      const { stdout } = await execFilePromise('node', [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'], {
-        timeout: CLI_TIMEOUT,
-        maxBuffer: 20 * 1024 * 1024
-      });
+      const { stdout } = await execFilePromise(
+        'node',
+        [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'],
+        {
+          timeout: CLI_TIMEOUT,
+          maxBuffer: 20 * 1024 * 1024
+        }
+      );
 
       // Parse JSON from output (skip info line)
       const jsonStart = stdout.indexOf('{');
@@ -231,16 +235,21 @@ describe('CLI Security Integration Tests', () => {
       /**Test that event handlers are sanitized from SVG input*/
       const maliciousPath = path.join(testDir, 'handlers.svg');
       // Add id to rect so sbb-extractor can process it
-      const maliciousSVG = '<svg xmlns="http://www.w3.org/2000/svg"><rect id="r2" onclick="alert(1)" onload="doEvil()" x="10" y="10" width="50" height="50"/></svg>';
+      const maliciousSVG =
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect id="r2" onclick="alert(1)" onload="doEvil()" x="10" y="10" width="50" height="50"/></svg>';
       testFiles.push(maliciousPath);
 
       fs.writeFileSync(maliciousPath, maliciousSVG);
 
       // Should process without issues
-      const { stdout } = await execFilePromise('node', [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'], {
-        timeout: CLI_TIMEOUT,
-        maxBuffer: 20 * 1024 * 1024
-      });
+      const { stdout } = await execFilePromise(
+        'node',
+        [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'],
+        {
+          timeout: CLI_TIMEOUT,
+          maxBuffer: 20 * 1024 * 1024
+        }
+      );
 
       // Parse JSON from output (skip info line)
       const jsonStart = stdout.indexOf('{');
@@ -337,9 +346,13 @@ describe('CLI Security Integration Tests', () => {
       fs.writeFileSync(batchPath, maliciousList);
 
       try {
-        await execFilePromise('node', [CLI_TOOLS.textToPath, '--batch', batchPath, '--skip-comparison'], {
-          timeout: CLI_TIMEOUT
-        });
+        await execFilePromise(
+          'node',
+          [CLI_TOOLS.textToPath, '--batch', batchPath, '--skip-comparison'],
+          {
+            timeout: CLI_TIMEOUT
+          }
+        );
         assert.fail('Should have rejected batch with malicious paths');
       } catch (err) {
         const errorOutput = (err.stderr || '') + (err.message || '');
@@ -360,9 +373,13 @@ describe('CLI Security Integration Tests', () => {
       fs.writeFileSync(batchPath, traversalList);
 
       try {
-        await execFilePromise('node', [CLI_TOOLS.textToPath, '--batch', batchPath, '--skip-comparison'], {
-          timeout: CLI_TIMEOUT
-        });
+        await execFilePromise(
+          'node',
+          [CLI_TOOLS.textToPath, '--batch', batchPath, '--skip-comparison'],
+          {
+            timeout: CLI_TIMEOUT
+          }
+        );
         // May fail or skip invalid files - either is acceptable
       } catch (err) {
         // Error is expected
@@ -380,14 +397,19 @@ describe('CLI Security Integration Tests', () => {
       /**Test that JSON output doesn't leak sensitive system paths*/
       const testPath = path.join(testDir, 'test.svg');
       // Add id to rect so sbb-extractor can find objects
-      const testSVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="r1" x="10" y="10" width="80" height="80" fill="blue"/></svg>';
+      const testSVG =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="r1" x="10" y="10" width="80" height="80" fill="blue"/></svg>';
       testFiles.push(testPath);
       fs.writeFileSync(testPath, testSVG);
 
-      const { stdout } = await execFilePromise('node', [CLI_TOOLS.extractor, testPath, '--list', '--json'], {
-        timeout: CLI_TIMEOUT,
-        maxBuffer: 20 * 1024 * 1024
-      });
+      const { stdout } = await execFilePromise(
+        'node',
+        [CLI_TOOLS.extractor, testPath, '--list', '--json'],
+        {
+          timeout: CLI_TIMEOUT,
+          maxBuffer: 20 * 1024 * 1024
+        }
+      );
 
       // Parse JSON from output (skip info line)
       const jsonStart = stdout.indexOf('{');
@@ -410,9 +432,13 @@ describe('CLI Security Integration Tests', () => {
       fs.writeFileSync(svg1Path, VALID_TEST_SVG);
       fs.writeFileSync(svg2Path, VALID_TEST_SVG);
 
-      const { stdout } = await execFilePromise('node', [CLI_TOOLS.comparer, svg1Path, svg2Path, '--json'], {
-        timeout: CLI_TIMEOUT
-      });
+      const { stdout } = await execFilePromise(
+        'node',
+        [CLI_TOOLS.comparer, svg1Path, svg2Path, '--json'],
+        {
+          timeout: CLI_TIMEOUT
+        }
+      );
 
       // Should parse without error
       const result = JSON.parse(stdout);
@@ -420,8 +446,8 @@ describe('CLI Security Integration Tests', () => {
       assert.ok(typeof result === 'object');
 
       // Should not have prototype pollution keys
-      assert.ok(!result.hasOwnProperty('__proto__'));
-      assert.ok(!result.hasOwnProperty('constructor'));
+      assert.ok(!Object.prototype.hasOwnProperty.call(result, '__proto__'));
+      assert.ok(!Object.prototype.hasOwnProperty.call(result, 'constructor'));
     });
   });
 
@@ -430,38 +456,42 @@ describe('CLI Security Integration Tests', () => {
   // ============================================================================
 
   describe('Browser Timeout Protection', () => {
-    it('sbb-extractor should timeout on extremely complex SVG', async () => {
-      /**Test that browser operations timeout on malicious SVG*/
-      const complexPath = path.join(testDir, 'complex.svg');
-      testFiles.push(complexPath);
+    it(
+      'sbb-extractor should timeout on extremely complex SVG',
+      async () => {
+        /**Test that browser operations timeout on malicious SVG*/
+        const complexPath = path.join(testDir, 'complex.svg');
+        testFiles.push(complexPath);
 
-      // Create SVG with many nested elements (potential DoS)
-      let nested = '<g>';
-      for (let i = 0; i < 1000; i++) {
-        nested += '<g transform="matrix(1,0,0,1,0.1,0.1)">';
-      }
-      nested += '<rect x="0" y="0" width="1" height="1"/>';
-      for (let i = 0; i < 1000; i++) {
+        // Create SVG with many nested elements (potential DoS)
+        let nested = '<g>';
+        for (let i = 0; i < 1000; i++) {
+          nested += '<g transform="matrix(1,0,0,1,0.1,0.1)">';
+        }
+        nested += '<rect x="0" y="0" width="1" height="1"/>';
+        for (let i = 0; i < 1000; i++) {
+          nested += '</g>';
+        }
         nested += '</g>';
-      }
-      nested += '</g>';
 
-      const complexSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${nested}</svg>`;
-      fs.writeFileSync(complexPath, complexSVG);
+        const complexSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${nested}</svg>`;
+        fs.writeFileSync(complexPath, complexSVG);
 
-      try {
-        // This might timeout or complete - both are acceptable
-        // The important thing is it doesn't hang forever
-        await execFilePromise('node', [CLI_TOOLS.extractor, complexPath, '--list', '--json'], {
-          timeout: CLI_TIMEOUT,
-          maxBuffer: 20 * 1024 * 1024
-        });
-        // If it completes, that's fine too (browser has internal timeout)
-      } catch (err) {
-        // Timeout or other error is acceptable
-        assert.ok(err);
-      }
-    }, CLI_TIMEOUT + 5000);  // Vitest timeout
+        try {
+          // This might timeout or complete - both are acceptable
+          // The important thing is it doesn't hang forever
+          await execFilePromise('node', [CLI_TOOLS.extractor, complexPath, '--list', '--json'], {
+            timeout: CLI_TIMEOUT,
+            maxBuffer: 20 * 1024 * 1024
+          });
+          // If it completes, that's fine too (browser has internal timeout)
+        } catch (err) {
+          // Timeout or other error is acceptable
+          assert.ok(err);
+        }
+      },
+      CLI_TIMEOUT + 5000
+    ); // Vitest timeout
   });
 
   // ============================================================================
@@ -525,15 +555,17 @@ describe('CLI Security Integration Tests', () => {
       fs.writeFileSync(svgPath, VALID_TEST_SVG);
 
       // Create mapping with invalid ID (contains semicolon)
-      const maliciousMapping = [
-        { from: 'valid', to: 'evil;alert(1)' }
-      ];
+      const maliciousMapping = [{ from: 'valid', to: 'evil;alert(1)' }];
       fs.writeFileSync(jsonPath, JSON.stringify(maliciousMapping));
 
       try {
-        await execFilePromise('node', [CLI_TOOLS.extractor, svgPath, '--rename', jsonPath, outPath, '--json'], {
-          timeout: CLI_TIMEOUT
-        });
+        await execFilePromise(
+          'node',
+          [CLI_TOOLS.extractor, svgPath, '--rename', jsonPath, outPath, '--json'],
+          {
+            timeout: CLI_TIMEOUT
+          }
+        );
         assert.fail('Should have rejected invalid ID in mapping');
       } catch (err) {
         const errorOutput = (err.stderr || '') + (err.message || '');
@@ -558,9 +590,13 @@ describe('CLI Security Integration Tests', () => {
       fs.writeFileSync(jsonPath, maliciousJSON);
 
       try {
-        await execFilePromise('node', [CLI_TOOLS.extractor, svgPath, '--rename', jsonPath, outPath, '--json'], {
-          timeout: CLI_TIMEOUT
-        });
+        await execFilePromise(
+          'node',
+          [CLI_TOOLS.extractor, svgPath, '--rename', jsonPath, outPath, '--json'],
+          {
+            timeout: CLI_TIMEOUT
+          }
+        );
         assert.fail('Should have rejected prototype pollution');
       } catch (err) {
         const errorOutput = (err.stderr || '') + (err.message || '');
@@ -586,9 +622,13 @@ describe('CLI Security Integration Tests', () => {
       fs.writeFileSync(validPath, VALID_TEST_SVG);
 
       try {
-        await execFilePromise('node', [CLI_TOOLS.textToPath, validPath, dangerousOutput, '--skip-comparison'], {
-          timeout: CLI_TIMEOUT
-        });
+        await execFilePromise(
+          'node',
+          [CLI_TOOLS.textToPath, validPath, dangerousOutput, '--skip-comparison'],
+          {
+            timeout: CLI_TIMEOUT
+          }
+        );
         assert.fail('Should have rejected dangerous output path');
       } catch (err) {
         // Should fail due to permissions or path validation
@@ -606,14 +646,19 @@ describe('CLI Security Integration Tests', () => {
       /**Test that sbb-extractor works correctly with valid input*/
       const validPath = path.join(testDir, 'valid.svg');
       // Add id to rect so sbb-extractor can find objects
-      const testSVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="rect" x="10" y="10" width="80" height="80" fill="blue"/></svg>';
+      const testSVG =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="rect" x="10" y="10" width="80" height="80" fill="blue"/></svg>';
       testFiles.push(validPath);
       fs.writeFileSync(validPath, testSVG);
 
-      const { stdout } = await execFilePromise('node', [CLI_TOOLS.extractor, validPath, '--list', '--json'], {
-        timeout: CLI_TIMEOUT,
-        maxBuffer: 20 * 1024 * 1024
-      });
+      const { stdout } = await execFilePromise(
+        'node',
+        [CLI_TOOLS.extractor, validPath, '--list', '--json'],
+        {
+          timeout: CLI_TIMEOUT,
+          maxBuffer: 20 * 1024 * 1024
+        }
+      );
 
       // Parse JSON from output (skip info line)
       const jsonStart = stdout.indexOf('{');
@@ -634,14 +679,18 @@ describe('CLI Security Integration Tests', () => {
       fs.writeFileSync(svg1Path, VALID_TEST_SVG);
       fs.writeFileSync(svg2Path, VALID_TEST_SVG);
 
-      const { stdout } = await execFilePromise('node', [CLI_TOOLS.comparer, svg1Path, svg2Path, '--json'], {
-        timeout: CLI_TIMEOUT
-      });
+      const { stdout } = await execFilePromise(
+        'node',
+        [CLI_TOOLS.comparer, svg1Path, svg2Path, '--json'],
+        {
+          timeout: CLI_TIMEOUT
+        }
+      );
 
       const result = JSON.parse(stdout);
       assert.ok(result);
       assert.strictEqual(typeof result.diffPercentage, 'number');
-      assert.strictEqual(result.diffPercentage, 0);  // Identical SVGs
+      assert.strictEqual(result.diffPercentage, 0); // Identical SVGs
     });
   });
 });

@@ -25,7 +25,7 @@ async function checkInkscapeAvailable() {
   try {
     await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
     return true;
-  } catch (_err) {
+  } catch {
     return false;
   }
 }
@@ -35,15 +35,19 @@ async function runText2Path(inputSvg, args = []) {
   const inputPath = path.join(FIXTURES_DIR, inputSvg);
   const outputPath = path.join(TEMP_DIR, inputSvg.replace('.svg', '-paths.svg'));
 
-  const { stdout, stderr } = await execFilePromise('node', [
-    TEXT2PATH_PATH,
-    inputPath,
-    outputPath,
-    '--skip-comparison', // Skip comparison for faster tests
-    ...args
-  ], {
-    timeout: 120000 // 2 minutes timeout (comparison can take time)
-  });
+  const { stdout, stderr } = await execFilePromise(
+    'node',
+    [
+      TEXT2PATH_PATH,
+      inputPath,
+      outputPath,
+      '--skip-comparison', // Skip comparison for faster tests
+      ...args
+    ],
+    {
+      timeout: 120000 // 2 minutes timeout (comparison can take time)
+    }
+  );
 
   return { stdout, stderr, outputPath };
 }
@@ -135,23 +139,17 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
       const outputPath = path.join(TEMP_DIR, 'overwrite-fail-test-paths.svg');
 
       // First conversion should succeed
-      await execFilePromise('node', [
-        TEXT2PATH_PATH,
-        inputPath,
-        outputPath,
-        '--skip-comparison'
-      ], { timeout: 120000 });
+      await execFilePromise('node', [TEXT2PATH_PATH, inputPath, outputPath, '--skip-comparison'], {
+        timeout: 120000
+      });
 
       expect(fs.existsSync(outputPath)).toBe(true);
 
       // Second conversion without --overwrite should fail
       await expect(
-        execFilePromise('node', [
-          TEXT2PATH_PATH,
-          inputPath,
-          outputPath,
-          '--skip-comparison'
-        ], { timeout: 120000 })
+        execFilePromise('node', [TEXT2PATH_PATH, inputPath, outputPath, '--skip-comparison'], {
+          timeout: 120000
+        })
       ).rejects.toThrow();
     });
 
@@ -165,23 +163,18 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
       const inputPath = path.join(FIXTURES_DIR, 'text-sample.svg');
 
       // First conversion
-      await execFilePromise('node', [
-        TEXT2PATH_PATH,
-        inputPath,
-        outputPath,
-        '--skip-comparison'
-      ], { timeout: 120000 });
+      await execFilePromise('node', [TEXT2PATH_PATH, inputPath, outputPath, '--skip-comparison'], {
+        timeout: 120000
+      });
 
       expect(fs.existsSync(outputPath)).toBe(true);
 
       // Second conversion with --overwrite should succeed
-      const { stdout: _stdout } = await execFilePromise('node', [
-        TEXT2PATH_PATH,
-        inputPath,
-        outputPath,
-        '--overwrite',
-        '--skip-comparison'
-      ], { timeout: 120000 });
+      const { stdout: _stdout } = await execFilePromise(
+        'node',
+        [TEXT2PATH_PATH, inputPath, outputPath, '--overwrite', '--skip-comparison'],
+        { timeout: 120000 }
+      );
 
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -203,12 +196,11 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
       fs.writeFileSync(batchFile, batchContent);
 
       // Run batch conversion
-      const { stdout: _stdout2 } = await execFilePromise('node', [
-        TEXT2PATH_PATH,
-        '--batch', batchFile,
-        '--skip-comparison',
-        '--overwrite'
-      ], { timeout: 120000 });
+      const { stdout: _stdout2 } = await execFilePromise(
+        'node',
+        [TEXT2PATH_PATH, '--batch', batchFile, '--skip-comparison', '--overwrite'],
+        { timeout: 120000 }
+      );
 
       // Check that outputs were created
       const output1 = path.join(FIXTURES_DIR, 'text-sample-paths.svg');
@@ -249,10 +241,7 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
 
   describe('Help and Version', () => {
     it('should display help text', async () => {
-      const { stdout } = await execFilePromise('node', [
-        TEXT2PATH_PATH,
-        '--help'
-      ]);
+      const { stdout } = await execFilePromise('node', [TEXT2PATH_PATH, '--help']);
 
       expect(stdout).toContain('sbb-inkscape-text2path');
       expect(stdout).toContain('text elements');
@@ -261,10 +250,7 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
     });
 
     it('should display version', async () => {
-      const { stdout } = await execFilePromise('node', [
-        TEXT2PATH_PATH,
-        '--version'
-      ]);
+      const { stdout } = await execFilePromise('node', [TEXT2PATH_PATH, '--version']);
 
       expect(stdout).toContain('sbb-inkscape-text2path');
       expect(stdout).toContain('svg-bbox toolkit');

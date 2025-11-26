@@ -40,16 +40,39 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
     availableFonts = await testPage.evaluate(() => {
       const fontsToTest = [
         // Web-safe fonts
-        'Arial', 'Helvetica', 'Times New Roman', 'Times', 'Courier New', 'Courier',
-        'Verdana', 'Georgia', 'Palatino', 'Garamond', 'Bookman', 'Comic Sans MS',
-        'Trebuchet MS', 'Arial Black', 'Impact',
+        'Arial',
+        'Helvetica',
+        'Times New Roman',
+        'Times',
+        'Courier New',
+        'Courier',
+        'Verdana',
+        'Georgia',
+        'Palatino',
+        'Garamond',
+        'Bookman',
+        'Comic Sans MS',
+        'Trebuchet MS',
+        'Arial Black',
+        'Impact',
         // macOS fonts
-        'Menlo', 'Monaco', 'San Francisco', 'Helvetica Neue',
+        'Menlo',
+        'Monaco',
+        'San Francisco',
+        'Helvetica Neue',
         // Windows fonts
-        'Segoe UI', 'Calibri', 'Cambria', 'Consolas',
+        'Segoe UI',
+        'Calibri',
+        'Cambria',
+        'Consolas',
         // Linux fonts
-        'DejaVu Sans', 'DejaVu Serif', 'Liberation Sans', 'Liberation Serif',
-        'Ubuntu', 'Noto Sans', 'Noto Serif'
+        'DejaVu Sans',
+        'DejaVu Serif',
+        'Liberation Sans',
+        'Liberation Serif',
+        'Ubuntu',
+        'Noto Sans',
+        'Noto Serif'
       ];
 
       const available = [];
@@ -75,11 +98,15 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
     if (availableFonts.length < 3) {
       throw new Error(
         `Not enough fonts available on system. Found: ${availableFonts.join(', ')}. ` +
-        'Need at least 3 fonts for comprehensive testing.'
+          'Need at least 3 fonts for comprehensive testing.'
       );
     }
 
-    console.log(`[Test Setup] Found ${availableFonts.length} available fonts:`, availableFonts.slice(0, 10).join(', '), '...');
+    console.log(
+      `[Test Setup] Found ${availableFonts.length} available fonts:`,
+      availableFonts.slice(0, 10).join(', '),
+      '...'
+    );
   });
 
   afterAll(async () => {
@@ -128,7 +155,6 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
    * REFERENCE: sbb-extractor.cjs HTML generation code
    */
   describe('Real-World HTML Preview Generation', () => {
-
     test('Generated HTML correctly renders text elements with parent transforms (tested with 3 fonts)', async () => {
       const fonts = getRandomFonts(3);
 
@@ -166,11 +192,14 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
         // Use SvgVisualBBox library to measure the <use> element
         const bbox = await page.evaluate(async () => {
           const useElement = document.querySelector('#preview use');
-          const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(useElement, {
-            mode: 'unclipped',
-            coarseFactor: 2,
-            fineFactor: 8
-          });
+          const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+            useElement,
+            {
+              mode: 'unclipped',
+              coarseFactor: 2,
+              fineFactor: 8
+            }
+          );
           return result;
         });
 
@@ -189,7 +218,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
       const fonts = getRandomFonts(3);
 
       for (const font of fonts) {
-        const textX = -455;  // Large negative coordinate (like text8)
+        const textX = -455; // Large negative coordinate (like text8)
         const textY = 1475;
 
         const fullHtml = `
@@ -213,17 +242,20 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
 
         const bbox = await page.evaluate(async () => {
           const useElement = document.querySelector('svg use');
-          const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(useElement, {
-            mode: 'unclipped',
-            coarseFactor: 2,
-            fineFactor: 8
-          });
+          const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+            useElement,
+            {
+              mode: 'unclipped',
+              coarseFactor: 2,
+              fineFactor: 8
+            }
+          );
           return result;
         });
 
         expect(bbox).toBeTruthy();
         expect(bbox.width).toBeGreaterThan(0);
-        expect(bbox.x).toBeCloseTo(textX, 5);  // Should be close to original X
+        expect(bbox.x).toBeCloseTo(textX, 5); // Should be close to original X
       }
     });
 
@@ -266,17 +298,23 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
         const results = await page.evaluate(async () => {
           const uses = document.querySelectorAll('svg use');
 
-          const bbox1 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(uses[0], {
-            mode: 'unclipped',
-            coarseFactor: 2,
-            fineFactor: 8
-          });
+          const bbox1 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+            uses[0],
+            {
+              mode: 'unclipped',
+              coarseFactor: 2,
+              fineFactor: 8
+            }
+          );
 
-          const bbox2 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(uses[1], {
-            mode: 'unclipped',
-            coarseFactor: 2,
-            fineFactor: 8
-          });
+          const bbox2 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+            uses[1],
+            {
+              mode: 'unclipped',
+              coarseFactor: 2,
+              fineFactor: 8
+            }
+          );
 
           return { bbox1, bbox2 };
         });
@@ -288,8 +326,8 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
         expect(results.bbox2.width).toBeGreaterThan(0);
 
         // Positions should account for their respective parent transforms
-        expect(results.bbox1.x).toBeGreaterThan(90);   // Near 100 (translate x)
-        expect(results.bbox2.x).toBeLessThan(-40);     // Near -50 (translate x)
+        expect(results.bbox1.x).toBeGreaterThan(90); // Near 100 (translate x)
+        expect(results.bbox2.x).toBeLessThan(-40); // Near -50 (translate x)
       }
     });
   });

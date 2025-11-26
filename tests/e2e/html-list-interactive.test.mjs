@@ -1,3 +1,4 @@
+/* eslint-env node, browser */
 /**
  * HTML List Interactive Features E2E Tests
  *
@@ -40,7 +41,6 @@ test.beforeAll(async () => {
 });
 
 test.describe('HTML List Interactive Features', () => {
-
   test('Page loads correctly with all interactive elements', async ({ page }) => {
     await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
 
@@ -77,7 +77,7 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Check NO red background (should be white or transparent)
-    const bgColor = await firstRow.evaluate(el => {
+    const bgColor = await firstRow.evaluate((el) => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor).not.toContain('255, 0, 0'); // Not red
@@ -103,9 +103,12 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Check red background (CSS applies to td, not tr)
-    const bgColor = await firstRow.locator('td').first().evaluate(el => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    const bgColor = await firstRow
+      .locator('td')
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).backgroundColor;
+      });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Check error message appears
@@ -136,9 +139,12 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Second row should have red background (lower priority loses) (CSS applies to td)
-    const bgColor2 = await secondRow.locator('td').first().evaluate(el => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    const bgColor2 = await secondRow
+      .locator('td')
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).backgroundColor;
+      });
     expect(bgColor2).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Check error message
@@ -173,9 +179,12 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Should have red background (CSS applies to td)
-    const bgColor = await secondRow.locator('td').first().evaluate(el => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    const bgColor = await secondRow
+      .locator('td')
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).backgroundColor;
+      });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Check error message
@@ -278,8 +287,8 @@ test.describe('HTML List Interactive Features', () => {
     // Validate mappings array contains our renames
     expect(mapping.mappings.length).toBeGreaterThanOrEqual(2);
 
-    const map1 = mapping.mappings.find(m => m.to === 'renamed_first');
-    const map2 = mapping.mappings.find(m => m.to === 'renamed_second');
+    const map1 = mapping.mappings.find((m) => m.to === 'renamed_first');
+    const map2 = mapping.mappings.find((m) => m.to === 'renamed_second');
 
     expect(map1).toBeDefined();
     expect(map1.from).toBe(originalId1.trim());
@@ -334,7 +343,7 @@ test.describe('HTML List Interactive Features', () => {
     expect(mapping.mappings[0].to).toBe('checked_item');
 
     // Should NOT contain unchecked item
-    const uncheckedItem = mapping.mappings.find(m => m.to === 'not_checked');
+    const uncheckedItem = mapping.mappings.find((m) => m.to === 'not_checked');
     expect(uncheckedItem).toBeUndefined();
   });
 
@@ -355,8 +364,8 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Count visible rows (should be fewer than initial)
-    const visibleRows = await rows.evaluateAll(rows => {
-      return rows.filter(row => row.style.display !== 'none');
+    const visibleRows = await rows.evaluateAll((rows) => {
+      return rows.filter((row) => row.style.display !== 'none');
     });
     const filteredCount = visibleRows.length;
 
@@ -364,12 +373,12 @@ test.describe('HTML List Interactive Features', () => {
     expect(filteredCount).toBeLessThan(initialCount);
 
     // Check that all visible rows match the filter
-    const visibleIds = await rows.evaluateAll(rows => {
+    const visibleIds = await rows.evaluateAll((rows) => {
       return rows
-        .filter(row => row.style.display !== 'none')
-        .map(row => row.cells[1]?.textContent?.trim()); // ID column
+        .filter((row) => row.style.display !== 'none')
+        .map((row) => row.cells[1]?.textContent?.trim()); // ID column
     });
-    visibleIds.forEach(id => {
+    visibleIds.forEach((id) => {
       expect(id).toMatch(/^g/);
     });
   });
@@ -387,10 +396,10 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Get all visible rows
-    const visibleRows = await rows.evaluateAll(rows => {
+    const visibleRows = await rows.evaluateAll((rows) => {
       return rows
-        .filter(row => row.style.display !== 'none')
-        .map(row => {
+        .filter((row) => row.style.display !== 'none')
+        .map((row) => {
           const text = row.cells[2]?.textContent?.trim(); // Tag column
           // Extract tag name from <tag> format
           const match = text?.match(/<(\w+)>/);
@@ -399,7 +408,7 @@ test.describe('HTML List Interactive Features', () => {
     });
 
     // All visible rows should be "path"
-    visibleRows.forEach(tag => {
+    visibleRows.forEach((tag) => {
       expect(tag).toBe('path');
     });
   });
@@ -419,9 +428,12 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(50);
 
     // Should show error immediately (CSS applies to td)
-    let bgColor = await firstRow.locator('td').first().evaluate(el => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    let bgColor = await firstRow
+      .locator('td')
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).backgroundColor;
+      });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Now type a valid prefix
@@ -430,9 +442,12 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(50);
 
     // Should NOT show error
-    bgColor = await firstRow.locator('td').first().evaluate(el => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    bgColor = await firstRow
+      .locator('td')
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).backgroundColor;
+      });
     expect(bgColor).not.toContain('255, 200, 200');
 
     // Continue typing valid characters
@@ -440,9 +455,12 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(50);
 
     // Still no error
-    bgColor = await firstRow.locator('td').first().evaluate(el => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    bgColor = await firstRow
+      .locator('td')
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).backgroundColor;
+      });
     expect(bgColor).not.toContain('255, 200, 200');
   });
 
@@ -461,9 +479,12 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Should show error (empty new ID is invalid) (CSS applies to td)
-    const bgColor = await firstRow.locator('td').first().evaluate(el => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    const bgColor = await firstRow
+      .locator('td')
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).backgroundColor;
+      });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Error message should appear

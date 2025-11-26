@@ -27,10 +27,7 @@ describe('Security Utils', () => {
 
     it('should reject null bytes in file path', () => {
       /**Test that paths with null bytes are rejected*/
-      assert.throws(
-        () => securityUtils.validateFilePath('file\0.svg'),
-        /null byte detected/
-      );
+      assert.throws(() => securityUtils.validateFilePath('file\0.svg'), /null byte detected/);
     });
 
     it('should reject shell metacharacters (command injection)', () => {
@@ -57,11 +54,7 @@ describe('Security Utils', () => {
 
     it('should reject path traversal attempts', () => {
       /**Test that path traversal attempts are rejected*/
-      const traversalPaths = [
-        '../../../etc/passwd',
-        '../../etc/shadow',
-        './../../../etc/hosts'
-      ];
+      const traversalPaths = ['../../../etc/passwd', '../../etc/shadow', './../../../etc/hosts'];
 
       for (const traversal of traversalPaths) {
         assert.throws(
@@ -75,9 +68,10 @@ describe('Security Utils', () => {
     it('should enforce required file extensions', () => {
       /**Test that file extension validation works*/
       assert.throws(
-        () => securityUtils.validateFilePath('file.txt', {
-          requiredExtensions: ['.svg']
-        }),
+        () =>
+          securityUtils.validateFilePath('file.txt', {
+            requiredExtensions: ['.svg']
+          }),
         /Invalid file extension/
       );
 
@@ -93,9 +87,10 @@ describe('Security Utils', () => {
       const nonExistent = path.join(process.cwd(), 'nonexistent-file-xyz-123.svg');
 
       assert.throws(
-        () => securityUtils.validateFilePath(nonExistent, {
-          mustExist: true
-        }),
+        () =>
+          securityUtils.validateFilePath(nonExistent, {
+            mustExist: true
+          }),
         /File not found/
       );
     });
@@ -166,10 +161,7 @@ describe('Security Utils', () => {
 
       fs.writeFileSync(testPath, 'This is not SVG content');
 
-      assert.throws(
-        () => securityUtils.readSVGFileSafe(testPath),
-        /not appear to be valid SVG/
-      );
+      assert.throws(() => securityUtils.readSVGFileSafe(testPath), /not appear to be valid SVG/);
     });
 
     it('should reject files exceeding size limit', () => {
@@ -178,25 +170,18 @@ describe('Security Utils', () => {
       testFiles.push(testPath);
 
       // Create an 11MB file (exceeds 10MB limit)
-      const largeContent = '<svg xmlns="http://www.w3.org/2000/svg">' +
-        'A'.repeat(11 * 1024 * 1024) +
-        '</svg>';
+      const largeContent =
+        '<svg xmlns="http://www.w3.org/2000/svg">' + 'A'.repeat(11 * 1024 * 1024) + '</svg>';
       fs.writeFileSync(testPath, largeContent);
 
-      assert.throws(
-        () => securityUtils.readSVGFileSafe(testPath),
-        /SVG file too large/
-      );
+      assert.throws(() => securityUtils.readSVGFileSafe(testPath), /SVG file too large/);
     });
 
     it('should reject non-existent files', () => {
       /**Test that missing files are rejected*/
       const nonExistent = path.join(process.cwd(), 'nonexistent-test-security.svg');
 
-      assert.throws(
-        () => securityUtils.readSVGFileSafe(nonExistent),
-        /File not found/
-      );
+      assert.throws(() => securityUtils.readSVGFileSafe(nonExistent), /File not found/);
     });
   });
 
@@ -233,7 +218,8 @@ describe('Security Utils', () => {
 
     it('should remove foreignObject elements', () => {
       /**Test that foreignObject elements are removed from SVG*/
-      const malicious = '<svg><foreignObject><html><script>evil()</script></html></foreignObject><rect/></svg>';
+      const malicious =
+        '<svg><foreignObject><html><script>evil()</script></html></foreignObject><rect/></svg>';
       const sanitized = securityUtils.sanitizeSVGContent(malicious);
 
       assert.ok(!sanitized.includes('foreignObject'));
@@ -243,7 +229,8 @@ describe('Security Utils', () => {
 
     it('should preserve clean SVG content', () => {
       /**Test that clean SVG content is preserved*/
-      const clean = '<svg xmlns="http://www.w3.org/2000/svg"><rect id="r1" x="0" y="0" width="100" height="100" fill="red"/></svg>';
+      const clean =
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect id="r1" x="0" y="0" width="100" height="100" fill="red"/></svg>';
       const sanitized = securityUtils.sanitizeSVGContent(clean);
 
       assert.strictEqual(sanitized, clean);
@@ -286,10 +273,7 @@ describe('Security Utils', () => {
 
       fs.writeFileSync(testPath, '{ invalid json }');
 
-      assert.throws(
-        () => securityUtils.readJSONFileSafe(testPath),
-        /Invalid JSON file/
-      );
+      assert.throws(() => securityUtils.readJSONFileSafe(testPath), /Invalid JSON file/);
     });
 
     it('should reject prototype pollution attempts', () => {
@@ -301,10 +285,7 @@ describe('Security Utils', () => {
       const maliciousJSON = '{"__proto__": {"polluted": true}, "data": "value"}';
       fs.writeFileSync(testPath, maliciousJSON);
 
-      assert.throws(
-        () => securityUtils.readJSONFileSafe(testPath),
-        /prototype pollution detected/
-      );
+      assert.throws(() => securityUtils.readJSONFileSafe(testPath), /prototype pollution detected/);
     });
 
     it('should reject files exceeding size limit', () => {
@@ -318,10 +299,7 @@ describe('Security Utils', () => {
       });
       fs.writeFileSync(testPath, largeContent);
 
-      assert.throws(
-        () => securityUtils.readJSONFileSafe(testPath),
-        /JSON file too large/
-      );
+      assert.throws(() => securityUtils.readJSONFileSafe(testPath), /JSON file too large/);
     });
 
     it('should use custom validator if provided', () => {
@@ -368,9 +346,7 @@ describe('Security Utils', () => {
     it('should accept object with mappings property', () => {
       /**Test that {mappings: [...]} format is accepted*/
       const data = {
-        mappings: [
-          { from: 'oldId', to: 'newId' }
-        ]
+        mappings: [{ from: 'oldId', to: 'newId' }]
       };
 
       const result = securityUtils.validateRenameMapping(data);
@@ -393,10 +369,10 @@ describe('Security Utils', () => {
     it('should reject invalid ID formats', () => {
       /**Test that invalid ID formats are rejected*/
       const invalidMappings = [
-        [{ from: '123invalid', to: 'valid' }],  // Can't start with number
-        [{ from: 'valid', to: 'has spaces' }],  // No spaces allowed
-        [{ from: 'has;semicolon', to: 'valid' }],  // No semicolons
-        [{ from: 'valid', to: 'has|pipe' }]  // No pipes
+        [{ from: '123invalid', to: 'valid' }], // Can't start with number
+        [{ from: 'valid', to: 'has spaces' }], // No spaces allowed
+        [{ from: 'has;semicolon', to: 'valid' }], // No semicolons
+        [{ from: 'valid', to: 'has|pipe' }] // No pipes
       ];
 
       for (const mapping of invalidMappings) {
@@ -424,8 +400,8 @@ describe('Security Utils', () => {
       /**Test that empty or malformed entries are skipped*/
       const mixedMappings = [
         { from: 'valid1', to: 'new1' },
-        { from: '', to: 'new2' },  // Empty from - skip
-        { from: 'valid3' },  // Missing to - skip
+        { from: '', to: 'new2' }, // Empty from - skip
+        { from: 'valid3' }, // Missing to - skip
         { from: 'valid4', to: 'new4' }
       ];
 
@@ -437,10 +413,7 @@ describe('Security Utils', () => {
 
     it('should throw if no valid mappings found', () => {
       /**Test that error is thrown when all mappings are invalid*/
-      const invalidMappings = [
-        { from: '', to: '' },
-        { from: 'only-from' }
-      ];
+      const invalidMappings = [{ from: '', to: '' }, { from: 'only-from' }];
 
       assert.throws(
         () => securityUtils.validateRenameMapping(invalidMappings),
@@ -547,7 +520,7 @@ describe('Security Utils', () => {
       /**Test that existing directories don't cause errors*/
       assert.doesNotThrow(() => {
         securityUtils.ensureDirectoryExists(tempDir);
-        securityUtils.ensureDirectoryExists(tempDir);  // Second call
+        securityUtils.ensureDirectoryExists(tempDir); // Second call
       });
     });
   });
@@ -621,7 +594,7 @@ describe('Security Utils', () => {
       assert.ok(result.includes('\\$'));
       assert.ok(result.includes('\\`'));
       assert.ok(result.includes('\\"'));
-      assert.ok(result.includes('\\\''));
+      assert.ok(result.includes("\\'"));
       assert.ok(result.includes('\\!'));
       assert.ok(result.includes('\\\\'));
     });

@@ -19,16 +19,16 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { getVersion, printVersion } = require('./version.cjs');
+const { getVersion, printVersion: _printVersion } = require('./version.cjs');
 
 // Import security utilities
 const {
   validateFilePath,
   validateOutputPath,
   readSVGFileSafe,
-  readJSONFileSafe,
+  readJSONFileSafe: _readJSONFileSafe,
   sanitizeSVGContent,
-  ensureDirectoryExists,
+  ensureDirectoryExists: _ensureDirectoryExists,
   writeFileSafe,
   ValidationError,
   FileSystemError
@@ -67,9 +67,10 @@ const PUPPETEER_OPTIONS = {
 const argParser = createArgParser({
   name: 'sbb-getbbox',
   description: 'Compute visual bounding boxes for SVG files and elements',
-  usage: 'sbb-getbbox <svg-file> [object-ids...] [options]\n' +
-         '       sbb-getbbox --dir <directory> [options]\n' +
-         '       sbb-getbbox --list <txt-file> [options]',
+  usage:
+    'sbb-getbbox <svg-file> [object-ids...] [options]\n' +
+    '       sbb-getbbox --dir <directory> [options]\n' +
+    '       sbb-getbbox --list <txt-file> [options]',
   flags: [
     {
       name: 'ignore-vbox',
@@ -180,17 +181,24 @@ function repairSvgAttributes(svgMarkup, bbox) {
  * @returns {Promise<Object>} {isSprite: boolean, sprites: Array, grid: Object}
  */
 async function detectSpriteSheet(page) {
-  return await page.evaluate(() => {
+  const result = await page.evaluate(() => {
+    /* eslint-disable no-undef */
     const rootSvg = document.querySelector('svg');
     if (!rootSvg) {
       return { isSprite: false, sprites: [], grid: null };
     }
 
     // Get all potential sprite elements (excluding defs, style, script, etc.)
-    const children = Array.from(rootSvg.children).filter(el => {
+    const children = Array.from(rootSvg.children).filter((el) => {
       const tag = el.tagName.toLowerCase();
-      return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
-             tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
+      return (
+        tag !== 'defs' &&
+        tag !== 'style' &&
+        tag !== 'script' &&
+        tag !== 'title' &&
+        tag !== 'desc' &&
+        tag !== 'metadata'
+      );
     });
 
     if (children.length < 3) {
@@ -221,9 +229,9 @@ async function detectSpriteSheet(page) {
     }
 
     // Analyze sprite characteristics
-    const widths = sprites.map(s => s.width);
-    const heights = sprites.map(s => s.height);
-    const areas = sprites.map(s => s.width * s.height);
+    const widths = sprites.map((s) => s.width);
+    const heights = sprites.map((s) => s.height);
+    const areas = sprites.map((s) => s.width * s.height);
 
     const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
     const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
@@ -255,36 +263,38 @@ async function detectSpriteSheet(page) {
       /^\d+$/
     ];
 
-    const hasCommonPattern = sprites.filter(s =>
-      s.hasId && idPatterns.some(p => p.test(s.id))
-    ).length / sprites.length > 0.5;
+    const hasCommonPattern =
+      sprites.filter((s) => s.hasId && idPatterns.some((p) => p.test(s.id))).length /
+        sprites.length >
+      0.5;
 
     // Detect grid arrangement
-    const xPositions = [...new Set(sprites.map(s => Math.round(s.x)))].sort((a, b) => a - b);
-    const yPositions = [...new Set(sprites.map(s => Math.round(s.y)))].sort((a, b) => a - b);
+    const xPositions = [...new Set(sprites.map((s) => Math.round(s.x)))].sort((a, b) => a - b);
+    const yPositions = [...new Set(sprites.map((s) => Math.round(s.y)))].sort((a, b) => a - b);
 
     const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
 
     // Decision criteria for sprite sheet detection
-    const isSpriteSheet = (
+    const isSpriteSheet =
       // Uniform sizes (CV < 0.3 means sizes are quite similar)
       (widthCV < 0.3 && heightCV < 0.3) ||
-      (areaCV < 0.3) ||
+      areaCV < 0.3 ||
       // Common naming pattern
       hasCommonPattern ||
       // Grid arrangement
-      isGridArranged
-    );
+      isGridArranged;
 
     return {
       isSprite: isSpriteSheet,
-      sprites: sprites.map(s => ({ id: s.id, tag: s.tag })),
-      grid: isGridArranged ? {
-        rows: yPositions.length,
-        cols: xPositions.length,
-        xPositions,
-        yPositions
-      } : null,
+      sprites: sprites.map((s) => ({ id: s.id, tag: s.tag })),
+      grid: isGridArranged
+        ? {
+            rows: yPositions.length,
+            cols: xPositions.length,
+            xPositions,
+            yPositions
+          }
+        : null,
       stats: {
         count: sprites.length,
         avgSize: { width: avgWidth, height: avgHeight },
@@ -297,7 +307,9 @@ async function detectSpriteSheet(page) {
         isGridArranged
       }
     };
+    /* eslint-enable no-undef */
   });
+  return result;
 }
 
 // ============================================================================
@@ -370,9 +382,11 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
 
     // Wait for fonts to load (with timeout)
     await page.evaluate(async (timeout) => {
+      /* eslint-disable no-undef */
       if (window.SvgVisualBBox && window.SvgVisualBBox.waitForDocumentFonts) {
         await window.SvgVisualBBox.waitForDocumentFonts(document, timeout);
       }
+      /* eslint-enable no-undef */
     }, FONT_TIMEOUT_MS);
 
     // Detect sprite sheet if in sprite mode
@@ -382,11 +396,13 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
 
       if (spriteInfo.isSprite) {
         // Automatically use all detected sprites as object IDs
-        objectIds = spriteInfo.sprites.map(s => s.id).filter(id => id && !id.startsWith('auto_'));
+        objectIds = spriteInfo.sprites
+          .map((s) => s.id)
+          .filter((id) => id && !id.startsWith('auto_'));
 
         // If no named sprites, use auto-generated IDs
         if (objectIds.length === 0) {
-          objectIds = spriteInfo.sprites.map(s => s.id);
+          objectIds = spriteInfo.sprites.map((s) => s.id);
         }
 
         printInfo('Sprite sheet detected!');
@@ -394,7 +410,9 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
         if (spriteInfo.grid) {
           printInfo(`  Grid: ${spriteInfo.grid.rows} rows × ${spriteInfo.grid.cols} cols`);
         }
-        printInfo(`  Avg size: ${spriteInfo.stats.avgSize.width.toFixed(1)} × ${spriteInfo.stats.avgSize.height.toFixed(1)}`);
+        printInfo(
+          `  Avg size: ${spriteInfo.stats.avgSize.width.toFixed(1)} × ${spriteInfo.stats.avgSize.height.toFixed(1)}`
+        );
         printInfo(`  Computing bbox for ${objectIds.length} sprites...\n`);
       }
     }
@@ -402,53 +420,71 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
     const mode = ignoreViewBox ? 'unclipped' : 'clipped';
 
     // Compute bboxes
-    const results = await page.evaluate(async (objectIds, mode) => {
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) {
-        throw new Error('SvgVisualBBox library not loaded');
-      }
-
-      const rootSvg = document.querySelector('svg');
-      if (!rootSvg) {
-        throw new Error('No <svg> element found');
-      }
-
-      const output = {};
-      const options = { mode, coarseFactor: 3, fineFactor: 24, useLayoutScale: true };
-
-      // If no object IDs specified, compute whole content bbox
-      if (objectIds.length === 0) {
-        const children = Array.from(rootSvg.children).filter(el => {
-          const tag = el.tagName.toLowerCase();
-          return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
-                 tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
-        });
-
-        if (children.length === 0) {
-          output['WHOLE CONTENT'] = { error: 'No renderable content found' };
-        } else if (children.length === 1) {
-          const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(children[0], options);
-          output['WHOLE CONTENT'] = bbox || { error: 'No visible pixels' };
-        } else {
-          const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox(children, options);
-          output['WHOLE CONTENT'] = union || { error: 'No visible pixels' };
+    const results = await page.evaluate(
+      async (objectIds, mode) => {
+        /* eslint-disable no-undef */
+        const SvgVisualBBox = window.SvgVisualBBox;
+        if (!SvgVisualBBox) {
+          throw new Error('SvgVisualBBox library not loaded');
         }
-      } else {
-        // Compute bbox for each object ID
-        for (const id of objectIds) {
-          const element = rootSvg.ownerDocument.getElementById(id);
-          if (!element) {
-            output[id] = { error: 'Element not found' };
-            continue;
+
+        const rootSvg = document.querySelector('svg');
+        if (!rootSvg) {
+          throw new Error('No <svg> element found');
+        }
+
+        const output = {};
+        const options = { mode, coarseFactor: 3, fineFactor: 24, useLayoutScale: true };
+
+        // If no object IDs specified, compute whole content bbox
+        if (objectIds.length === 0) {
+          const children = Array.from(rootSvg.children).filter((el) => {
+            const tag = el.tagName.toLowerCase();
+            return (
+              tag !== 'defs' &&
+              tag !== 'style' &&
+              tag !== 'script' &&
+              tag !== 'title' &&
+              tag !== 'desc' &&
+              tag !== 'metadata'
+            );
+          });
+
+          if (children.length === 0) {
+            output['WHOLE CONTENT'] = { error: 'No renderable content found' };
+          } else if (children.length === 1) {
+            const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+              children[0],
+              options
+            );
+            output['WHOLE CONTENT'] = bbox || { error: 'No visible pixels' };
+          } else {
+            const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox(children, options);
+            output['WHOLE CONTENT'] = union || { error: 'No visible pixels' };
           }
+        } else {
+          // Compute bbox for each object ID
+          for (const id of objectIds) {
+            const element = rootSvg.ownerDocument.getElementById(id);
+            if (!element) {
+              output[id] = { error: 'Element not found' };
+              continue;
+            }
 
-          const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(element, options);
-          output[id] = bbox || { error: 'No visible pixels' };
+            const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+              element,
+              options
+            );
+            output[id] = bbox || { error: 'No visible pixels' };
+          }
         }
-      }
 
-      return output;
-    }, objectIds, mode);
+        /* eslint-enable no-undef */
+        return output;
+      },
+      objectIds,
+      mode
+    );
 
     const result = {
       filename: path.basename(safePath),
@@ -461,13 +497,12 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
     }
 
     return result;
-
   } finally {
     // SECURITY: Ensure browser is always closed
     if (browser) {
       try {
         await browser.close();
-      } catch (closeErr) {
+      } catch {
         // Force kill if close fails
         if (browser.process()) {
           browser.process().kill('SIGKILL');
@@ -502,13 +537,13 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
   }
 
   const files = fs.readdirSync(safeDir);
-  const svgFiles = files.filter(f => f.endsWith('.svg'));
+  const svgFiles = files.filter((f) => f.endsWith('.svg'));
 
   let filtered = svgFiles;
   if (filterRegex) {
     try {
       const regex = new RegExp(filterRegex);
-      filtered = svgFiles.filter(f => regex.test(f));
+      filtered = svgFiles.filter((f) => regex.test(f));
     } catch (err) {
       throw new ValidationError(`Invalid regex pattern: ${err.message}`, { pattern: filterRegex });
     }

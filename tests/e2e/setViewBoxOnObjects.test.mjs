@@ -1,3 +1,4 @@
+/* eslint-env node, browser */
 /**
  * setViewBoxOnObjects() E2E Tests
  *
@@ -76,7 +77,7 @@ const baseScenarios = [
       // Position should change significantly (element placed far from center)
       const positionChange = Math.sqrt(
         Math.pow(result.actualViewBox.x - result.oldViewBox.x, 2) +
-        Math.pow(result.actualViewBox.y - result.oldViewBox.y, 2)
+          Math.pow(result.actualViewBox.y - result.oldViewBox.y, 2)
       );
       expect(positionChange).toBeGreaterThan(TEST_CONFIG.MIN_POSITION_CHANGE);
     }
@@ -136,7 +137,7 @@ const baseScenarios = [
       const hiddenCount = await page.evaluate(() => {
         const allElements = document.querySelectorAll('[id]');
         let hidden = 0;
-        allElements.forEach(el => {
+        allElements.forEach((el) => {
           const style = window.getComputedStyle(el);
           if (style.display === 'none') hidden++;
         });
@@ -232,9 +233,12 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
           const options = scenario.options || {};
 
           // Execute test in browser context
-          const result = await page.evaluate(({ svg, elem, opts }) => {
-            return window.testViewBox(svg, elem, opts);
-          }, { svg: svgId, elem: targetId, opts: options });
+          const result = await page.evaluate(
+            ({ svg, elem, opts }) => {
+              return window.testViewBox(svg, elem, opts);
+            },
+            { svg: svgId, elem: targetId, opts: options }
+          );
 
           // Run scenario-specific validation
           // Check function arity to determine if validation needs page access

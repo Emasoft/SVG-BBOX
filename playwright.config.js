@@ -15,10 +15,7 @@ export default {
   workers: process.env.CI ? 1 : undefined,
 
   // Reporter to use
-  reporter: [
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['list']
-  ],
+  reporter: [['html', { outputFolder: 'playwright-report', open: 'never' }], ['list']],
 
   // Shared settings for all projects
   use: {

@@ -37,7 +37,6 @@ import { JSDOM } from 'jsdom';
 const execFilePromise = promisify(execFile);
 
 describe('HTML Preview Structure Validation', () => {
-
   test('export-svg-objects generates HTML with parent transform wrappers', async () => {
     // Generate HTML from sample SVG
     const { stdout: _stdout } = await execFilePromise('node', [
@@ -61,7 +60,7 @@ describe('HTML Preview Structure Validation', () => {
     expect(previewsWithWrappers.length).toBeGreaterThan(0);
 
     // Verify structure: <g transform="..."><use href="#id" /></g>
-    previewsWithWrappers.forEach(use => {
+    previewsWithWrappers.forEach((use) => {
       const wrapper = use.parentElement;
       expect(wrapper.tagName).toBe('g');
       expect(wrapper.hasAttribute('transform')).toBe(true);
@@ -100,12 +99,12 @@ describe('HTML Preview Structure Validation', () => {
     // Find preview SVGs (not in hidden container)
     // IMPORTANT: Hidden container uses CSS class, not inline style!
     const previewSvgs = Array.from(doc.querySelectorAll('svg')).filter(
-      svg => !svg.closest('.hidden-svg-container')
+      (svg) => !svg.closest('.hidden-svg-container')
     );
 
     expect(previewSvgs.length).toBeGreaterThan(0);
 
-    previewSvgs.forEach(svg => {
+    previewSvgs.forEach((svg) => {
       // Must have viewBox
       expect(svg.hasAttribute('viewBox')).toBe(true);
 
@@ -114,11 +113,11 @@ describe('HTML Preview Structure Validation', () => {
       expect(values).toHaveLength(4);
 
       // Check precision: should have decimal places (not rounded to integers)
-      const hasDecimalPrecision = values.some(v => v.includes('.'));
+      const hasDecimalPrecision = values.some((v) => v.includes('.'));
       if (hasDecimalPrecision) {
         // If any value has decimals, verify they're preserved (not rounded to 2 decimals)
-        const decimalValues = values.filter(v => v.includes('.'));
-        const hasPrecision = decimalValues.some(v => {
+        const decimalValues = values.filter((v) => v.includes('.'));
+        const hasPrecision = decimalValues.some((v) => {
           const decimals = v.split('.')[1];
           return decimals && decimals.length > 2;
         });
@@ -178,11 +177,11 @@ describe('HTML Preview Structure Validation', () => {
     // Find all preview <use> elements (not in hidden container)
     // IMPORTANT: Hidden container uses CSS class, not inline style!
     const allUses = Array.from(doc.querySelectorAll('svg use')).filter(
-      use => !use.closest('.hidden-svg-container')
+      (use) => !use.closest('.hidden-svg-container')
     );
 
     // Some should NOT have a wrapper <g> (elements without parent transforms)
-    const usesWithoutWrapper = allUses.filter(use => {
+    const usesWithoutWrapper = allUses.filter((use) => {
       const parent = use.parentElement;
       return parent.tagName !== 'g' || !parent.hasAttribute('transform');
     });
@@ -199,12 +198,12 @@ describe('HTML Preview Structure Validation', () => {
 
     // Find all preview SVGs (not in hidden container)
     const previewSvgs = Array.from(doc.querySelectorAll('svg')).filter(
-      svg => !svg.closest('.hidden-svg-container')
+      (svg) => !svg.closest('.hidden-svg-container')
     );
 
     expect(previewSvgs.length).toBeGreaterThan(0);
 
-    previewSvgs.forEach(svg => {
+    previewSvgs.forEach((svg) => {
       // SVG must have width="100%" height="100%"
       expect(svg.getAttribute('width')).toBe('100%');
       expect(svg.getAttribute('height')).toBe('100%');
@@ -247,7 +246,7 @@ describe('HTML Preview Structure Validation', () => {
 
     // Find first preview cell
     const previewSvg = Array.from(doc.querySelectorAll('svg')).find(
-      svg => !svg.closest('.hidden-svg-container')
+      (svg) => !svg.closest('.hidden-svg-container')
     );
 
     expect(previewSvg).toBeTruthy();

@@ -293,7 +293,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         try {
           const bbox = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(svg);
           return bbox;
-        } catch (_e) {
+        } catch {
           // Expected: SVG root can't be cloned/queried by temporary ID
           return null;
         }
@@ -330,7 +330,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         try {
           const bbox = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(svg);
           return bbox;
-        } catch (_e) {
+        } catch {
           // May throw error when trying to find SVG root in clone
           return null;
         }

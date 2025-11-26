@@ -203,9 +203,8 @@ export async function getRootSvgInfo(page) {
     }
 
     const vb = svg.viewBox && svg.viewBox.baseVal;
-    const viewBox = vb && vb.width && vb.height
-      ? { x: vb.x, y: vb.y, width: vb.width, height: vb.height }
-      : null;
+    const viewBox =
+      vb && vb.width && vb.height ? { x: vb.x, y: vb.y, width: vb.width, height: vb.height } : null;
 
     return {
       viewBox,

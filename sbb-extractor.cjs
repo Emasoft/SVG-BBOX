@@ -154,11 +154,15 @@ const path = require('path');
 const puppeteer = require('puppeteer');
 const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion, printVersion: _printVersion, hasVersionFlag: _hasVersionFlag } = require('./version.cjs');
+const {
+  getVersion,
+  printVersion: _printVersion,
+  hasVersionFlag: _hasVersionFlag
+} = require('./version.cjs');
 
 // SECURITY: Constants for timeouts and limits
-const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
-const _FONT_TIMEOUT_MS = 8000;     // 8 seconds
+const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
+const _FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 // SECURITY: Import security utilities
 const {
@@ -360,7 +364,7 @@ function parseArgs(argv) {
   const positional = [];
   const options = {
     input: null,
-    mode: null,           // 'list', 'extract', 'exportAll', 'rename'
+    mode: null, // 'list', 'extract', 'exportAll', 'rename'
     extractId: null,
     outSvg: null,
     outDir: null,
@@ -373,7 +377,7 @@ function parseArgs(argv) {
     outHtml: null,
     renameJson: null,
     renameOut: null,
-    autoOpen: false       // automatically open HTML in browser
+    autoOpen: false // automatically open HTML in browser
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -591,11 +595,11 @@ ${sanitizedSvg}
           rootSvg.setAttribute('height', String(vb.height || 1000));
         } else if (!hasW && hasH) {
           const h = parseFloat(rootSvg.getAttribute('height'));
-          const w = (isFinite(h) && h > 0 && aspect > 0) ? h * aspect : (vb.width || 1000);
+          const w = isFinite(h) && h > 0 && aspect > 0 ? h * aspect : vb.width || 1000;
           rootSvg.setAttribute('width', String(w));
         } else if (hasW && !hasH) {
           const w = parseFloat(rootSvg.getAttribute('width'));
-          const h = (isFinite(w) && w > 0 && aspect > 0) ? w / aspect : (vb.height || 1000);
+          const h = isFinite(w) && w > 0 && aspect > 0 ? w / aspect : vb.height || 1000;
           rootSvg.setAttribute('height', String(h));
         }
       }
@@ -619,7 +623,14 @@ ${sanitizedSvg}
 
 // -------- LIST mode: data + HTML with filters & rename UI --------
 
-async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath, jsonMode, autoOpen) {
+async function listAndAssignIds(
+  inputPath,
+  assignIds,
+  outFixedPath,
+  outHtmlPath,
+  jsonMode,
+  autoOpen
+) {
   const result = await withPageForSvg(inputPath, async (page) => {
     const evalResult = await page.evaluate(async (assignIds) => {
       /* eslint-disable no-undef */
@@ -637,10 +648,16 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
 
       // Sprite sheet detection function (runs in browser context)
       function detectSpriteSheet(rootSvg) {
-        const children = Array.from(rootSvg.children).filter(el => {
+        const children = Array.from(rootSvg.children).filter((el) => {
           const tag = el.tagName.toLowerCase();
-          return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
-               tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
+          return (
+            tag !== 'defs' &&
+            tag !== 'style' &&
+            tag !== 'script' &&
+            tag !== 'title' &&
+            tag !== 'desc' &&
+            tag !== 'metadata'
+          );
         });
 
         if (children.length < 3) {
@@ -669,9 +686,9 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
           return { isSprite: false, sprites: [], grid: null, stats: null };
         }
 
-        const widths = sprites.map(s => s.width);
-        const heights = sprites.map(s => s.height);
-        const areas = sprites.map(s => s.width * s.height);
+        const widths = sprites.map((s) => s.width);
+        const heights = sprites.map((s) => s.height);
+        const areas = sprites.map((s) => s.width * s.height);
 
         const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
         const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
@@ -700,29 +717,28 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
           /^\d+$/
         ];
 
-        const hasCommonPattern = sprites.filter(s =>
-          s.hasId && idPatterns.some(p => p.test(s.id))
-        ).length / sprites.length > 0.5;
+        const hasCommonPattern =
+          sprites.filter((s) => s.hasId && idPatterns.some((p) => p.test(s.id))).length /
+            sprites.length >
+          0.5;
 
-        const xPositions = [...new Set(sprites.map(s => Math.round(s.x)))].sort((a, b) => a - b);
-        const yPositions = [...new Set(sprites.map(s => Math.round(s.y)))].sort((a, b) => a - b);
+        const xPositions = [...new Set(sprites.map((s) => Math.round(s.x)))].sort((a, b) => a - b);
+        const yPositions = [...new Set(sprites.map((s) => Math.round(s.y)))].sort((a, b) => a - b);
 
         const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
 
-        const isSpriteSheet = (
-          (widthCV < 0.3 && heightCV < 0.3) ||
-        (areaCV < 0.3) ||
-        hasCommonPattern ||
-        isGridArranged
-        );
+        const isSpriteSheet =
+          (widthCV < 0.3 && heightCV < 0.3) || areaCV < 0.3 || hasCommonPattern || isGridArranged;
 
         return {
           isSprite: isSpriteSheet,
-          sprites: sprites.map(s => ({ id: s.id, tag: s.tag })),
-          grid: isGridArranged ? {
-            rows: yPositions.length,
-            cols: xPositions.length
-          } : null,
+          sprites: sprites.map((s) => ({ id: s.id, tag: s.tag })),
+          grid: isGridArranged
+            ? {
+                rows: yPositions.length,
+                cols: xPositions.length
+              }
+            : null,
           stats: {
             count: sprites.length,
             avgSize: { width: avgWidth, height: avgHeight },
@@ -741,8 +757,17 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       const spriteInfo = detectSpriteSheet(rootSvg);
 
       const selector = [
-        'g', 'path', 'rect', 'circle', 'ellipse',
-        'polygon', 'polyline', 'text', 'image', 'use', 'symbol'
+        'g',
+        'path',
+        'rect',
+        'circle',
+        'ellipse',
+        'polygon',
+        'polyline',
+        'text',
+        'image',
+        'use',
+        'symbol'
       ].join(',');
 
       const els = Array.from(rootSvg.querySelectorAll(selector));
@@ -752,7 +777,7 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
         let id = base;
         let counter = 1;
         while (seenIds.has(id) || document.getElementById(id)) {
-          id = base + '_' + (counter++);
+          id = base + '_' + counter++;
         }
         seenIds.add(id);
         return id;
@@ -797,12 +822,12 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
             coarseFactor: 3,
             fineFactor: 24,
             useLayoutScale: true,
-            fontTimeoutMs: 15000  // Longer timeout for font loading
+            fontTimeoutMs: 15000 // Longer timeout for font loading
           });
           if (b) {
             bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
           } else {
-          // Check if it's a text element - likely font issue
+            // Check if it's a text element - likely font issue
             const tagLower = el.tagName && el.tagName.toLowerCase();
             if (tagLower === 'text') {
               bboxError = 'No visible pixels (likely missing fonts)';
@@ -1031,7 +1056,7 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       //   → Tests exact production bug with all three broken elements
       //   → User confirmation: "yes, it worked!"
       const parentTransforms = {};
-      info.forEach(obj => {
+      info.forEach((obj) => {
         const el = rootSvg.getElementById(obj.id);
         if (!el) {
           return;
@@ -1043,7 +1068,7 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
         while (node && node !== rootSvg) {
           const transform = node.getAttribute('transform');
           if (transform) {
-            transforms.unshift(transform);  // Prepend to maintain parent→child order
+            transforms.unshift(transform); // Prepend to maintain parent→child order
           }
           node = node.parentNode;
         }
@@ -1083,9 +1108,9 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
 
   // Count bbox failures
   const totalObjects = result.info.length;
-  const failedObjects = result.info.filter(obj => obj.bboxError).length;
-  const zeroSizeObjects = result.info.filter(obj =>
-    obj.bbox && (obj.bbox.width === 0 || obj.bbox.height === 0)
+  const failedObjects = result.info.filter((obj) => obj.bboxError).length;
+  const zeroSizeObjects = result.info.filter(
+    (obj) => obj.bbox && (obj.bbox.width === 0 || obj.bbox.height === 0)
   ).length;
 
   if (jsonMode) {
@@ -1097,7 +1122,7 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       bboxFailures: failedObjects,
       zeroSizeObjects,
       fixedSvgWritten: !!(assignIds && result.fixedSvgString && outFixedPath),
-      fixedSvgPath: (assignIds && outFixedPath) ? path.resolve(outFixedPath) : null,
+      fixedSvgPath: assignIds && outFixedPath ? path.resolve(outFixedPath) : null,
       htmlWritten: !!outHtmlPath,
       htmlPath: outHtmlPath ? path.resolve(outHtmlPath) : null,
       spriteInfo: result.spriteInfo
@@ -1121,20 +1146,30 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       console.log('🎨 Sprite sheet detected!');
       console.log(`   Sprites: ${result.spriteInfo.stats.count}`);
       if (result.spriteInfo.grid) {
-        console.log(`   Grid: ${result.spriteInfo.grid.rows} rows × ${result.spriteInfo.grid.cols} cols`);
+        console.log(
+          `   Grid: ${result.spriteInfo.grid.rows} rows × ${result.spriteInfo.grid.cols} cols`
+        );
       }
-      console.log(`   Avg size: ${result.spriteInfo.stats.avgSize.width.toFixed(1)} × ${result.spriteInfo.stats.avgSize.height.toFixed(1)}`);
-      console.log(`   Uniformity: width CV=${result.spriteInfo.stats.uniformity.widthCV}, height CV=${result.spriteInfo.stats.uniformity.heightCV}`);
+      console.log(
+        `   Avg size: ${result.spriteInfo.stats.avgSize.width.toFixed(1)} × ${result.spriteInfo.stats.avgSize.height.toFixed(1)}`
+      );
+      console.log(
+        `   Uniformity: width CV=${result.spriteInfo.stats.uniformity.widthCV}, height CV=${result.spriteInfo.stats.uniformity.heightCV}`
+      );
       console.log('   💡 Tip: Use --export-all to extract each sprite as a separate SVG file');
     }
 
     console.log('');
     console.log(`Objects found: ${totalObjects}`);
     if (failedObjects > 0) {
-      console.log(`⚠️  BBox measurement FAILED for ${failedObjects} object(s) - marked with ❌ in HTML`);
+      console.log(
+        `⚠️  BBox measurement FAILED for ${failedObjects} object(s) - marked with ❌ in HTML`
+      );
     }
     if (zeroSizeObjects > 0) {
-      console.log(`⚠️  ${zeroSizeObjects} object(s) have zero width/height - marked with ⚠️ in HTML`);
+      console.log(
+        `⚠️  ${zeroSizeObjects} object(s) have zero width/height - marked with ⚠️ in HTML`
+      );
     }
 
     // Auto-open HTML in Chrome/Chromium if requested
@@ -1142,17 +1177,19 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     if (autoOpen) {
       const absolutePath = path.resolve(outHtmlPath);
 
-      openInChrome(absolutePath).then(result => {
-        if (result.success) {
-          console.log(`\n✓ Opened in Chrome: ${absolutePath}`);
-        } else {
-          console.log(`\n⚠️  ${result.error}`);
+      openInChrome(absolutePath)
+        .then((result) => {
+          if (result.success) {
+            console.log(`\n✓ Opened in Chrome: ${absolutePath}`);
+          } else {
+            console.log(`\n⚠️  ${result.error}`);
+            console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
+          }
+        })
+        .catch((err) => {
+          console.log(`\n⚠️  Failed to auto-open: ${err.message}`);
           console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
-        }
-      }).catch(err => {
-        console.log(`\n⚠️  Failed to auto-open: ${err.message}`);
-        console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
-      });
+        });
     }
   }
 }
@@ -1209,9 +1246,9 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
         // Apply parent transforms if they exist (critical for elements with local transforms)
         const parentTransform = parentTransforms[id] || '';
         const useElement = id
-          ? (parentTransform
+          ? parentTransform
             ? `<g transform="${parentTransform}"><use href="#${id}" /></g>`
-            : `<use href="#${id}" />`)
+            : `<use href="#${id}" />`
           : '';
 
         // ════════════════════════════════════════════════════════════════════════════════
@@ -1278,7 +1315,8 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
         data-h="${h}"`;
     }
 
-    rows.push(`
+    rows.push(
+      `
       <tr
         data-row-index="${rowIndex}"
         data-id="${id.replace(/"/g, '&quot;')}"
@@ -1303,7 +1341,8 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
             <span class="error-message" style="font-size:0.75rem; color:#b00020;"></span>
           </label>
         </td>
-      </tr>`.trim());
+      </tr>`.trim()
+    );
   });
 
   return `<!DOCTYPE html>
@@ -1769,102 +1808,119 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
 
 // -------- EXTRACT mode --------
 
-async function extractSingleObject(inputPath, elementId, outSvgPath, margin, includeContext, jsonMode) {
-  const result = await withPageForSvg(inputPath, async (page) => await page.evaluate(async (elementId, marginUser, includeContext) => {
-    const SvgVisualBBox = window.SvgVisualBBox;
-    if (!SvgVisualBBox) {
-      throw new Error('SvgVisualBBox not found.');
-    }
+async function extractSingleObject(
+  inputPath,
+  elementId,
+  outSvgPath,
+  margin,
+  includeContext,
+  jsonMode
+) {
+  const result = await withPageForSvg(inputPath, async (page) => {
+    const evalResult = await page.evaluate(
+      async (elementId, marginUser, includeContext) => {
+        /* eslint-disable no-undef */
+        const SvgVisualBBox = window.SvgVisualBBox;
+        if (!SvgVisualBBox) {
+          throw new Error('SvgVisualBBox not found.');
+        }
 
-    const rootSvg = document.querySelector('svg');
-    if (!rootSvg) {
-      throw new Error('No <svg> found');
-    }
+        const rootSvg = document.querySelector('svg');
+        if (!rootSvg) {
+          throw new Error('No <svg> found');
+        }
 
-    const el = rootSvg.ownerDocument.getElementById(elementId);
-    if (!el) {
-      throw new Error('No element found with id="' + elementId + '"');
-    }
+        const el = rootSvg.ownerDocument.getElementById(elementId);
+        if (!el) {
+          throw new Error('No element found with id="' + elementId + '"');
+        }
 
-    const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-      mode: 'unclipped',
-      coarseFactor: 3,
-      fineFactor: 24,
-      useLayoutScale: true
-    });
-    if (!bboxData) {
-      throw new Error('Element id="' + elementId + '" has no visible pixels.');
-    }
+        const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+          mode: 'unclipped',
+          coarseFactor: 3,
+          fineFactor: 24,
+          useLayoutScale: true
+        });
+        if (!bboxData) {
+          throw new Error('Element id="' + elementId + '" has no visible pixels.');
+        }
 
-    let x = bboxData.x;
-    let y = bboxData.y;
-    let w = bboxData.width;
-    let h = bboxData.height;
-    if (marginUser > 0) {
-      x -= marginUser;
-      y -= marginUser;
-      w += 2 * marginUser;
-      h += 2 * marginUser;
-    }
-    if (w <= 0 || h <= 0) {
-      throw new Error('Degenerate bbox after margin.');
-    }
+        let x = bboxData.x;
+        let y = bboxData.y;
+        let w = bboxData.width;
+        let h = bboxData.height;
+        if (marginUser > 0) {
+          x -= marginUser;
+          y -= marginUser;
+          w += 2 * marginUser;
+          h += 2 * marginUser;
+        }
+        if (w <= 0 || h <= 0) {
+          throw new Error('Degenerate bbox after margin.');
+        }
 
-    const clonedRoot = rootSvg.cloneNode(false);
-    if (!clonedRoot.getAttribute('xmlns')) {
-      clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    }
-    const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
-    if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
-      clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
-    }
+        const clonedRoot = rootSvg.cloneNode(false);
+        if (!clonedRoot.getAttribute('xmlns')) {
+          clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        }
+        const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
+        if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
+          clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
+        }
 
-    clonedRoot.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-    clonedRoot.setAttribute('width', String(w));
-    clonedRoot.setAttribute('height', String(h));
+        clonedRoot.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+        clonedRoot.setAttribute('width', String(w));
+        clonedRoot.setAttribute('height', String(h));
 
-    const defsList = Array.from(rootSvg.querySelectorAll('defs'));
-    for (const defs of defsList) {
-      clonedRoot.appendChild(defs.cloneNode(true));
-    }
+        const defsList = Array.from(rootSvg.querySelectorAll('defs'));
+        for (const defs of defsList) {
+          clonedRoot.appendChild(defs.cloneNode(true));
+        }
 
-    if (!includeContext) {
-      const ancestors = [];
-      let node = el;
-      while (node && node !== rootSvg) {
-        ancestors.unshift(node);
-        node = node.parentNode;
-      }
-      let currentParent = clonedRoot;
-      for (const original of ancestors) {
-        const clone = original.cloneNode(false);
-        if (original === el) {
-          const fullSubtree = original.cloneNode(true);
-          currentParent.appendChild(fullSubtree);
+        if (!includeContext) {
+          const ancestors = [];
+          let node = el;
+          while (node && node !== rootSvg) {
+            ancestors.unshift(node);
+            node = node.parentNode;
+          }
+          let currentParent = clonedRoot;
+          for (const original of ancestors) {
+            const clone = original.cloneNode(false);
+            if (original === el) {
+              const fullSubtree = original.cloneNode(true);
+              currentParent.appendChild(fullSubtree);
+            } else {
+              const nextParent = clone;
+              currentParent.appendChild(nextParent);
+              currentParent = nextParent;
+            }
+          }
         } else {
-          const nextParent = clone;
-          currentParent.appendChild(nextParent);
-          currentParent = nextParent;
+          const children = Array.from(rootSvg.childNodes);
+          for (const child of children) {
+            if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'defs') {
+              continue;
+            }
+            clonedRoot.appendChild(child.cloneNode(true));
+          }
         }
-      }
-    } else {
-      const children = Array.from(rootSvg.childNodes);
-      for (const child of children) {
-        if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'defs') {
-          continue;
-        }
-        clonedRoot.appendChild(child.cloneNode(true));
-      }
-    }
 
-    const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(clonedRoot);
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(clonedRoot);
 
-    return {
-      bbox: { x, y, width: w, height: h },
-      svgString
-    };
-  }, elementId, margin, includeContext));
+        return {
+          bbox: { x, y, width: w, height: h },
+          svgString
+        };
+        /* eslint-enable no-undef */
+      },
+      elementId,
+      margin,
+      includeContext
+    );
+    return evalResult;
+  });
 
   // SECURITY: Validate and write extracted SVG file safely
   const safeOutputPath = validateOutputPath(outSvgPath, {
@@ -1873,15 +1929,21 @@ async function extractSingleObject(inputPath, elementId, outSvgPath, margin, inc
   writeFileSafe(safeOutputPath, result.svgString, 'utf-8');
 
   if (jsonMode) {
-    console.log(JSON.stringify({
-      mode: 'extract',
-      input: path.resolve(inputPath),
-      elementId,
-      output: path.resolve(outSvgPath),
-      margin,
-      includeContext,
-      bbox: result.bbox
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          mode: 'extract',
+          input: path.resolve(inputPath),
+          elementId,
+          output: path.resolve(outSvgPath),
+          margin,
+          includeContext,
+          bbox: result.bbox
+        },
+        null,
+        2
+      )
+    );
   } else {
     console.log(`✓ Extracted "${elementId}" to: ${outSvgPath}`);
     console.log('  bbox:', result.bbox);
@@ -1897,168 +1959,189 @@ async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMod
     fs.mkdirSync(outDir, { recursive: true });
   }
 
-  const exports = await withPageForSvg(inputPath, async (page) => await page.evaluate(async (marginUser, exportGroups) => {
-    const SvgVisualBBox = window.SvgVisualBBox;
-    if (!SvgVisualBBox) {
-      throw new Error('SvgVisualBBox not found.');
-    }
-
-    const rootSvg = document.querySelector('svg');
-    if (!rootSvg) {
-      throw new Error('No <svg> found');
-    }
-
-    const serializer = new XMLSerializer();
-
-    const baseTags = [
-      'path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline',
-      'text', 'image', 'use', 'symbol'
-    ];
-    const groupTag = 'g';
-
-    const selector = exportGroups
-      ? baseTags.concat(groupTag).join(',')
-      : baseTags.join(',');
-
-    const allCandidates = Array.from(rootSvg.querySelectorAll(selector));
-
-    const usedIds = new Set();
-    for (const el of allCandidates) {
-      if (el.id) {
-        usedIds.add(el.id);
-      }
-    }
-    function ensureId(el) {
-      if (el.id) {
-        return el.id;
-      }
-      const base = 'auto_id_' + el.tagName.toLowerCase();
-      let id = base;
-      let i = 1;
-      while (usedIds.has(id) || document.getElementById(id)) {
-        id = base + '_' + (i++);
-      }
-      el.setAttribute('id', id);
-      usedIds.add(id);
-      return id;
-    }
-
-    const defsList = Array.from(rootSvg.querySelectorAll('defs'));
-
-    function makeRootSvgWithBBox(bbox) {
-      const clonedRoot = rootSvg.cloneNode(false);
-      if (!clonedRoot.getAttribute('xmlns')) {
-        clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      }
-      const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
-      if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
-        clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
-      }
-      let { x, y, width, height } = bbox;
-      if (marginUser > 0) {
-        x -= marginUser;
-        y -= marginUser;
-        width += 2 * marginUser;
-        height += 2 * marginUser;
-      }
-      if (width <= 0 || height <= 0) {
-        return null;
-      }
-      clonedRoot.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
-      clonedRoot.setAttribute('width', String(width));
-      clonedRoot.setAttribute('height', String(height));
-      for (const defs of defsList) {
-        clonedRoot.appendChild(defs.cloneNode(true));
-      }
-      return clonedRoot;
-    }
-
-    function tagEquals(el, tagName) {
-      return el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase();
-    }
-
-    const exports = [];
-
-    async function exportElement(el, prefix) {
-      const id = ensureId(el);
-      const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-        mode: 'unclipped',
-        coarseFactor: 3,
-        fineFactor: 24,
-        useLayoutScale: true
-      });
-      if (!bboxData) {
-        return;
-      }
-
-      const rootForExport = makeRootSvgWithBBox(bboxData);
-      if (!rootForExport) {
-        return;
-      }
-
-      const ancestors = [];
-      let node = el;
-      while (node && node !== rootSvg) {
-        ancestors.unshift(node);
-        node = node.parentNode;
-      }
-
-      let currentParent = rootForExport;
-      for (const original of ancestors) {
-        const shallowClone = original.cloneNode(false);
-        if (original === el) {
-          const subtree = original.cloneNode(true);
-          currentParent.appendChild(subtree);
-        } else {
-          const nextParent = shallowClone;
-          currentParent.appendChild(nextParent);
-          currentParent = nextParent;
+  const exports = await withPageForSvg(inputPath, async (page) => {
+    const evalResult = await page.evaluate(
+      async (marginUser, exportGroups) => {
+        /* eslint-disable no-undef */
+        const SvgVisualBBox = window.SvgVisualBBox;
+        if (!SvgVisualBBox) {
+          throw new Error('SvgVisualBBox not found.');
         }
-      }
 
-      const svgString = serializer.serializeToString(rootForExport);
-      const fileName = (prefix ? prefix + '_' : '') + id + '.svg';
+        const rootSvg = document.querySelector('svg');
+        if (!rootSvg) {
+          throw new Error('No <svg> found');
+        }
 
-      exports.push({
-        id,
-        fileName,
-        bbox: {
-          x: bboxData.x,
-          y: bboxData.y,
-          width: bboxData.width,
-          height: bboxData.height
-        },
-        svgString
-      });
+        const serializer = new XMLSerializer();
 
-      if (exportGroups && tagEquals(el, groupTag)) {
-        const children = Array.from(el.children);
-        for (const child of children) {
-          const tag = child.tagName.toLowerCase();
-          if (baseTags.includes(tag) || tag === groupTag) {
-            await exportElement(child, id);
+        const baseTags = [
+          'path',
+          'rect',
+          'circle',
+          'ellipse',
+          'polygon',
+          'polyline',
+          'text',
+          'image',
+          'use',
+          'symbol'
+        ];
+        const groupTag = 'g';
+
+        const selector = exportGroups ? baseTags.concat(groupTag).join(',') : baseTags.join(',');
+
+        const allCandidates = Array.from(rootSvg.querySelectorAll(selector));
+
+        const usedIds = new Set();
+        for (const el of allCandidates) {
+          if (el.id) {
+            usedIds.add(el.id);
           }
         }
-      }
-    }
+        function ensureId(el) {
+          if (el.id) {
+            return el.id;
+          }
+          const base = 'auto_id_' + el.tagName.toLowerCase();
+          let id = base;
+          let i = 1;
+          while (usedIds.has(id) || document.getElementById(id)) {
+            id = base + '_' + i++;
+          }
+          el.setAttribute('id', id);
+          usedIds.add(id);
+          return id;
+        }
 
-    for (const el of allCandidates) {
-      await exportElement(el, '');
-    }
+        const defsList = Array.from(rootSvg.querySelectorAll('defs'));
 
-    return exports;
-  }, margin, exportGroups));
+        function makeRootSvgWithBBox(bbox) {
+          const clonedRoot = rootSvg.cloneNode(false);
+          if (!clonedRoot.getAttribute('xmlns')) {
+            clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+          }
+          const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
+          if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
+            clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
+          }
+          let { x, y, width, height } = bbox;
+          if (marginUser > 0) {
+            x -= marginUser;
+            y -= marginUser;
+            width += 2 * marginUser;
+            height += 2 * marginUser;
+          }
+          if (width <= 0 || height <= 0) {
+            return null;
+          }
+          clonedRoot.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+          clonedRoot.setAttribute('width', String(width));
+          clonedRoot.setAttribute('height', String(height));
+          for (const defs of defsList) {
+            clonedRoot.appendChild(defs.cloneNode(true));
+          }
+          return clonedRoot;
+        }
+
+        function tagEquals(el, tagName) {
+          return el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase();
+        }
+
+        const exports = [];
+
+        async function exportElement(el, prefix) {
+          const id = ensureId(el);
+          const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+            mode: 'unclipped',
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true
+          });
+          if (!bboxData) {
+            return;
+          }
+
+          const rootForExport = makeRootSvgWithBBox(bboxData);
+          if (!rootForExport) {
+            return;
+          }
+
+          const ancestors = [];
+          let node = el;
+          while (node && node !== rootSvg) {
+            ancestors.unshift(node);
+            node = node.parentNode;
+          }
+
+          let currentParent = rootForExport;
+          for (const original of ancestors) {
+            const shallowClone = original.cloneNode(false);
+            if (original === el) {
+              const subtree = original.cloneNode(true);
+              currentParent.appendChild(subtree);
+            } else {
+              const nextParent = shallowClone;
+              currentParent.appendChild(nextParent);
+              currentParent = nextParent;
+            }
+          }
+
+          const svgString = serializer.serializeToString(rootForExport);
+          const fileName = (prefix ? prefix + '_' : '') + id + '.svg';
+
+          exports.push({
+            id,
+            fileName,
+            bbox: {
+              x: bboxData.x,
+              y: bboxData.y,
+              width: bboxData.width,
+              height: bboxData.height
+            },
+            svgString
+          });
+
+          if (exportGroups && tagEquals(el, groupTag)) {
+            const children = Array.from(el.children);
+            for (const child of children) {
+              const tag = child.tagName.toLowerCase();
+              if (baseTags.includes(tag) || tag === groupTag) {
+                await exportElement(child, id);
+              }
+            }
+          }
+        }
+
+        for (const el of allCandidates) {
+          await exportElement(el, '');
+        }
+
+        return exports;
+        /* eslint-enable no-undef */
+      },
+      margin,
+      exportGroups
+    );
+    return evalResult;
+  });
 
   if (!exports || exports.length === 0) {
     if (jsonMode) {
-      console.log(JSON.stringify({
-        mode: 'exportAll',
-        input: path.resolve(inputPath),
-        outputDir: path.resolve(outDir),
-        margin,
-        exportGroups,
-        exported: []
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            mode: 'exportAll',
+            input: path.resolve(inputPath),
+            outputDir: path.resolve(outDir),
+            margin,
+            exportGroups,
+            exported: []
+          },
+          null,
+          2
+        )
+      );
     } else {
       console.log('No objects exported (none with visible bbox).');
     }
@@ -2085,14 +2168,20 @@ async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMod
   }
 
   if (jsonMode) {
-    console.log(JSON.stringify({
-      mode: 'exportAll',
-      input: path.resolve(inputPath),
-      outputDir: path.resolve(outDir),
-      margin,
-      exportGroups,
-      exported: exportedMeta
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          mode: 'exportAll',
+          input: path.resolve(inputPath),
+          outputDir: path.resolve(outDir),
+          margin,
+          exportGroups,
+          exported: exportedMeta
+        },
+        null,
+        2
+      )
+    );
   } else {
     console.log('\nExport completed.');
   }
@@ -2119,9 +2208,9 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
 
   // SECURITY: Validate mapping structure
   mappings = mappings
-    .filter(m => m && typeof m.from === 'string' && typeof m.to === 'string')
-    .map(m => ({ from: m.from.trim(), to: m.to.trim() }))
-    .filter(m => m.from && m.to);
+    .filter((m) => m && typeof m.from === 'string' && typeof m.to === 'string')
+    .map((m) => ({ from: m.from.trim(), to: m.to.trim() }))
+    .filter((m) => m.from && m.to);
 
   if (!mappings.length) {
     throw new ValidationError('No valid mappings found in JSON.');
@@ -2130,117 +2219,122 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
   // SECURITY: Validate each mapping
   validateRenameMapping(mappings);
 
-  const result = await withPageForSvg(inputPath, async (page) => await page.evaluate((mappings) => {
-    const SvgVisualBBox = window.SvgVisualBBox;
-    if (!SvgVisualBBox) {
-      throw new Error('SvgVisualBBox not found.');
-    }
-
-    const rootSvg = document.querySelector('svg');
-    if (!rootSvg) {
-      throw new Error('No <svg> found');
-    }
-
-    function isValidIdName(id) {
-      return /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(id);
-    }
-
-    const allWithId = rootSvg.ownerDocument.querySelectorAll('[id]');
-    const existingIds = new Set();
-    allWithId.forEach(el => existingIds.add(el.id));
-
-    const applied = [];
-    const skipped = [];
-    const usedTargets = new Set();
-    const seenFrom = new Set();
-
-    for (const m of mappings) {
-      const from = m.from;
-      const to = m.to;
-
-      if (!from || !to) {
-        skipped.push({ mapping: m, reason: 'Empty from/to' });
-        continue;
+  const result = await withPageForSvg(inputPath, async (page) => {
+    const evalResult = await page.evaluate((mappings) => {
+      /* eslint-disable no-undef */
+      const SvgVisualBBox = window.SvgVisualBBox;
+      if (!SvgVisualBBox) {
+        throw new Error('SvgVisualBBox not found.');
       }
 
-      if (!isValidIdName(to)) {
-        skipped.push({ mapping: m, reason: 'Invalid target ID syntax' });
-        continue;
+      const rootSvg = document.querySelector('svg');
+      if (!rootSvg) {
+        throw new Error('No <svg> found');
       }
 
-      if (seenFrom.has(from)) {
-        skipped.push({ mapping: m, reason: 'Duplicate source ID; earlier mapping wins' });
-        continue;
+      function isValidIdName(id) {
+        return /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(id);
       }
 
-      const el = rootSvg.ownerDocument.getElementById(from);
-      if (!el) {
-        skipped.push({ mapping: m, reason: 'Source ID not found in SVG' });
-        continue;
-      }
+      const allWithId = rootSvg.ownerDocument.querySelectorAll('[id]');
+      const existingIds = new Set();
+      allWithId.forEach((el) => existingIds.add(el.id));
 
-      if (from === to) {
-        skipped.push({ mapping: m, reason: 'Source and target IDs are the same' });
-        continue;
-      }
+      const applied = [];
+      const skipped = [];
+      const usedTargets = new Set();
+      const seenFrom = new Set();
 
-      if (existingIds.has(to) && to !== from) {
-        skipped.push({ mapping: m, reason: 'Target ID already exists in SVG' });
-        continue;
-      }
+      for (const m of mappings) {
+        const from = m.from;
+        const to = m.to;
 
-      if (usedTargets.has(to) && to !== from) {
-        skipped.push({ mapping: m, reason: 'Target ID already used by a previous mapping' });
-        continue;
-      }
-
-      // Apply the rename
-      seenFrom.add(from);
-      usedTargets.add(to);
-      existingIds.delete(from);
-      existingIds.add(to);
-
-      el.setAttribute('id', to);
-
-      // Update references: href, xlink:href, url(#from) in attributes
-      const allEls = rootSvg.ownerDocument.querySelectorAll('*');
-      const oldRef = '#' + from;
-      const newRef = '#' + to;
-      const urlOld = 'url(#' + from + ')';
-      const urlNew = 'url(#' + to + ')';
-
-      allEls.forEach(node => {
-        if (node.hasAttribute('href')) {
-          const v = node.getAttribute('href');
-          if (v === oldRef) {
-            node.setAttribute('href', newRef);
-          }
+        if (!from || !to) {
+          skipped.push({ mapping: m, reason: 'Empty from/to' });
+          continue;
         }
-        if (node.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')) {
-          const v = node.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
-          if (v === oldRef) {
-            node.setAttributeNS('http://www.w3.org/1999/xlink', 'href', newRef);
-          }
+
+        if (!isValidIdName(to)) {
+          skipped.push({ mapping: m, reason: 'Invalid target ID syntax' });
+          continue;
         }
-        for (const attr of Array.from(node.attributes)) {
-          const val = attr.value;
-          if (!val) {
-            continue;
-          }
-          if (val.indexOf(urlOld) !== -1) {
-            node.setAttribute(attr.name, val.split(urlOld).join(urlNew));
-          }
+
+        if (seenFrom.has(from)) {
+          skipped.push({ mapping: m, reason: 'Duplicate source ID; earlier mapping wins' });
+          continue;
         }
-      });
 
-      applied.push({ from, to });
-    }
+        const el = rootSvg.ownerDocument.getElementById(from);
+        if (!el) {
+          skipped.push({ mapping: m, reason: 'Source ID not found in SVG' });
+          continue;
+        }
 
-    const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(rootSvg);
+        if (from === to) {
+          skipped.push({ mapping: m, reason: 'Source and target IDs are the same' });
+          continue;
+        }
 
-    return { svgString, applied, skipped };
-  }, mappings));
+        if (existingIds.has(to) && to !== from) {
+          skipped.push({ mapping: m, reason: 'Target ID already exists in SVG' });
+          continue;
+        }
+
+        if (usedTargets.has(to) && to !== from) {
+          skipped.push({ mapping: m, reason: 'Target ID already used by a previous mapping' });
+          continue;
+        }
+
+        // Apply the rename
+        seenFrom.add(from);
+        usedTargets.add(to);
+        existingIds.delete(from);
+        existingIds.add(to);
+
+        el.setAttribute('id', to);
+
+        // Update references: href, xlink:href, url(#from) in attributes
+        const allEls = rootSvg.ownerDocument.querySelectorAll('*');
+        const oldRef = '#' + from;
+        const newRef = '#' + to;
+        const urlOld = 'url(#' + from + ')';
+        const urlNew = 'url(#' + to + ')';
+
+        allEls.forEach((node) => {
+          if (node.hasAttribute('href')) {
+            const v = node.getAttribute('href');
+            if (v === oldRef) {
+              node.setAttribute('href', newRef);
+            }
+          }
+          if (node.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')) {
+            const v = node.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+            if (v === oldRef) {
+              node.setAttributeNS('http://www.w3.org/1999/xlink', 'href', newRef);
+            }
+          }
+          for (const attr of Array.from(node.attributes)) {
+            const val = attr.value;
+            if (!val) {
+              continue;
+            }
+            if (val.indexOf(urlOld) !== -1) {
+              node.setAttribute(attr.name, val.split(urlOld).join(urlNew));
+            }
+          }
+        });
+
+        applied.push({ from, to });
+      }
+
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(rootSvg);
+
+      return { svgString, applied, skipped };
+      /* eslint-enable no-undef */
+    }, mappings);
+    return evalResult;
+  });
 
   // SECURITY: Validate and write renamed SVG file safely
   const safeOutputPath = validateOutputPath(renameOutPath, {
@@ -2249,20 +2343,26 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
   writeFileSafe(safeOutputPath, result.svgString, 'utf-8');
 
   if (jsonMode) {
-    console.log(JSON.stringify({
-      mode: 'rename',
-      input: path.resolve(inputPath),
-      mappingFile: path.resolve(renameJsonPath),
-      output: path.resolve(renameOutPath),
-      applied: result.applied,
-      skipped: result.skipped
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          mode: 'rename',
+          input: path.resolve(inputPath),
+          mappingFile: path.resolve(renameJsonPath),
+          output: path.resolve(renameOutPath),
+          applied: result.applied,
+          skipped: result.skipped
+        },
+        null,
+        2
+      )
+    );
   } else {
     console.log(`✓ Renamed IDs using ${renameJsonPath} -> ${renameOutPath}`);
     console.log(`  Applied mappings: ${result.applied.length}`);
     if (result.skipped.length) {
       console.log(`  Skipped mappings: ${result.skipped.length}`);
-      result.skipped.slice(0, 10).forEach(s => {
+      result.skipped.slice(0, 10).forEach((s) => {
         console.log('   -', s.mapping.from, '→', s.mapping.to, '(', s.reason, ')');
       });
       if (result.skipped.length > 10) {
@@ -2284,7 +2384,14 @@ async function main() {
 
   try {
     if (opts.mode === 'list') {
-      await listAndAssignIds(opts.input, opts.assignIds, opts.outFixed, opts.outHtml, opts.json, opts.autoOpen);
+      await listAndAssignIds(
+        opts.input,
+        opts.assignIds,
+        opts.outFixed,
+        opts.outHtml,
+        opts.json,
+        opts.autoOpen
+      );
     } else if (opts.mode === 'extract') {
       await extractSingleObject(
         opts.input,
@@ -2295,20 +2402,9 @@ async function main() {
         opts.json
       );
     } else if (opts.mode === 'exportAll') {
-      await exportAllObjects(
-        opts.input,
-        opts.outDir,
-        opts.margin,
-        opts.exportGroups,
-        opts.json
-      );
+      await exportAllObjects(opts.input, opts.outDir, opts.margin, opts.exportGroups, opts.json);
     } else if (opts.mode === 'rename') {
-      await renameIds(
-        opts.input,
-        opts.renameJson,
-        opts.renameOut,
-        opts.json
-      );
+      await renameIds(opts.input, opts.renameJson, opts.renameOut, opts.json);
     } else {
       throw new SVGBBoxError(`Unknown mode: ${opts.mode}`);
     }

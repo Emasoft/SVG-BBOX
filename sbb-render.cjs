@@ -41,9 +41,13 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
+const {
+  getVersion,
+  printVersion: _printVersion,
+  hasVersionFlag: _hasVersionFlag
+} = require('./version.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -51,15 +55,15 @@ const {
   validateOutputPath,
   readSVGFileSafe,
   sanitizeSVGContent,
-  SVGBBoxError,
-  ValidationError,
+  SVGBBoxError: _SVGBBoxError,
+  ValidationError: _ValidationError,
   FileSystemError
 } = require('./lib/security-utils.cjs');
 
 const {
   runCLI,
   printSuccess,
-  printError,
+  printError: _printError,
   printInfo,
   printWarning
 } = require('./lib/cli-utils.cjs');
@@ -284,17 +288,13 @@ function parseArgs(argv) {
 // ---------- core render logic ----------
 
 // SECURITY: Constants for timeouts
-const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
-const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
+const FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 // SECURITY: Secure Puppeteer options
 const PUPPETEER_OPTIONS = {
   headless: true,
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage'
-  ]
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
 };
 
 async function renderSvgWithModes(opts) {
@@ -315,7 +315,7 @@ async function renderSvgWithModes(opts) {
   // Decide background CSS + omitBackground
   const bgLower = (opts.background || '').toString().toLowerCase();
   const isTransparentBg = bgLower === 'transparent';
-  const bgCSS = isTransparentBg ? 'transparent' : (opts.background || 'white');
+  const bgCSS = isTransparentBg ? 'transparent' : opts.background || 'white';
 
   let browser = null;
 
@@ -370,222 +370,230 @@ ${sanitizedSvg}
     //  - apply margin in SVG units
     //  - optionally hide other elements (element mode)
     //  - compute suggested pixel width/height if not given
-    const measure = await page.evaluate(async (optsInPage) => {
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) {
-        throw new Error('SvgVisualBBox not found on window. Did the script load?');
-      }
-
-      const svg = document.querySelector('svg');
-      if (!svg) {
-        throw new Error('No <svg> element found in the document.');
-      }
-
-      // Ensure fonts are loaded as best as we can (with timeout)
-      await SvgVisualBBox.waitForDocumentFonts(document, optsInPage.fontTimeout || 8000);
-
-      const mode = (optsInPage.mode || 'visible').toLowerCase();
-      const marginUser = (typeof optsInPage.margin === 'number' && optsInPage.margin > 0)
-        ? optsInPage.margin
-        : 0;
-
-      // Helper: ensure the root <svg> has a reasonable viewBox.
-      // If missing, we use the full drawing bbox (unclipped).
-      async function ensureViewBox() {
-        const vb = svg.viewBox && svg.viewBox.baseVal;
-        if (vb && vb.width && vb.height) {
-          return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
-        }
-        // No viewBox → use full drawing bbox (unclipped)
-        const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true
-        });
-        const full = both.full;
-        if (!full) {
-          throw new Error('Cannot determine full drawing bbox for SVG without a viewBox.');
-        }
-        const newVB = {
-          x: full.x,
-          y: full.y,
-          width: full.width,
-          height: full.height
-        };
-        svg.setAttribute('viewBox', `${newVB.x} ${newVB.y} ${newVB.width} ${newVB.height}`);
-        return newVB;
-      }
-
-      const originalViewBox = await ensureViewBox(); // used for clamping in "visible" mode
-      let targetBBox = null;
-
-      if (mode === 'full') {
-        // Full drawing, ignoring current viewBox
-        const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true
-        });
-        if (!both.full) {
-          throw new Error('Full drawing bbox is empty (nothing to render).');
-        }
-        targetBBox = {
-          x: both.full.x,
-          y: both.full.y,
-          width: both.full.width,
-          height: both.full.height
-        };
-      } else if (mode === 'element') {
-        const id = optsInPage.elementId;
-        if (!id) {
-          throw new Error('--mode element requires --element-id');
-        }
-        const el = svg.ownerDocument.getElementById(id);
-        if (!el) {
-          throw new Error('No element found with id="' + id + '"');
+    const measure = await page.evaluate(
+      async (optsInPage) => {
+        /* eslint-disable no-undef */
+        const SvgVisualBBox = window.SvgVisualBBox;
+        if (!SvgVisualBBox) {
+          throw new Error('SvgVisualBBox not found on window. Did the script load?');
         }
 
-        const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-          mode: 'unclipped',
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true
-        });
-        if (!bbox) {
-          throw new Error('Element with id="' + id + '" has no visible pixels.');
+        const svg = document.querySelector('svg');
+        if (!svg) {
+          throw new Error('No <svg> element found in the document.');
         }
-        targetBBox = {
-          x: bbox.x,
-          y: bbox.y,
-          width: bbox.width,
-          height: bbox.height
-        };
 
-        // Hide everything except this element (and <defs>)
-        const allowed = new Set();
-        let node = el;
-        while (node) {
-          allowed.add(node);
-          if (node === svg) {
-            break;
+        // Ensure fonts are loaded as best as we can (with timeout)
+        await SvgVisualBBox.waitForDocumentFonts(document, optsInPage.fontTimeout || 8000);
+
+        const mode = (optsInPage.mode || 'visible').toLowerCase();
+        const marginUser =
+          typeof optsInPage.margin === 'number' && optsInPage.margin > 0 ? optsInPage.margin : 0;
+
+        // Helper: ensure the root <svg> has a reasonable viewBox.
+        // If missing, we use the full drawing bbox (unclipped).
+        async function ensureViewBox() {
+          const vb = svg.viewBox && svg.viewBox.baseVal;
+          if (vb && vb.width && vb.height) {
+            return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
           }
-          node = node.parentNode;
+          // No viewBox → use full drawing bbox (unclipped)
+          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true
+          });
+          const full = both.full;
+          if (!full) {
+            throw new Error('Cannot determine full drawing bbox for SVG without a viewBox.');
+          }
+          const newVB = {
+            x: full.x,
+            y: full.y,
+            width: full.width,
+            height: full.height
+          };
+          svg.setAttribute('viewBox', `${newVB.x} ${newVB.y} ${newVB.width} ${newVB.height}`);
+          return newVB;
         }
 
-        // Add all descendants of the target element
-        // CRITICAL: Without this, child elements like <textPath> inside <text>
-        // would get display="none" and render as invisible/empty
-        (function addDescendants(n) {
-          allowed.add(n);
-          const children = n.children;
-          for (let i = 0; i < children.length; i++) {
-            addDescendants(children[i]);
-          }
-        })(el);
+        const originalViewBox = await ensureViewBox(); // used for clamping in "visible" mode
+        let targetBBox = null;
 
-        const all = Array.from(svg.querySelectorAll('*'));
-        for (const child of all) {
-          const tag = child.tagName && child.tagName.toLowerCase();
-          if (tag === 'defs') {
-            continue;
+        if (mode === 'full') {
+          // Full drawing, ignoring current viewBox
+          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true
+          });
+          if (!both.full) {
+            throw new Error('Full drawing bbox is empty (nothing to render).');
           }
-          if (!allowed.has(child) && !child.contains(el)) {
-            child.setAttribute('display', 'none');
+          targetBBox = {
+            x: both.full.x,
+            y: both.full.y,
+            width: both.full.width,
+            height: both.full.height
+          };
+        } else if (mode === 'element') {
+          const id = optsInPage.elementId;
+          if (!id) {
+            throw new Error('--mode element requires --element-id');
           }
+          const el = svg.ownerDocument.getElementById(id);
+          if (!el) {
+            throw new Error('No element found with id="' + id + '"');
+          }
+
+          const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+            mode: 'unclipped',
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true
+          });
+          if (!bbox) {
+            throw new Error('Element with id="' + id + '" has no visible pixels.');
+          }
+          targetBBox = {
+            x: bbox.x,
+            y: bbox.y,
+            width: bbox.width,
+            height: bbox.height
+          };
+
+          // Hide everything except this element (and <defs>)
+          const allowed = new Set();
+          let node = el;
+          while (node) {
+            allowed.add(node);
+            if (node === svg) {
+              break;
+            }
+            node = node.parentNode;
+          }
+
+          // Add all descendants of the target element
+          // CRITICAL: Without this, child elements like <textPath> inside <text>
+          // would get display="none" and render as invisible/empty
+          (function addDescendants(n) {
+            allowed.add(n);
+            const children = n.children;
+            for (let i = 0; i < children.length; i++) {
+              addDescendants(children[i]);
+            }
+          })(el);
+
+          const all = Array.from(svg.querySelectorAll('*'));
+          for (const child of all) {
+            const tag = child.tagName && child.tagName.toLowerCase();
+            if (tag === 'defs') {
+              continue;
+            }
+            if (!allowed.has(child) && !child.contains(el)) {
+              child.setAttribute('display', 'none');
+            }
+          }
+        } else {
+          // "visible" → content actually inside the current viewBox
+          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true
+          });
+          if (!both.visible) {
+            throw new Error('Visible bbox is empty (nothing inside viewBox).');
+          }
+          targetBBox = {
+            x: both.visible.x,
+            y: both.visible.y,
+            width: both.visible.width,
+            height: both.visible.height
+          };
         }
-      } else {
-        // "visible" → content actually inside the current viewBox
-        const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true
-        });
-        if (!both.visible) {
-          throw new Error('Visible bbox is empty (nothing inside viewBox).');
+
+        if (!targetBBox) {
+          throw new Error('No target bounding box could be computed.');
         }
-        targetBBox = {
-          x: both.visible.x,
-          y: both.visible.y,
-          width: both.visible.width,
-          height: both.visible.height
+
+        // Apply margin in SVG units
+        const expanded = {
+          x: targetBBox.x,
+          y: targetBBox.y,
+          width: targetBBox.width,
+          height: targetBBox.height
         };
+
+        if (marginUser > 0) {
+          expanded.x -= marginUser;
+          expanded.y -= marginUser;
+          expanded.width += marginUser * 2;
+          expanded.height += marginUser * 2;
+        }
+
+        // For "visible" mode, clamp the expanded bbox to the original viewBox
+        if (mode === 'visible' && expanded.width > 0 && expanded.height > 0) {
+          const ov = originalViewBox;
+          const bx0 = expanded.x;
+          const by0 = expanded.y;
+          const bx1 = expanded.x + expanded.width;
+          const by1 = expanded.y + expanded.height;
+
+          const clampedX0 = Math.max(ov.x, bx0);
+          const clampedY0 = Math.max(ov.y, by0);
+          const clampedX1 = Math.min(ov.x + ov.width, bx1);
+          const clampedY1 = Math.min(ov.y + ov.height, by1);
+
+          expanded.x = clampedX0;
+          expanded.y = clampedY0;
+          expanded.width = Math.max(0, clampedX1 - clampedX0);
+          expanded.height = Math.max(0, clampedY1 - clampedY0);
+        }
+
+        // Now set the viewBox to the expanded bbox
+        if (expanded.width <= 0 || expanded.height <= 0) {
+          throw new Error('Expanded bbox is empty after clamping/margin.');
+        }
+        svg.setAttribute(
+          'viewBox',
+          `${expanded.x} ${expanded.y} ${expanded.width} ${expanded.height}`
+        );
+
+        // Compute suggested pixel size
+        const scale =
+          typeof optsInPage.scale === 'number' && isFinite(optsInPage.scale) && optsInPage.scale > 0
+            ? optsInPage.scale
+            : 4;
+
+        const pixelWidth = optsInPage.width || Math.max(1, Math.round(expanded.width * scale));
+        const pixelHeight = optsInPage.height || Math.max(1, Math.round(expanded.height * scale));
+
+        // Update SVG sizing in the DOM
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.style.width = pixelWidth + 'px';
+        svg.style.height = pixelHeight + 'px';
+
+        return {
+          mode,
+          targetBBox,
+          expandedBBox: expanded,
+          viewBox: svg.getAttribute('viewBox'),
+          pixelWidth,
+          pixelHeight
+        };
+        /* eslint-enable no-undef */
+      },
+      {
+        mode: opts.mode,
+        elementId: opts.elementId,
+        scale: opts.scale,
+        width: opts.width,
+        height: opts.height,
+        margin: opts.margin,
+        fontTimeout: FONT_TIMEOUT_MS
       }
-
-      if (!targetBBox) {
-        throw new Error('No target bounding box could be computed.');
-      }
-
-      // Apply margin in SVG units
-      const expanded = {
-        x: targetBBox.x,
-        y: targetBBox.y,
-        width: targetBBox.width,
-        height: targetBBox.height
-      };
-
-      if (marginUser > 0) {
-        expanded.x -= marginUser;
-        expanded.y -= marginUser;
-        expanded.width += marginUser * 2;
-        expanded.height += marginUser * 2;
-      }
-
-      // For "visible" mode, clamp the expanded bbox to the original viewBox
-      if (mode === 'visible' && expanded.width > 0 && expanded.height > 0) {
-        const ov = originalViewBox;
-        const bx0 = expanded.x;
-        const by0 = expanded.y;
-        const bx1 = expanded.x + expanded.width;
-        const by1 = expanded.y + expanded.height;
-
-        const clampedX0 = Math.max(ov.x, bx0);
-        const clampedY0 = Math.max(ov.y, by0);
-        const clampedX1 = Math.min(ov.x + ov.width, bx1);
-        const clampedY1 = Math.min(ov.y + ov.height, by1);
-
-        expanded.x = clampedX0;
-        expanded.y = clampedY0;
-        expanded.width = Math.max(0, clampedX1 - clampedX0);
-        expanded.height = Math.max(0, clampedY1 - clampedY0);
-      }
-
-      // Now set the viewBox to the expanded bbox
-      if (expanded.width <= 0 || expanded.height <= 0) {
-        throw new Error('Expanded bbox is empty after clamping/margin.');
-      }
-      svg.setAttribute('viewBox', `${expanded.x} ${expanded.y} ${expanded.width} ${expanded.height}`);
-
-      // Compute suggested pixel size
-      const scale = (typeof optsInPage.scale === 'number' && isFinite(optsInPage.scale) && optsInPage.scale > 0)
-        ? optsInPage.scale
-        : 4;
-
-      const pixelWidth = optsInPage.width || Math.max(1, Math.round(expanded.width * scale));
-      const pixelHeight = optsInPage.height || Math.max(1, Math.round(expanded.height * scale));
-
-      // Update SVG sizing in the DOM
-      svg.removeAttribute('width');
-      svg.removeAttribute('height');
-      svg.style.width = pixelWidth + 'px';
-      svg.style.height = pixelHeight + 'px';
-
-      return {
-        mode,
-        targetBBox,
-        expandedBBox: expanded,
-        viewBox: svg.getAttribute('viewBox'),
-        pixelWidth,
-        pixelHeight
-      };
-    }, {
-      mode: opts.mode,
-      elementId: opts.elementId,
-      scale: opts.scale,
-      width: opts.width,
-      height: opts.height,
-      margin: opts.margin,
-      fontTimeout: FONT_TIMEOUT_MS
-    });
+    );
 
     // Now set the Puppeteer viewport to match the chosen PNG size
     await page.setViewport({
@@ -595,7 +603,7 @@ ${sanitizedSvg}
     });
 
     // Small delay to allow re-layout after we tweaked the SVG
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // SECURITY: Validate output path
     const safeOutPath = validateOutputPath(output, {
@@ -630,25 +638,26 @@ ${sanitizedSvg}
     if (opts.autoOpen) {
       const absolutePath = path.resolve(safeOutPath);
 
-      openInChrome(absolutePath).then(result => {
-        if (result.success) {
-          printSuccess(`Opened in Chrome: ${absolutePath}`);
-        } else {
-          printWarning(result.error);
+      openInChrome(absolutePath)
+        .then((result) => {
+          if (result.success) {
+            printSuccess(`Opened in Chrome: ${absolutePath}`);
+          } else {
+            printWarning(result.error);
+            printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+          }
+        })
+        .catch((err) => {
+          printWarning(`Failed to auto-open: ${err.message}`);
           printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
-        }
-      }).catch(err => {
-        printWarning(`Failed to auto-open: ${err.message}`);
-        printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
-      });
+        });
     }
-
   } finally {
     // SECURITY: Ensure browser is always closed
     if (browser) {
       try {
         await browser.close();
-      } catch (closeErr) {
+      } catch {
         // Force kill if close fails
         if (browser.process()) {
           browser.process().kill('SIGKILL');

@@ -10,7 +10,8 @@ We release security updates for the following versions:
 
 ## Reporting a Vulnerability
 
-We take security vulnerabilities seriously. If you discover a security issue, please report it responsibly.
+We take security vulnerabilities seriously. If you discover a security issue,
+please report it responsibly.
 
 ### How to Report
 
@@ -40,22 +41,27 @@ Instead:
 
 - We will notify you when we have a fix ready
 - We will coordinate disclosure timing with you
-- We will credit you in the security advisory (unless you prefer to remain anonymous)
+- We will credit you in the security advisory (unless you prefer to remain
+  anonymous)
 - We will publish a security advisory on GitHub
 
 ## Security Considerations
 
 ### SVG Input
 
-SVG files can contain malicious content. SVG-BBOX processes SVG files in headless Chrome, which provides some isolation but does not guarantee complete safety.
+SVG files can contain malicious content. SVG-BBOX processes SVG files in
+headless Chrome, which provides some isolation but does not guarantee complete
+safety.
 
 **Risks:**
+
 - **XXE (XML External Entity)** attacks via malicious SVG
 - **XSS (Cross-Site Scripting)** via embedded scripts in SVG
 - **Resource exhaustion** via extremely large or complex SVG
 - **File system access** via `<image>` or `<use>` elements with file:// URLs
 
 **Mitigations:**
+
 - Run in headless browser (isolated environment)
 - Disable JavaScript in browser context (when possible)
 - Validate SVG files before processing
@@ -64,13 +70,16 @@ SVG files can contain malicious content. SVG-BBOX processes SVG files in headles
 
 ### External Resources
 
-SVG files can reference external resources (images, fonts, stylesheets). This can lead to:
+SVG files can reference external resources (images, fonts, stylesheets). This
+can lead to:
 
-- **SSRF (Server-Side Request Forgery)** - SVG requests internal network resources
+- **SSRF (Server-Side Request Forgery)** - SVG requests internal network
+  resources
 - **Data exfiltration** - SVG sends data to external servers
 - **Canvas tainting** - External resources without CORS headers
 
 **Mitigations:**
+
 - Block external network requests when processing untrusted SVG
 - Use Content Security Policy (CSP) in browser context
 - Validate and sanitize external resource URLs
@@ -81,12 +90,14 @@ SVG files can reference external resources (images, fonts, stylesheets). This ca
 We regularly update dependencies to address known vulnerabilities.
 
 **What we do:**
+
 - Monitor security advisories for dependencies
 - Run `pnpm audit` regularly
 - Update dependencies promptly
 - Use tools like Dependabot for automated updates
 
 **What you can do:**
+
 - Keep your installation up to date
 - Run `pnpm audit` to check for known vulnerabilities
 - Report dependency vulnerabilities you discover
@@ -96,11 +107,13 @@ We regularly update dependencies to address known vulnerabilities.
 The CLI tools execute in your local environment with your permissions.
 
 **Risks:**
+
 - **Path traversal** - Malicious file paths could access unintended files
 - **Command injection** - User input could be interpreted as shell commands
 - **File overwrite** - Output paths could overwrite important files
 
 **Mitigations:**
+
 - Validate and sanitize all file paths
 - Use absolute paths internally
 - Never execute user input as shell commands
@@ -109,13 +122,16 @@ The CLI tools execute in your local environment with your permissions.
 
 ### Browser Launch
 
-We use Puppeteer to launch headless Chrome, which has its own security considerations.
+We use Puppeteer to launch headless Chrome, which has its own security
+considerations.
 
 **Risks:**
+
 - **Browser vulnerabilities** - Outdated Chrome/Chromium versions
 - **Sandbox escapes** - Malicious SVG could exploit browser bugs
 
 **Mitigations:**
+
 - Use latest Puppeteer (bundles recent Chrome)
 - Run with sandbox enabled (default)
 - Set resource limits (memory, CPU time)
@@ -126,15 +142,18 @@ We use Puppeteer to launch headless Chrome, which has its own security considera
 When using SVG-BBOX in production:
 
 1. **Validate input**
+
    ```javascript
    // Check file size before processing
    const stats = fs.statSync(svgPath);
-   if (stats.size > 10 * 1024 * 1024) { // 10 MB limit
+   if (stats.size > 10 * 1024 * 1024) {
+     // 10 MB limit
      throw new Error('SVG file too large');
    }
    ```
 
 2. **Set timeouts**
+
    ```javascript
    // Prevent infinite loops/hangs
    const timeout = 30000; // 30 seconds
@@ -142,6 +161,7 @@ When using SVG-BBOX in production:
    ```
 
 3. **Sanitize SVG** (if processing untrusted input)
+
    ```javascript
    // Use a library like DOMPurify or sanitize-html
    const sanitizedSvg = DOMPurify.sanitize(svgContent, {
@@ -150,6 +170,7 @@ When using SVG-BBOX in production:
    ```
 
 4. **Run in isolated environment**
+
    ```bash
    # Use Docker for untrusted SVG processing
    docker run --rm -v ./input:/input:ro -v ./output:/output \
@@ -160,7 +181,7 @@ When using SVG-BBOX in production:
    ```javascript
    // In Puppeteer, intercept and block external requests
    await page.setRequestInterception(true);
-   page.on('request', request => {
+   page.on('request', (request) => {
      const url = new URL(request.url());
      if (url.hostname !== 'localhost') {
        request.abort();
@@ -176,13 +197,13 @@ When using SVG-BBOX in production:
 
 ### Issues Identified
 
-| Severity | Count | Status |
-|----------|-------|--------|
-| Critical | 8 | ⏳ In Progress |
-| High | 14 | ⏳ In Progress |
-| Medium | 18 | 📋 Planned |
-| Low | 7 | 📋 Planned |
-| **Total** | **47** | |
+| Severity  | Count  | Status         |
+| --------- | ------ | -------------- |
+| Critical  | 8      | ⏳ In Progress |
+| High      | 14     | ⏳ In Progress |
+| Medium    | 18     | 📋 Planned     |
+| Low       | 7      | 📋 Planned     |
+| **Total** | **47** |                |
 
 See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
 
@@ -200,6 +221,7 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
 ### Mitigation Progress
 
 ✅ **Completed:**
+
 - Created `lib/security-utils.cjs` with comprehensive security functions
 - Created `lib/cli-utils.cjs` for standardized CLI tooling
 - Path validation (`validateFilePath`, `validateOutputPath`)
@@ -217,17 +239,23 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
   - Timeout handling ✅
 
 ⏳ **In Progress:**
+
 - Applying security fixes to remaining 2 CLI tools:
   - sbb-comparer.cjs (1399 lines) - 0% complete
   - sbb-extractor.cjs (2255 lines, 4 modes) - 0% complete
 
 ✅ **CLI Tools Completed (4/6):**
+
 1. **sbb-getbbox.cjs** (807 → 755 lines) - All 20 security fixes applied ✅
-2. **sbb-fix-viewbox.cjs** (298 → 362 lines) - All 20 fixes + undefined variable bug fixed ✅
-3. **sbb-render.cjs** (610 → 671 lines) - All 20 fixes + PNG output validation ✅
-4. **sbb-test.cjs** (364 → 411 lines) - All 20 fixes + JSON/log output validation ✅
+2. **sbb-fix-viewbox.cjs** (298 → 362 lines) - All 20 fixes + undefined variable
+   bug fixed ✅
+3. **sbb-render.cjs** (610 → 671 lines) - All 20 fixes + PNG output validation
+   ✅
+4. **sbb-test.cjs** (364 → 411 lines) - All 20 fixes + JSON/log output
+   validation ✅
 
 📋 **Planned:**
+
 - Complete remaining 2 CLI tools (est. 10-12 hours)
 - Adding comprehensive security tests (est. 5-7 hours)
 - Updating all tool documentation (est. 3-5 hours)
@@ -235,14 +263,16 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
 - Breaking up large functions (>100 lines)
 - Adding comprehensive JSDoc
 
-**Current Status:** 4/6 CLI tools secured (66.7% complete)
-**Estimated Completion:** 18-24 hours remaining total
+**Current Status:** 4/6 CLI tools secured (66.7% complete) **Estimated
+Completion:** 18-24 hours remaining total
 
 ## Known Limitations
 
-- **Limited SVG sanitization** - Basic script/event removal (use DOMPurify for full sanitization)
+- **Limited SVG sanitization** - Basic script/event removal (use DOMPurify for
+  full sanitization)
 - **No network isolation by default** - External resources can be loaded
-- **No built-in resource limits** - Large/complex SVG can consume excessive resources
+- **No built-in resource limits** - Large/complex SVG can consume excessive
+  resources
 - **Browser security dependency** - Relies on Chromium's security model
 
 ## Security Checklist for Contributors
@@ -261,6 +291,7 @@ When contributing code:
 ## Security Tools
 
 We use:
+
 - **pnpm audit** - Check for vulnerable dependencies
 - **ESLint** - Static analysis for common security issues
 - **Dependabot** - Automated dependency updates

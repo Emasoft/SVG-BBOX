@@ -27,12 +27,7 @@ const {
   ValidationError
 } = require('./lib/security-utils.cjs');
 
-const {
-  runCLI,
-  printSuccess,
-  printError,
-  printInfo
-} = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printError, printInfo } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELP TEXT
@@ -168,7 +163,7 @@ function parseArgs(argv) {
     dpi: null,
     margin: null,
     // Export area
-    areaDrawing: true,  // Default
+    areaDrawing: true, // Default
     areaPage: false,
     areaSnap: false,
     objectId: null,
@@ -233,10 +228,17 @@ function parseArgs(argv) {
     } else if (arg === '--color-mode' && i + 1 < argv.length) {
       args.colorMode = argv[++i];
       const validModes = [
-        'Gray_1', 'Gray_2', 'Gray_4', 'Gray_8', 'Gray_16',
-        'RGB_8', 'RGB_16',
-        'GrayAlpha_8', 'GrayAlpha_16',
-        'RGBA_8', 'RGBA_16'
+        'Gray_1',
+        'Gray_2',
+        'Gray_4',
+        'Gray_8',
+        'Gray_16',
+        'RGB_8',
+        'RGB_16',
+        'GrayAlpha_8',
+        'GrayAlpha_16',
+        'RGBA_8',
+        'RGBA_16'
       ];
       if (!validModes.includes(args.colorMode)) {
         console.error(`Error: --color-mode must be one of: ${validModes.join(', ')}`);
@@ -329,9 +331,10 @@ function readBatchFile(batchFilePath) {
   });
 
   const content = fs.readFileSync(safeBatchPath, 'utf-8');
-  const lines = content.split('\n')
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith('#'));
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
 
   if (lines.length === 0) {
     throw new ValidationError('Batch file is empty or contains no valid SVG paths');
@@ -524,12 +527,11 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
       stdout: stdout.trim(),
       stderr: stderr.trim()
     };
-
   } catch (error) {
     if (error.code === 'ENOENT') {
       throw new SVGBBoxError(
         'Inkscape not found. Please install Inkscape and ensure it is in your PATH.\n' +
-        'Download from: https://inkscape.org/release/'
+          'Download from: https://inkscape.org/release/'
       );
     } else if (error.killed) {
       throw new SVGBBoxError('Inkscape process timed out (30s limit)');
@@ -587,7 +589,9 @@ async function main() {
           fileSize: result.fileSize
         });
 
-        printSuccess(`  ✓ Created ${result.outputPath} (${(result.fileSize / 1024).toFixed(1)} KB)`);
+        printSuccess(
+          `  ✓ Created ${result.outputPath} (${(result.fileSize / 1024).toFixed(1)} KB)`
+        );
       } catch (error) {
         results.push({
           success: false,
@@ -600,8 +604,8 @@ async function main() {
     }
 
     // Summary
-    const successful = results.filter(r => r.success).length;
-    const failed = results.filter(r => !r.success).length;
+    const successful = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
 
     console.log(`\n${'═'.repeat(78)}`);
     console.log(`Summary: ${successful} successful, ${failed} failed`);
@@ -675,7 +679,8 @@ async function main() {
 
   // Background
   if (result.background) {
-    const opacity = result.backgroundOpacity !== null ? ` (opacity: ${result.backgroundOpacity}/255)` : '';
+    const opacity =
+      result.backgroundOpacity !== null ? ` (opacity: ${result.backgroundOpacity}/255)` : '';
     console.log(`  Background:  ${result.background}${opacity}`);
   }
 

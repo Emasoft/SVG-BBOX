@@ -52,7 +52,8 @@ Paste relevant console output here
 
 ## Additional Context
 
-Add any other context about the problem here. Screenshots, browser console logs, or related issues can be helpful.
+Add any other context about the problem here. Screenshots, browser console logs,
+or related issues can be helpful.
 
 ## Checklist
 

@@ -12,7 +12,8 @@ A clear and concise description of the feature you'd like to see.
 
 ## Use Case
 
-Describe the use case or problem this feature would solve. Why do you need this feature?
+Describe the use case or problem this feature would solve. Why do you need this
+feature?
 
 ## Proposed Solution
 
@@ -40,7 +41,8 @@ Add any other context, screenshots, or examples about the feature request here.
 
 ## Implementation Complexity
 
-If you have technical knowledge of the codebase, what do you estimate the complexity to be?
+If you have technical knowledge of the codebase, what do you estimate the
+complexity to be?
 
 - [ ] Low - Small change to existing functionality
 - [ ] Medium - New option or mode in existing tool

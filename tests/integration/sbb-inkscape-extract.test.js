@@ -25,7 +25,7 @@ async function checkInkscapeAvailable() {
   try {
     await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
     return true;
-  } catch (_err) {
+  } catch {
     return false;
   }
 }
@@ -35,15 +35,13 @@ async function runExtract(inputSvg, objectId, args = []) {
   const inputPath = path.join(FIXTURES_DIR, inputSvg);
   const outputPath = path.join(TEMP_DIR, `extracted_${objectId}.svg`);
 
-  const { stdout, stderr } = await execFilePromise('node', [
-    EXTRACT_PATH,
-    inputPath,
-    '--id', objectId,
-    '--output', outputPath,
-    ...args
-  ], {
-    timeout: 30000 // 30 seconds timeout
-  });
+  const { stdout, stderr } = await execFilePromise(
+    'node',
+    [EXTRACT_PATH, inputPath, '--id', objectId, '--output', outputPath, ...args],
+    {
+      timeout: 30000 // 30 seconds timeout
+    }
+  );
 
   return { stdout, stderr, outputPath };
 }
@@ -124,9 +122,7 @@ describe('sbb-inkscape-extract Integration Tests', () => {
         return;
       }
 
-      const { outputPath } = await runExtract('multi-objects.svg', 'rect1', [
-        '--margin', '10'
-      ]);
+      const { outputPath } = await runExtract('multi-objects.svg', 'rect1', ['--margin', '10']);
 
       expect(fs.existsSync(outputPath)).toBe(true);
 
@@ -144,18 +140,13 @@ describe('sbb-inkscape-extract Integration Tests', () => {
         return;
       }
 
-      await expect(
-        runExtract('multi-objects.svg', 'nonexistent-id')
-      ).rejects.toThrow();
+      await expect(runExtract('multi-objects.svg', 'nonexistent-id')).rejects.toThrow();
     });
   });
 
   describe('Help and Version', () => {
     it('should display help text', async () => {
-      const { stdout } = await execFilePromise('node', [
-        EXTRACT_PATH,
-        '--help'
-      ]);
+      const { stdout } = await execFilePromise('node', [EXTRACT_PATH, '--help']);
 
       expect(stdout).toContain('sbb-inkscape-extract');
       expect(stdout).toContain('Extract a single object');
@@ -163,10 +154,7 @@ describe('sbb-inkscape-extract Integration Tests', () => {
     });
 
     it('should display version', async () => {
-      const { stdout } = await execFilePromise('node', [
-        EXTRACT_PATH,
-        '--version'
-      ]);
+      const { stdout } = await execFilePromise('node', [EXTRACT_PATH, '--version']);
 
       expect(stdout).toContain('sbb-inkscape-extract');
       expect(stdout).toContain('svg-bbox toolkit');

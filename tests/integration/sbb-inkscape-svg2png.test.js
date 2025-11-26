@@ -25,7 +25,7 @@ async function checkInkscapeAvailable() {
   try {
     await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
     return true;
-  } catch (_err) {
+  } catch {
     return false;
   }
 }
@@ -35,14 +35,13 @@ async function runSvg2Png(inputSvg, args = []) {
   const inputPath = path.join(FIXTURES_DIR, inputSvg);
   const outputPath = path.join(TEMP_DIR, inputSvg.replace('.svg', '.png'));
 
-  const { stdout, stderr } = await execFilePromise('node', [
-    SVG2PNG_PATH,
-    inputPath,
-    '--output', outputPath,
-    ...args
-  ], {
-    timeout: 30000 // 30 seconds timeout
-  });
+  const { stdout, stderr } = await execFilePromise(
+    'node',
+    [SVG2PNG_PATH, inputPath, '--output', outputPath, ...args],
+    {
+      timeout: 30000 // 30 seconds timeout
+    }
+  );
 
   return { stdout, stderr, outputPath };
 }
@@ -82,7 +81,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
       const fileBuffer = fs.readFileSync(outputPath);
       expect(fileBuffer[0]).toBe(0x89);
       expect(fileBuffer[1]).toBe(0x50);
-      expect(fileBuffer[2]).toBe(0x4E);
+      expect(fileBuffer[2]).toBe(0x4e);
       expect(fileBuffer[3]).toBe(0x47);
 
       // Check file size is reasonable (not empty)
@@ -114,8 +113,10 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
       }
 
       const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--width', '256',
-        '--height', '256'
+        '--width',
+        '256',
+        '--height',
+        '256'
       ]);
 
       expect(fs.existsSync(outputPath)).toBe(true);
@@ -133,9 +134,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
         return;
       }
 
-      const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--dpi', '150'
-      ]);
+      const { outputPath } = await runSvg2Png('simple-rect.svg', ['--dpi', '150']);
 
       expect(fs.existsSync(outputPath)).toBe(true);
 
@@ -151,9 +150,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
         return;
       }
 
-      const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--area-page'
-      ]);
+      const { outputPath } = await runSvg2Png('simple-rect.svg', ['--area-page']);
 
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -164,9 +161,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
         return;
       }
 
-      const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--area-drawing'
-      ]);
+      const { outputPath } = await runSvg2Png('simple-rect.svg', ['--area-drawing']);
 
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -179,9 +174,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
         return;
       }
 
-      const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--compression', '9'
-      ]);
+      const { outputPath } = await runSvg2Png('simple-rect.svg', ['--compression', '9']);
 
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -192,9 +185,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
         return;
       }
 
-      const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--antialias', '3'
-      ]);
+      const { outputPath } = await runSvg2Png('simple-rect.svg', ['--antialias', '3']);
 
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -207,9 +198,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
         return;
       }
 
-      const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--background', 'white'
-      ]);
+      const { outputPath } = await runSvg2Png('simple-rect.svg', ['--background', 'white']);
 
       expect(fs.existsSync(outputPath)).toBe(true);
 
@@ -224,8 +213,10 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
       }
 
       const { outputPath } = await runSvg2Png('simple-rect.svg', [
-        '--background', '#ff0000',
-        '--background-opacity', '0.5'
+        '--background',
+        '#ff0000',
+        '--background-opacity',
+        '0.5'
       ]);
 
       expect(fs.existsSync(outputPath)).toBe(true);
@@ -234,10 +225,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
 
   describe('Help and Version', () => {
     it('should display help text', async () => {
-      const { stdout } = await execFilePromise('node', [
-        SVG2PNG_PATH,
-        '--help'
-      ]);
+      const { stdout } = await execFilePromise('node', [SVG2PNG_PATH, '--help']);
 
       expect(stdout).toContain('sbb-inkscape-svg2png');
       expect(stdout).toContain('Export SVG files to PNG');
@@ -246,10 +234,7 @@ describe('sbb-inkscape-svg2png Integration Tests', () => {
     });
 
     it('should display version', async () => {
-      const { stdout } = await execFilePromise('node', [
-        SVG2PNG_PATH,
-        '--version'
-      ]);
+      const { stdout } = await execFilePromise('node', [SVG2PNG_PATH, '--version']);
 
       expect(stdout).toContain('sbb-inkscape-svg2png');
       expect(stdout).toContain('svg-bbox toolkit');

@@ -36,7 +36,6 @@ async function runComparer(svg1, svg2, args = []) {
 }
 
 describe('sbb-comparer Integration Tests', () => {
-
   beforeAll(() => {
     // Create temp directory for test outputs
     if (!fs.existsSync(TEMP_DIR)) {
@@ -84,7 +83,8 @@ describe('sbb-comparer Integration Tests', () => {
   describe('Threshold Configuration', () => {
     it('should respect threshold=1 (strict)', async () => {
       const result = await runComparer('simple-rect.svg', 'simple-rect-red.svg', [
-        '--threshold', '1'
+        '--threshold',
+        '1'
       ]);
 
       expect(result.threshold).toBe(1);
@@ -93,7 +93,8 @@ describe('sbb-comparer Integration Tests', () => {
 
     it('should accept threshold=10 (more tolerant)', async () => {
       const result = await runComparer('simple-rect.svg', 'simple-rect-red.svg', [
-        '--threshold', '10'
+        '--threshold',
+        '10'
       ]);
 
       expect(result.threshold).toBe(10);
@@ -105,7 +106,8 @@ describe('sbb-comparer Integration Tests', () => {
   describe('Alignment Modes', () => {
     it('should support origin alignment', async () => {
       const result = await runComparer('simple-rect.svg', 'offset-rect.svg', [
-        '--alignment', 'origin'
+        '--alignment',
+        'origin'
       ]);
 
       expect(result.totalPixels).toBeGreaterThan(0);
@@ -113,7 +115,8 @@ describe('sbb-comparer Integration Tests', () => {
 
     it('should support viewbox-center alignment', async () => {
       const result = await runComparer('simple-rect.svg', 'offset-rect.svg', [
-        '--alignment', 'viewbox-center'
+        '--alignment',
+        'viewbox-center'
       ]);
 
       expect(result.totalPixels).toBeGreaterThan(0);
@@ -123,7 +126,8 @@ describe('sbb-comparer Integration Tests', () => {
   describe('Resolution Modes', () => {
     it('should support viewbox resolution mode', async () => {
       const result = await runComparer('simple-rect.svg', 'simple-circle.svg', [
-        '--resolution', 'viewbox'
+        '--resolution',
+        'viewbox'
       ]);
 
       expect(result.totalPixels).toBeGreaterThan(0);
@@ -131,7 +135,8 @@ describe('sbb-comparer Integration Tests', () => {
 
     it('should support scale resolution mode', async () => {
       const result = await runComparer('simple-rect.svg', 'simple-circle.svg', [
-        '--resolution', 'scale'
+        '--resolution',
+        'scale'
       ]);
 
       expect(result.totalPixels).toBeGreaterThan(0);
@@ -142,9 +147,7 @@ describe('sbb-comparer Integration Tests', () => {
     it('should create diff PNG file', async () => {
       const diffPath = path.join(TEMP_DIR, 'test-diff.png');
 
-      await runComparer('simple-rect.svg', 'simple-rect-red.svg', [
-        '--out-diff', diffPath
-      ]);
+      await runComparer('simple-rect.svg', 'simple-rect-red.svg', ['--out-diff', diffPath]);
 
       expect(fs.existsSync(diffPath)).toBe(true);
 
@@ -152,7 +155,7 @@ describe('sbb-comparer Integration Tests', () => {
       const buffer = fs.readFileSync(diffPath);
       expect(buffer[0]).toBe(0x89);
       expect(buffer[1]).toBe(0x50); // 'P'
-      expect(buffer[2]).toBe(0x4E); // 'N'
+      expect(buffer[2]).toBe(0x4e); // 'N'
       expect(buffer[3]).toBe(0x47); // 'G'
     });
   });

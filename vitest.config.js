@@ -18,11 +18,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      include: [
-        'SvgVisualBBox.js',
-        '*-svg-*.js',
-        'export-svg-objects.js'
-      ],
+      include: ['SvgVisualBBox.js', '*-svg-*.js', 'export-svg-objects.js'],
       exclude: [
         'tests/**',
         'node_modules/**',
@@ -45,10 +41,7 @@ export default defineConfig({
     },
 
     // Test include patterns
-    include: [
-      'tests/**/*.test.js',
-      'tests/**/*.spec.js'
-    ],
+    include: ['tests/**/*.test.js', 'tests/**/*.spec.js'],
 
     // Test exclude patterns
     exclude: [

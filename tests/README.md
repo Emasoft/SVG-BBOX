@@ -63,7 +63,8 @@ Test CLI tools with real SVG files:
 
 - **test-svg-bbox.test.js** - Test harness CLI
 - **export-objects-list.test.js** - LIST mode (HTML generation, auto-IDs)
-- **export-objects-rename.test.js** - RENAME mode (ID updates, reference updates)
+- **export-objects-rename.test.js** - RENAME mode (ID updates, reference
+  updates)
 - **export-objects-extract.test.js** - EXTRACT mode (cut-outs, context)
 - **export-objects-export-all.test.js** - EXPORT-ALL mode (bulk export, groups)
 - **fix-viewbox.test.js** - ViewBox repair
@@ -92,6 +93,7 @@ Run: `just test-e2e` or `pnpm run test:e2e`
    - Elements with IDs for easy reference
 
 Example:
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
@@ -114,7 +116,12 @@ Example:
 Located in `tests/helpers/browser-test.js`:
 
 ```javascript
-import { createPageWithSvg, getBBoxById, closeBrowser, assertValidBBox } from '../helpers/browser-test.js';
+import {
+  createPageWithSvg,
+  getBBoxById,
+  closeBrowser,
+  assertValidBBox
+} from '../helpers/browser-test.js';
 
 // Load SVG and create page
 const page = await createPageWithSvg('simple/rect.svg');
@@ -164,10 +171,12 @@ Opens Playwright Inspector for step-by-step debugging.
 ### Screenshots and Videos
 
 Playwright automatically captures:
+
 - Screenshots on test failure
 - Videos when tests fail (if configured)
 
 Find them in:
+
 - `test-results/` - Screenshots
 - `playwright-report/` - HTML report with videos
 
@@ -187,6 +196,7 @@ just coverage-report
 ```
 
 Coverage thresholds (in `vitest.config.js`):
+
 - Statements: 80%
 - Branches: 70%
 - Functions: 80%
@@ -195,6 +205,7 @@ Coverage thresholds (in `vitest.config.js`):
 ## CI/CD
 
 Tests run automatically on:
+
 - Push to main/develop branches
 - Pull requests
 
@@ -211,6 +222,7 @@ See `.github/workflows/test.yml` for configuration.
 ### Browser Launch Fails
 
 Install Chrome/Chromium:
+
 ```bash
 # Install Puppeteer's Chromium
 npx puppeteer browsers install chrome
@@ -222,18 +234,20 @@ npx playwright install --with-deps chromium
 ### Font Loading Timeouts
 
 Increase `fontTimeoutMs` in test options:
+
 ```javascript
 await getBBoxById(page, 'cjk-text', { fontTimeoutMs: 10000 });
 ```
 
 ### Canvas Tainting Errors
 
-Check if SVG references external resources without CORS headers.
-Tests should use local fixtures to avoid this.
+Check if SVG references external resources without CORS headers. Tests should
+use local fixtures to avoid this.
 
 ### Tests Hang
 
 Check for:
+
 - Unclosed browser pages: Always `await page.close()`
 - Missing `await` keywords
 - Infinite loops in evaluated code
@@ -242,22 +256,17 @@ Check for:
 
 ### Do's
 
-✅ Use real SVG fixtures (no mocks)
-✅ Test in real browser context (Puppeteer/Playwright)
-✅ Close pages and browsers properly
-✅ Use descriptive test names
-✅ Group related tests with `describe` blocks
-✅ Add comments explaining complex assertions
-✅ Test edge cases and error conditions
+✅ Use real SVG fixtures (no mocks) ✅ Test in real browser context
+(Puppeteer/Playwright) ✅ Close pages and browsers properly ✅ Use descriptive
+test names ✅ Group related tests with `describe` blocks ✅ Add comments
+explaining complex assertions ✅ Test edge cases and error conditions
 
 ### Don'ts
 
-❌ Don't mock the browser or DOM
-❌ Don't skip cleanup (`afterAll`, `page.close()`)
-❌ Don't use hard-coded paths (use helpers)
-❌ Don't test implementation details
-❌ Don't create flaky tests (use proper waits)
-❌ Don't commit failing tests
+❌ Don't mock the browser or DOM ❌ Don't skip cleanup (`afterAll`,
+`page.close()`) ❌ Don't use hard-coded paths (use helpers) ❌ Don't test
+implementation details ❌ Don't create flaky tests (use proper waits) ❌ Don't
+commit failing tests
 
 ## Writing New Tests
 
@@ -265,7 +274,11 @@ Check for:
 
 ```javascript
 import { describe, it, expect, afterAll } from 'vitest';
-import { createPageWithSvg, getBBoxById, closeBrowser } from '../helpers/browser-test.js';
+import {
+  createPageWithSvg,
+  getBBoxById,
+  closeBrowser
+} from '../helpers/browser-test.js';
 
 describe('My Feature', () => {
   afterAll(async () => {
@@ -293,7 +306,9 @@ import fs from 'fs';
 
 describe('My CLI Tool', () => {
   it('should process SVG correctly', async () => {
-    const { stdout, stderr, exitCode } = await runCLI('my-tool.js', ['input.svg']);
+    const { stdout, stderr, exitCode } = await runCLI('my-tool.js', [
+      'input.svg'
+    ]);
 
     expect(exitCode).toBe(0);
     expect(stderr).toBe('');
@@ -307,7 +322,8 @@ describe('My CLI Tool', () => {
 
 ## Performance
 
-- **Parallel execution:** Tests run in parallel (configurable in `vitest.config.js`)
+- **Parallel execution:** Tests run in parallel (configurable in
+  `vitest.config.js`)
 - **Browser reuse:** Shared browser instance across tests
 - **Fixture caching:** SVG files loaded once
 - **Timeout:** 30 minutes per test (browser operations can be slow)

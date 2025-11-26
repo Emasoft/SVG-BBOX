@@ -25,7 +25,7 @@ async function build() {
   const result = await minify(sourceCode, {
     compress: {
       dead_code: true,
-      drop_console: false,  // Keep console for debugging
+      drop_console: false, // Keep console for debugging
       drop_debugger: true,
       pure_funcs: []
     },
@@ -43,7 +43,7 @@ async function build() {
       ]
     },
     format: {
-      comments: /^!/,  // Keep comments starting with !
+      comments: /^!/, // Keep comments starting with !
       preamble: `/*! SvgVisualBBox.js v${getVersion()} | MIT License | https://github.com/Emasoft/SVG-BBOX */`
     }
   });

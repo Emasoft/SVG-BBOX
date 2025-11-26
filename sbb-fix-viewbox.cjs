@@ -148,22 +148,18 @@ function parseArgs(argv) {
   }
 
   const input = positional[0];
-  const output = positional[1] || (input.replace(/\.svg$/i, '') + '.fixed.svg');
+  const output = positional[1] || input.replace(/\.svg$/i, '') + '.fixed.svg';
   return { input, output, autoOpen };
 }
 
 // SECURITY: Constants for timeouts
-const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
-const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
+const FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 // SECURITY: Secure Puppeteer options
 const PUPPETEER_OPTIONS = {
   headless: true,
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage'
-  ]
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
 };
 
 async function fixSvgFile(inputPath, outputPath, autoOpen = false) {
@@ -324,25 +320,26 @@ ${sanitizedSvg}
     if (autoOpen) {
       const absolutePath = path.resolve(safeOutPath);
 
-      openInChrome(absolutePath).then(result => {
-        if (result.success) {
-          printSuccess(`Opened in Chrome: ${absolutePath}`);
-        } else {
-          printWarning(result.error);
+      openInChrome(absolutePath)
+        .then((result) => {
+          if (result.success) {
+            printSuccess(`Opened in Chrome: ${absolutePath}`);
+          } else {
+            printWarning(result.error);
+            printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+          }
+        })
+        .catch((err) => {
+          printWarning(`Failed to auto-open: ${err.message}`);
           printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
-        }
-      }).catch(err => {
-        printWarning(`Failed to auto-open: ${err.message}`);
-        printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
-      });
+        });
     }
-
   } finally {
     // SECURITY: Ensure browser is always closed
     if (browser) {
       try {
         await browser.close();
-      } catch (closeErr) {
+      } catch {
         // Force kill if close fails
         if (browser.process()) {
           browser.process().kill('SIGKILL');

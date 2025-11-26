@@ -147,15 +147,15 @@ async function findInkscape() {
       '/Applications/Inkscape.app/Contents/Resources/bin/inkscape',
       '/usr/local/bin/inkscape',
       '/opt/homebrew/bin/inkscape',
-      '/opt/local/bin/inkscape'  // MacPorts
+      '/opt/local/bin/inkscape' // MacPorts
     );
   } else {
     // Linux and other Unix-like systems
     candidatePaths.push(
       '/usr/bin/inkscape',
       '/usr/local/bin/inkscape',
-      '/snap/bin/inkscape',  // Snap package
-      '/usr/bin/flatpak'      // Flatpak (special handling needed)
+      '/snap/bin/inkscape', // Snap package
+      '/usr/bin/flatpak' // Flatpak (special handling needed)
     );
   }
 
@@ -169,7 +169,7 @@ async function findInkscape() {
           return candidate;
         }
       }
-    } catch (err) {
+    } catch {
       // Path exists but not executable or version check failed - continue
       continue;
     }
@@ -179,20 +179,24 @@ async function findInkscape() {
   try {
     const { stdout } = await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
     if (stdout.toLowerCase().includes('inkscape')) {
-      return 'inkscape';  // Found in PATH
+      return 'inkscape'; // Found in PATH
     }
-  } catch (err) {
+  } catch {
     // Not in PATH
   }
 
   // Special handling for Flatpak on Linux
   if (platform === 'linux') {
     try {
-      const { stdout } = await execFilePromise('flatpak', ['run', 'org.inkscape.Inkscape', '--version'], { timeout: 5000 });
+      const { stdout } = await execFilePromise(
+        'flatpak',
+        ['run', 'org.inkscape.Inkscape', '--version'],
+        { timeout: 5000 }
+      );
       if (stdout.toLowerCase().includes('inkscape')) {
         return 'flatpak run org.inkscape.Inkscape';
       }
-    } catch (err) {
+    } catch {
       // Flatpak not available or Inkscape not installed via Flatpak
     }
   }
@@ -283,10 +287,14 @@ async function runComparison(originalPath, convertedPath, jsonMode) {
   }
 
   try {
-    const { stdout } = await execFilePromise('node', [comparerPath, originalPath, convertedPath, '--json'], {
-      timeout: 120000,  // 2 minutes for comparison
-      maxBuffer: 10 * 1024 * 1024
-    });
+    const { stdout } = await execFilePromise(
+      'node',
+      [comparerPath, originalPath, convertedPath, '--json'],
+      {
+        timeout: 120000, // 2 minutes for comparison
+        maxBuffer: 10 * 1024 * 1024
+      }
+    );
 
     const result = JSON.parse(stdout);
     return result;
@@ -347,13 +355,13 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
       const flatpakArgs = ['run', 'org.inkscape.Inkscape'].concat(inkscapeArgs);
       const { stdout, stderr } = await execFilePromise('flatpak', flatpakArgs, {
         timeout: 60000,
-        maxBuffer: 10 * 1024 * 1024  // 10MB buffer for output
+        maxBuffer: 10 * 1024 * 1024 // 10MB buffer for output
       });
       return { stdout, stderr };
     } else {
       const { stdout, stderr } = await execFilePromise(inkscapePath, inkscapeArgs, {
         timeout: 60000,
-        maxBuffer: 10 * 1024 * 1024  // 10MB buffer for output
+        maxBuffer: 10 * 1024 * 1024 // 10MB buffer for output
       });
       return { stdout, stderr };
     }
@@ -378,9 +386,10 @@ function readBatchFile(batchFilePath) {
   });
 
   const content = fs.readFileSync(safeBatchPath, 'utf-8');
-  const lines = content.split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0 && !line.startsWith('#'));
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
 
   if (lines.length === 0) {
     throw new ValidationError(`Batch file is empty: ${safeBatchPath}`);
@@ -407,7 +416,9 @@ async function processSingleFile(inkscapePath, inputPath, outputPath, options, a
 
   // Check if output exists and --overwrite not specified
   if (fs.existsSync(safeOutputPath) && !options.overwrite) {
-    throw new ValidationError(`Output file already exists: ${safeOutputPath}\nUse --overwrite to replace it.`);
+    throw new ValidationError(
+      `Output file already exists: ${safeOutputPath}\nUse --overwrite to replace it.`
+    );
   }
 
   // Convert text to paths
@@ -467,10 +478,10 @@ async function main() {
   if (!inkscapePath) {
     throw new SVGBBoxError(
       'Inkscape not found.\n' +
-      'Please install Inkscape:\n' +
-      '  • Windows: https://inkscape.org/release/\n' +
-      '  • macOS: brew install --cask inkscape\n' +
-      '  • Linux: sudo apt install inkscape (or your package manager)'
+        'Please install Inkscape:\n' +
+        '  • Windows: https://inkscape.org/release/\n' +
+        '  • macOS: brew install --cask inkscape\n' +
+        '  • Linux: sudo apt install inkscape (or your package manager)'
     );
   }
 
@@ -498,10 +509,16 @@ async function main() {
           printInfo(`[${i + 1}/${inputFiles.length}] Converting: ${inputFile}`);
         }
 
-        const result = await processSingleFile(inkscapePath, inputFile, outputFile, {
-          overwrite: args.overwrite,
-          skipComparison: args.skipComparison
-        }, args);
+        const result = await processSingleFile(
+          inkscapePath,
+          inputFile,
+          outputFile,
+          {
+            overwrite: args.overwrite,
+            skipComparison: args.skipComparison
+          },
+          args
+        );
 
         results.push(result);
 
@@ -513,7 +530,9 @@ async function main() {
 
           console.log(`  ✓ ${path.basename(result.output)}`);
           if (!args.skipComparison && result.comparison) {
-            console.log(`    Similarity: ${similarity}% (${result.comparison.diffPercentage}% different)`);
+            console.log(
+              `    Similarity: ${similarity}% (${result.comparison.diffPercentage}% different)`
+            );
           }
         }
       } catch (err) {
@@ -533,20 +552,28 @@ async function main() {
 
     // Output batch results
     if (args.json) {
-      console.log(JSON.stringify({
-        mode: 'batch',
-        totalFiles: inputFiles.length,
-        successful: results.filter(r => !r.error).length,
-        failed: results.filter(r => r.error).length,
-        results: results
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            mode: 'batch',
+            totalFiles: inputFiles.length,
+            successful: results.filter((r) => !r.error).length,
+            failed: results.filter((r) => r.error).length,
+            results: results
+          },
+          null,
+          2
+        )
+      );
     } else {
       console.log('');
-      const successful = results.filter(r => !r.error).length;
-      const failed = results.filter(r => r.error).length;
+      const successful = results.filter((r) => !r.error).length;
+      const failed = results.filter((r) => r.error).length;
 
       if (failed === 0) {
-        printSuccess(`Batch complete! ${successful}/${inputFiles.length} files converted successfully.`);
+        printSuccess(
+          `Batch complete! ${successful}/${inputFiles.length} files converted successfully.`
+        );
       } else {
         printWarning(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
       }
@@ -560,10 +587,16 @@ async function main() {
     printInfo('Converting text to paths...');
   }
 
-  const result = await processSingleFile(inkscapePath, args.input, args.output, {
-    overwrite: args.overwrite,
-    skipComparison: args.skipComparison
-  }, args);
+  const result = await processSingleFile(
+    inkscapePath,
+    args.input,
+    args.output,
+    {
+      overwrite: args.overwrite,
+      skipComparison: args.skipComparison
+    },
+    args
+  );
 
   // Output results
   if (args.json) {
@@ -572,7 +605,9 @@ async function main() {
     printSuccess('Conversion complete!');
     console.log(`  Input:        ${result.input} (${(result.inputSize / 1024).toFixed(1)} KB)`);
     console.log(`  Output:       ${result.output} (${(result.outputSize / 1024).toFixed(1)} KB)`);
-    console.log(`  Size change:  ${result.outputSize > result.inputSize ? '+' : ''}${((result.outputSize / result.inputSize - 1) * 100).toFixed(1)}%`);
+    console.log(
+      `  Size change:  ${result.outputSize > result.inputSize ? '+' : ''}${((result.outputSize / result.inputSize - 1) * 100).toFixed(1)}%`
+    );
 
     if (result.comparison) {
       console.log('');

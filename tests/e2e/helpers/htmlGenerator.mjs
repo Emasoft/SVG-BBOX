@@ -19,20 +19,16 @@ import { generateTestViewBoxFunction } from './testHelpers.mjs';
  * @param {number} options.totalTests - Total number of tests
  * @returns {string} Complete HTML document
  */
-export function generateTestPage({
-  title,
-  sections,
-  scriptFunction,
-  libraryPath,
-  totalTests
-}) {
+export function generateTestPage({ title, sections, scriptFunction, libraryPath, totalTests }) {
   const sectionsHTML = sections
-    .map(({ title: sectionTitle, markup }) => `
+    .map(
+      ({ title: sectionTitle, markup }) => `
   <!-- ${sectionTitle} -->
   <div class="section">
     <h3>${sectionTitle}</h3>
     ${markup}
-  </div>`)
+  </div>`
+    )
     .join('\n');
 
   return `<!DOCTYPE html>

@@ -1,3 +1,4 @@
+/* eslint-env node, browser */
 /**
  * showTrueBBoxBorder() E2E Tests
  *
@@ -48,23 +49,32 @@ const edgeCases = {
       let transformedContent = content;
 
       // Transform x and cx attributes
-      transformedContent = transformedContent.replace(/(<\w+[^>]*?\s+)(x|cx)="([^"]+)"/g, (match, prefix, attr, value) => {
-        const newVal = parseFloat(value) - 200;
-        return `${prefix}${attr}="${newVal}"`;
-      });
+      transformedContent = transformedContent.replace(
+        /(<\w+[^>]*?\s+)(x|cx)="([^"]+)"/g,
+        (match, prefix, attr, value) => {
+          const newVal = parseFloat(value) - 200;
+          return `${prefix}${attr}="${newVal}"`;
+        }
+      );
 
       // Transform y and cy attributes
-      transformedContent = transformedContent.replace(/(<\w+[^>]*?\s+)(y|cy)="([^"]+)"/g, (match, prefix, attr, value) => {
-        const newVal = parseFloat(value) - 150;
-        return `${prefix}${attr}="${newVal}"`;
-      });
+      transformedContent = transformedContent.replace(
+        /(<\w+[^>]*?\s+)(y|cy)="([^"]+)"/g,
+        (match, prefix, attr, value) => {
+          const newVal = parseFloat(value) - 150;
+          return `${prefix}${attr}="${newVal}"`;
+        }
+      );
 
       // Transform rotate() transform coordinates: rotate(angle x y) -> rotate(angle x-200 y-150)
-      transformedContent = transformedContent.replace(/rotate\(([^\s]+)\s+([^\s]+)\s+([^\)]+)\)/g, (match, angle, x, y) => {
-        const newX = parseFloat(x) - 200;
-        const newY = parseFloat(y) - 150;
-        return `rotate(${angle} ${newX} ${newY})`;
-      });
+      transformedContent = transformedContent.replace(
+        /rotate\(([^\s]+)\s+([^\s]+)\s+([^)]+)\)/g,
+        (match, angle, x, y) => {
+          const newX = parseFloat(x) - 200;
+          const newY = parseFloat(y) - 150;
+          return `rotate(${angle} ${newX} ${newY})`;
+        }
+      );
 
       return `<svg id="svg_${id}" viewBox="-200 -150 400 300" width="800" height="600">${transformedContent}</svg>`;
     }
@@ -151,8 +161,11 @@ const baseScenarios = [
     validate: (result) => {
       expect(result.success).toBe(true);
       expect(result.borderStyle).toContain('dashed');
-      const isDark = result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
-      const isLight = result.borderStyle.includes('rgba(255, 255, 255') || result.borderStyle.includes('rgb(255, 255, 255');
+      const isDark =
+        result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
+      const isLight =
+        result.borderStyle.includes('rgba(255, 255, 255') ||
+        result.borderStyle.includes('rgb(255, 255, 255');
       expect(isDark || isLight).toBe(true);
     }
   },
@@ -164,7 +177,9 @@ const baseScenarios = [
     options: { theme: 'dark' },
     validate: (result) => {
       expect(result.success).toBe(true);
-      const isLight = result.borderStyle.includes('rgba(255, 255, 255') || result.borderStyle.includes('rgb(255, 255, 255');
+      const isLight =
+        result.borderStyle.includes('rgba(255, 255, 255') ||
+        result.borderStyle.includes('rgb(255, 255, 255');
       expect(isLight).toBe(true);
     }
   },
@@ -176,7 +191,8 @@ const baseScenarios = [
     options: { theme: 'light' },
     validate: (result) => {
       expect(result.success).toBe(true);
-      const isDark = result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
+      const isDark =
+        result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
       expect(isDark).toBe(true);
     }
   },
@@ -205,19 +221,18 @@ const baseScenarios = [
   }
 ];
 
-test.beforeAll(async ({ }, testInfo) => {
+test.beforeAll(async () => {
   // Skip if file already exists (avoid race condition)
   try {
     await fs.access(testPagePath);
     console.log('Test page already exists');
     return;
-  } catch (e) {
+  } catch {
     // File doesn't exist, create it
   }
 
   // Generate all SVG combinations dynamically
   let sections = [];
-  let testIndex = 0;
 
   for (const edgeKey of Object.keys(edgeCases)) {
     const edge = edgeCases[edgeKey];
@@ -234,7 +249,6 @@ test.beforeAll(async ({ }, testInfo) => {
     <h3>${edge.name}: ${scenario.name}</h3>
     ${svgMarkup}
   </div>`);
-      testIndex++;
     }
   }
 
@@ -358,9 +372,12 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
           }
 
           const options = scenario.options || {};
-          const result = await page.evaluate(({ elemId, opts }) => {
-            return window.testBorder(elemId, opts);
-          }, { elemId: targetId, opts: options });
+          const result = await page.evaluate(
+            ({ elemId, opts }) => {
+              return window.testBorder(elemId, opts);
+            },
+            { elemId: targetId, opts: options }
+          );
 
           // Run scenario-specific validation
           scenario.validate(result);
@@ -368,7 +385,9 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
           // Log success
           const edgeLabel = edgeKey.padEnd(15);
           const scenarioLabel = scenario.name.padEnd(30);
-          console.log(`✓ [${edgeLabel}] ${scenarioLabel} - accurate (x=${result.diffs.x.toFixed(2)}, y=${result.diffs.y.toFixed(2)})`);
+          console.log(
+            `✓ [${edgeLabel}] ${scenarioLabel} - accurate (x=${result.diffs.x.toFixed(2)}, y=${result.diffs.y.toFixed(2)})`
+          );
         });
       }
     });
@@ -382,11 +401,13 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
     const firstId = 'elem_normal_0';
     await page.evaluate((id) => window.testBorder(id), firstId);
 
-    let count = await page.evaluate(() => document.querySelectorAll('[data-svg-bbox-overlay]').length);
+    let count = await page.evaluate(
+      () => document.querySelectorAll('[data-svg-bbox-overlay]').length
+    );
     expect(count).toBe(1);
 
     await page.evaluate(() => {
-      document.querySelectorAll('[data-svg-bbox-overlay]').forEach(o => o.remove());
+      document.querySelectorAll('[data-svg-bbox-overlay]').forEach((o) => o.remove());
     });
 
     count = await page.evaluate(() => document.querySelectorAll('[data-svg-bbox-overlay]').length);
