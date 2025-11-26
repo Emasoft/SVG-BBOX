@@ -28,15 +28,30 @@
  * These tests document the correct HTML structure so future changes don't break it.
  */
 
-import { test, describe, expect } from 'vitest';
+import { test, describe, expect, beforeAll, afterAll } from 'vitest';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
+import path from 'path';
 import { JSDOM } from 'jsdom';
 
 const execFilePromise = promisify(execFile);
 
+// Use project-local temp directory
+const TEMP_DIR = path.join(process.cwd(), 'tests', '.tmp-html-structure-tests');
+const TEST_HTML = path.join(TEMP_DIR, 'test_structure.html');
+
 describe('HTML Preview Structure Validation', () => {
+  beforeAll(async () => {
+    // Create temp directory
+    await fs.mkdir(TEMP_DIR, { recursive: true });
+  });
+
+  afterAll(async () => {
+    // Clean up temp directory
+    await fs.rm(TEMP_DIR, { recursive: true, force: true });
+  });
+
   test('export-svg-objects generates HTML with parent transform wrappers', async () => {
     // Generate HTML from sample SVG
     const { stdout: _stdout } = await execFilePromise('node', [
@@ -44,11 +59,11 @@ describe('HTML Preview Structure Validation', () => {
       'samples/test_text_to_path_advanced.svg',
       '--list',
       '--out-html',
-      '/tmp/test_structure.html'
+      TEST_HTML
     ]);
 
     // Read generated HTML
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
     const dom = new JSDOM(html);
     const doc = dom.window.document;
 
@@ -70,7 +85,7 @@ describe('HTML Preview Structure Validation', () => {
   }, 30000);
 
   test('Hidden container SVG has NO viewBox attribute', async () => {
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
     const dom = new JSDOM(html);
     const doc = dom.window.document;
 
@@ -92,7 +107,7 @@ describe('HTML Preview Structure Validation', () => {
   });
 
   test('Preview SVGs use viewBox with full precision coordinates', async () => {
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
     const dom = new JSDOM(html);
     const doc = dom.window.document;
 
@@ -127,7 +142,7 @@ describe('HTML Preview Structure Validation', () => {
   });
 
   test('text8 preview has correct parent transform from g37', async () => {
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
 
     // Find text8's preview cell (contains <use href="#text8" />)
     const text8Match = html.match(
@@ -146,7 +161,7 @@ describe('HTML Preview Structure Validation', () => {
   });
 
   test('rect1851 preview has correct parent transform from g1 and g37', async () => {
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
 
     // Find rect1851's specific row by data-id attribute, then extract the transform
     // This is more robust than regex matching across the whole document
@@ -170,7 +185,7 @@ describe('HTML Preview Structure Validation', () => {
   });
 
   test('Elements without parent transforms have no wrapper <g>', async () => {
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
     const dom = new JSDOM(html);
     const doc = dom.window.document;
 
@@ -192,7 +207,7 @@ describe('HTML Preview Structure Validation', () => {
   });
 
   test('Preview cells have correct border structure (external to SVG)', async () => {
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
     const dom = new JSDOM(html);
     const doc = dom.window.document;
 
@@ -240,7 +255,7 @@ describe('HTML Preview Structure Validation', () => {
   });
 
   test('Border wrapper structure allows external border (no overlap)', async () => {
-    const html = await fs.readFile('/tmp/test_structure.html', 'utf8');
+    const html = await fs.readFile(TEST_HTML, 'utf8');
     const dom = new JSDOM(html);
     const doc = dom.window.document;
 

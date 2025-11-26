@@ -65,6 +65,11 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+tests/.tmp-*/
+test-cli-security-temp/
+
+# E2E test temporary directories
+tests/.tmp-e2e-*/
 
 # Development directories
 docs_dev/

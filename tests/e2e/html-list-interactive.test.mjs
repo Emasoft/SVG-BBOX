@@ -26,22 +26,34 @@ import path from 'path';
 
 const execFilePromise = promisify(execFile);
 
+// Use project-local temp directory
+const TEMP_DIR = path.join(process.cwd(), 'tests', '.tmp-e2e-interactive-tests');
+const TEST_HTML = path.join(TEMP_DIR, 'test_interactive.html');
+
 // Generate HTML file once before all tests
 test.beforeAll(async () => {
+  // Create temp directory
+  await fs.mkdir(TEMP_DIR, { recursive: true });
+
   console.log('Generating HTML catalog for interactive testing...');
   await execFilePromise('node', [
     'sbb-extractor.cjs',
     'samples/test_text_to_path_advanced.svg',
     '--list',
     '--out-html',
-    '/tmp/test_interactive.html'
+    TEST_HTML
   ]);
-  console.log('HTML catalog generated at /tmp/test_interactive.html');
+  console.log(`HTML catalog generated at ${TEST_HTML}`);
+});
+
+test.afterAll(async () => {
+  // Clean up temp directory
+  await fs.rm(TEMP_DIR, { recursive: true, force: true });
 });
 
 test.describe('HTML List Interactive Features', () => {
   test('Page loads correctly with all interactive elements', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     // Check title
     await expect(page).toHaveTitle(/SVG Objects/);
@@ -61,7 +73,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Valid ID input shows NO error and NO red background', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     // Find first row with an ID
     const firstRow = page.locator('tbody tr').first();
@@ -88,7 +100,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Invalid ID syntax shows red background and error message', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const firstRow = page.locator('tbody tr').first();
     const input = firstRow.locator('input[type="text"]');
@@ -117,7 +129,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Duplicate ID shows red background and collision error', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const rows = page.locator('tbody tr');
     const firstRow = rows.nth(0);
@@ -153,7 +165,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Collision with existing SVG ID shows red background and error', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const rows = page.locator('tbody tr');
 
@@ -194,7 +206,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Save button is DISABLED when errors exist', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const firstRow = page.locator('tbody tr').first();
     const input = firstRow.locator('input[type="text"]');
@@ -216,7 +228,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Save button is ENABLED when all checked rows are valid', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const firstRow = page.locator('tbody tr').first();
     const input = firstRow.locator('input[type="text"]');
@@ -235,7 +247,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('JSON export contains correct mapping with user-provided names', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const rows = page.locator('tbody tr');
     const firstRow = rows.nth(0);
@@ -270,7 +282,7 @@ test.describe('HTML List Interactive Features', () => {
     const download = await downloadPromise;
 
     // Save to temp file
-    const downloadPath = '/tmp/test_rename_mapping.json';
+    const downloadPath = path.join(TEMP_DIR, 'test_rename_mapping.json');
     await download.saveAs(downloadPath);
 
     // Read and parse JSON
@@ -300,7 +312,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Unchecked rows are NOT included in JSON export', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const rows = page.locator('tbody tr');
     const firstRow = rows.nth(0);
@@ -331,7 +343,7 @@ test.describe('HTML List Interactive Features', () => {
     const download = await downloadPromise;
 
     // Save to temp file
-    const downloadPath = '/tmp/test_rename_unchecked.json';
+    const downloadPath = path.join(TEMP_DIR, 'test_rename_unchecked.json');
     await download.saveAs(downloadPath);
 
     // Read and parse JSON
@@ -348,7 +360,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Regex filter hides non-matching rows', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const filterInput = page.locator('#filterRegex');
     const rows = page.locator('tbody tr');
@@ -384,7 +396,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Tag filter shows only matching element types', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const filterSelect = page.locator('#filterTag');
     const rows = page.locator('tbody tr');
@@ -414,7 +426,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Real-time validation updates on every keystroke', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const firstRow = page.locator('tbody tr').first();
     const input = firstRow.locator('input[type="text"]');
@@ -465,7 +477,7 @@ test.describe('HTML List Interactive Features', () => {
   });
 
   test('Empty input with checked box shows error', async ({ page }) => {
-    await page.goto(`file://${path.resolve('/tmp/test_interactive.html')}`);
+    await page.goto(`file://${path.resolve(TEST_HTML)}`);
 
     const firstRow = page.locator('tbody tr').first();
     const input = firstRow.locator('input[type="text"]');

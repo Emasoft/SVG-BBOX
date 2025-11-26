@@ -52,7 +52,9 @@ import path from 'path';
  * @property {function(string, TestBorderOptions=): Promise<TestBorderResult>} testBorder - Test border function
  */
 
-const testPagePath = '/tmp/showTrueBBoxBorder_test.html';
+// Use project-local temp directory
+const TEMP_DIR = path.join(process.cwd(), 'tests', '.tmp-e2e-border-tests');
+const testPagePath = path.join(TEMP_DIR, 'showTrueBBoxBorder_test.html');
 
 // Edge case generators - each function wraps content in appropriate SVG structure
 const edgeCases = {
@@ -397,6 +399,16 @@ test.afterAll(async () => {
 
 test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
   test.describe.configure({ mode: 'serial' });
+
+  test.beforeAll(async () => {
+    // Create temp directory
+    await fs.mkdir(TEMP_DIR, { recursive: true });
+  });
+
+  test.afterAll(async () => {
+    // Clean up temp directory
+    await fs.rm(TEMP_DIR, { recursive: true, force: true });
+  });
 
   // Generate tests for each edge case × scenario combination
   for (const edgeKey of Object.keys(edgeCases)) {
