@@ -976,6 +976,24 @@ node sbb-comparer.cjs svg1.svg svg2.svg [options]
 - `--json` - Output results as JSON
 - `--verbose` - Show detailed progress
 
+#### Understanding preserveAspectRatio Values
+
+The `--meet-rule` and `--slice-rule` options accept SVG `preserveAspectRatio`
+alignment values. This diagram illustrates how different values affect
+alignment:
+
+<div align="center">
+  <img src="./assets/alignement_table_svg_presrveAspectRatio_attribute_diagram.svg" alt="preserveAspectRatio Alignment Diagram" width="100%">
+</div>
+
+- **meet mode**: Scales content to fit entirely within viewport (may have empty
+  space)
+  - `xMinYMin` - Align top-left
+  - `xMidYMid` - Align center (default)
+  - `xMaxYMax` - Align bottom-right
+- **slice mode**: Scales content to fill viewport (may crop content)
+  - Same alignment options as meet mode
+
 #### Examples
 
 ```bash
