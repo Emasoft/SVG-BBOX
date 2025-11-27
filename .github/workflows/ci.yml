@@ -125,11 +125,18 @@ jobs:
       - name: Install browser dependencies
         run: pnpm run install-browsers
 
-      - name: Run unit tests
-        run: pnpm run test:unit
-
-      - name: Run integration tests
-        run: pnpm run test:integration
+      - name: Run selective tests (PRs) or full tests (main/develop)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Running selective tests for PR..."
+            # Fetch base branch to ensure origin/${{ github.base_ref }} exists
+            git fetch --depth=1 origin ${{ github.base_ref }}
+            node scripts/test-selective.cjs origin/${{ github.base_ref }}
+          else
+            echo "Running full test suite for main/develop..."
+            pnpm run test:unit
+            pnpm run test:integration
+          fi
 
   e2e:
     name: E2E Tests (Node ${{ matrix.node-version }} on ${{ matrix.os }})

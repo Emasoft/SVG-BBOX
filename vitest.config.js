@@ -5,11 +5,11 @@ export default defineConfig({
     // Test environment
     environment: 'node',
 
-    // Global test timeout (60 seconds - increased from excessive 30 minutes)
+    // Global test timeout (60 seconds - reduced from excessive 30 minutes)
     testTimeout: 60000,
 
-    // Hook timeout (30 seconds for browser launch/teardown)
-    hookTimeout: 30000,
+    // Hook timeout (60 seconds for browser launch + font discovery)
+    hookTimeout: 60000,
 
     // Globals
     globals: true,
