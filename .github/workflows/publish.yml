@@ -26,6 +26,21 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           always-auth: true
 
+      - name: Debug - Show npm config & .npmrc files
+        run: |
+          echo "==== npm config list -l ===="
+          npm config list -l
+          echo ""
+          echo "==== Project .npmrc (if present) ===="
+          [ -f .npmrc ] && sed -n '1,200p' .npmrc || echo "no project .npmrc"
+          echo ""
+          echo "==== User ~/.npmrc (if present) ===="
+          [ -f ~/.npmrc ] && sed -n '1,200p' ~/.npmrc || echo "no user ~/.npmrc"
+
+      - name: Debug - Show package.json publishConfig and name
+        run: |
+          node -e "const p=require('./package.json'); console.log('name =>', p.name); console.log('publishConfig =>', p.publishConfig||{});"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
