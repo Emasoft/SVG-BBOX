@@ -1,6 +1,6 @@
 {
   "name": "svg-bbox",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "A set of tools to compute and to use a SVG bounding box you can trust (as opposed to the unreliable .getBBox() scourge)",
   "type": "module",
   "main": "./SvgVisualBBox.js",
@@ -21,14 +21,15 @@
     "svg-bbox": "svg-bbox.cjs",
     "sbb-getbbox": "sbb-getbbox.cjs",
     "sbb-chrome-getbbox": "sbb-chrome-getbbox.cjs",
-    "sbb-chrome-extract": "sbb-chrome-extract.cjs",
+    "sbb-inkscape-getbbox": "sbb-inkscape-getbbox.cjs",
     "sbb-extract": "sbb-extract.cjs",
-    "sbb-fix-viewbox": "sbb-fix-viewbox.cjs",
+    "sbb-chrome-extract": "sbb-chrome-extract.cjs",
+    "sbb-inkscape-extract": "sbb-inkscape-extract.cjs",
     "sbb-render": "sbb-render.cjs",
+    "sbb-fix-viewbox": "sbb-fix-viewbox.cjs",
     "sbb-comparer": "sbb-comparer.cjs",
     "sbb-test": "sbb-test.cjs",
     "sbb-inkscape-text2path": "sbb-inkscape-text2path.cjs",
-    "sbb-inkscape-extract": "sbb-inkscape-extract.cjs",
     "sbb-inkscape-svg2png": "sbb-inkscape-svg2png.cjs"
   },
   "files": [

@@ -65,6 +65,8 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+*_$
+*$
 tests/.tmp-*/
 test-cli-security-temp/
 

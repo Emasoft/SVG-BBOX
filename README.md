@@ -25,6 +25,27 @@
 
 ---
 
+## 📚 Table of Contents
+
+- [The Problem with .getBBox()](#the-problem-with-getbbox)
+  - [Visual Comparison: Oval Badge with Dashed Stroke](#visual-comparison-oval-badge-with-dashed-stroke)
+- [Quick Start](#quick-start)
+  - [Browser (CDN)](#browser-cdn)
+  - [Node.js / npm](#nodejs--npm)
+- [What This Package Provides](#what-this-package-provides)
+  - [1. Core Library: SvgVisualBBox.js](#1-core-library-svgvisualbboxjs)
+  - [2. CLI Tools](#2-cli-tools)
+- [Library API Reference](#-library-api-reference)
+- [Programmatic Usage](#-programmatic-usage)
+- [Installation](#-installation)
+- [Platform Compatibility](#platform-compatibility)
+- [How It Works](#-how-it-works)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
 ## The Problem with `.getBBox()`
 
 The native SVG `.getBBox()` method is fundamentally broken:
@@ -139,43 +160,31 @@ browsers and Node.js (via Puppeteer).
 
 ### 2. CLI Tools
 
-**Core Tools:**
+| Tool                                              | <div align="center">Source</div>                                                                                        | Description                                                | Example Usage                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------- |
+| **Core Tools (Our Visual BBox Algorithm)**        |                                                                                                                         |                                                            |                                                          |
+| `sbb-getbbox`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-getbbox.cjs)</div>            | Get bbox info using our pixel-accurate visual algorithm    | `sbb-getbbox drawing.svg`                                |
+| `sbb-extract`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-extract.cjs)</div>            | List/rename/extract/export SVG objects with visual catalog | `sbb-extract sprites.svg --list`                         |
+| `sbb-render`                                      | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-render.cjs)</div>             | Render SVG to PNG with accurate bbox                       | `sbb-render input.svg output.png`                        |
+| `sbb-fix-viewbox`                                 | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-fix-viewbox.cjs)</div>        | Repair missing/broken viewBox using visual bbox            | `sbb-fix-viewbox broken.svg fixed.svg`                   |
+| `sbb-comparer`                                    | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-comparer.cjs)</div>           | Visual diff between SVGs (pixel comparison)                | `sbb-comparer a.svg b.svg diff.png`                      |
+| `sbb-test`                                        | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-test.cjs)</div>               | Test bbox accuracy across methods                          | `sbb-test sample.svg`                                    |
+| **Chrome Comparison Tools (Chrome's .getBBox())** |                                                                                                                         |                                                            |                                                          |
+| `sbb-chrome-getbbox`                              | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-chrome-getbbox.cjs)</div>     | Get bbox info using Chrome's .getBBox()                    | `sbb-chrome-getbbox drawing.svg`                         |
+| `sbb-chrome-extract`                              | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-chrome-extract.cjs)</div>     | Extract using Chrome's .getBBox()                          | `sbb-chrome-extract file.svg --id obj1 --output out.svg` |
+| **Inkscape Comparison Tools (Inkscape CLI)**      |                                                                                                                         |                                                            |                                                          |
+| `sbb-inkscape-getbbox`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-getbbox.cjs)</div>   | Get bbox info using Inkscape's query commands              | `sbb-inkscape-getbbox drawing.svg`                       |
+| `sbb-inkscape-extract`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-extract.cjs)</div>   | Extract by ID using Inkscape                               | `sbb-inkscape-extract file.svg --id obj1`                |
+| `sbb-inkscape-text2path`                          | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-text2path.cjs)</div> | Convert text to paths using Inkscape                       | `sbb-inkscape-text2path input.svg output.svg`            |
+| `sbb-inkscape-svg2png`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-svg2png.cjs)</div>   | SVG to PNG export using Inkscape                           | `sbb-inkscape-svg2png input.svg output.png`              |
 
-- `sbb-getbbox` - Compute bounding boxes, batch process directories, detect
-  sprite sheets
-- `sbb-extract` - List/rename/extract/export SVG objects with visual catalog
-- `sbb-render` - Render SVG to PNG
-- `sbb-fix-viewbox` - Repair missing/broken viewBox
-- `sbb-comparer` - Visual diff between SVGs (pixel comparison)
-- `sbb-test` - Test bbox accuracy
+**Naming Convention:**
 
-**Comparison Tools:**
-
-- `sbb-chrome-getbbox` - Get bbox using Chrome .getBBox() (for comparison)
-- `sbb-chrome-extract` - Extract using Chrome .getBBox() (for comparison)
-- `sbb-inkscape-text2path` - Convert text to paths (Inkscape)
-- `sbb-inkscape-extract` - Extract by ID (Inkscape)
-- `sbb-inkscape-svg2png` - SVG to PNG (Inkscape)
+- `sbb-[function]` = Our reliable visual bbox algorithm
+- `sbb-chrome-[function]` = Chrome's .getBBox() method (for comparison)
+- `sbb-inkscape-[function]` = Inkscape tools (for comparison)
 
 Run `npx svg-bbox` or any tool with `--help` for detailed usage.
-
----
-
-## 📚 Table of Contents
-
-- [The Problem with getBBox](#the-problem-with-getbbox)
-- [Quick Start](#quick-start)
-- [What This Package Provides](#what-this-package-provides)
-- [Library API Reference](#-library-api-reference)
-- [Installation](#-installation)
-- [Browser Usage Examples](#-browser-usage-examples)
-- [Node.js Usage Examples](#-nodejs-usage-examples)
-- [CLI Tools Reference](#-cli-tools-reference)
-- [How It Works](#-how-it-works)
-- [Platform Compatibility](#platform-compatibility)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
 
 ---
 

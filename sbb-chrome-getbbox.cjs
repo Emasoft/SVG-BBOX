@@ -86,7 +86,6 @@ async function getBBoxWithChrome(options) {
           // Get bbox for each element ID
           for (const id of elementIds) {
             const element = /** @type {SVGGraphicsElement} */ (
-              /* eslint-disable-next-line no-undef */
               /** @type {unknown} */ (document.getElementById(id))
             );
 
