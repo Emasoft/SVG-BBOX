@@ -5,11 +5,11 @@ export default defineConfig({
     // Test environment
     environment: 'node',
 
-    // Global test timeout (30 minutes for browser tests)
-    testTimeout: 1800000,
+    // Global test timeout (60 seconds - increased from excessive 30 minutes)
+    testTimeout: 60000,
 
-    // Hook timeout
-    hookTimeout: 60000,
+    // Hook timeout (30 seconds for browser launch/teardown)
+    hookTimeout: 30000,
 
     // Globals
     globals: true,
@@ -68,8 +68,8 @@ export default defineConfig({
     // Pool options for parallel execution
     pool: 'forks',
 
-    // Max concurrent tests
-    maxConcurrency: 5,
+    // Max concurrent tests (increased from 5 to 10 for I/O-bound Puppeteer tests)
+    maxConcurrency: 10,
 
     // Retry failed tests once
     retry: 1,
