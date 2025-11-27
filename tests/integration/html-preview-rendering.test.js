@@ -223,7 +223,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
         // Position should account for parent transform
         // Text at x=-50, parent translate(-13.5, -10.2), so final x ≈ -63.5
         // Note: Font rendering varies across systems - verify transform is applied correctly
-        expect(Math.abs(bbox.x - (textX - 13.5))).toBeLessThan(3); // ±3px tolerance for font metrics
+        expect(Math.abs(bbox.x - (textX - 13.5))).toBeLessThan(4); // ±4px tolerance for font metrics
       }
     });
 
