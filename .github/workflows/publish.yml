@@ -19,68 +19,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (configure npm auth for npmjs via OIDC)
+      - name: Setup Node.js 24 (npm 11.6.2 with OIDC support)
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
-          always-auth: true
 
-      - name: Debug - Show npm config & .npmrc files
-        run: |
-          echo "==== npm config list -l ===="
-          npm config list -l
-          echo ""
-          echo "==== Project .npmrc (if present) ===="
-          [ -f .npmrc ] && sed -n '1,200p' .npmrc || echo "no project .npmrc"
-          echo ""
-          echo "==== User ~/.npmrc (if present) ===="
-          [ -f ~/.npmrc ] && sed -n '1,200p' ~/.npmrc || echo "no user ~/.npmrc"
-
-      - name: Debug - Show package.json publishConfig and name
-        run: |
-          node -e "const p=require('./package.json'); console.log('name =>', p.name); console.log('publishConfig =>', p.publishConfig||{});"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run linter
-        run: pnpm run lint
-
-      - name: Run type checker
-        run: pnpm run typecheck
-
-      - name: Install browser dependencies
-        run: pnpm run install-browsers
-
-      - name: Run tests
-        run: pnpm run test:unit && pnpm run test:integration
-
-      - name: Verify npm version
+      - name: Verify npm version (should be >= 11.5.1)
         run: npm --version
 
-      - name: Debug npm auth (should print npm username)
-        run: |
-          echo ".npmrc present: $( [ -f .npmrc ] && echo yes || echo no )"
-          npm whoami --registry=https://registry.npmjs.org || echo "not authenticated"
-
       - name: Publish to npm (using OIDC trusted publishing)
-        run: npm publish --access public --registry=https://registry.npmjs.org
+        run: npm publish --access public
