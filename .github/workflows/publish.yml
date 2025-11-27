@@ -6,23 +6,25 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (configure npm auth for npmjs via OIDC)
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+          always-auth: true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -60,5 +62,10 @@ jobs:
       - name: Verify npm version
         run: npm --version
 
+      - name: Debug npm auth (should print npm username)
+        run: |
+          echo ".npmrc present: $( [ -f .npmrc ] && echo yes || echo no )"
+          npm whoami --registry=https://registry.npmjs.org || echo "not authenticated"
+
       - name: Publish to npm (using OIDC trusted publishing)
-        run: npm publish --access public
+        run: npm publish --access public --registry=https://registry.npmjs.org
