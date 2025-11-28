@@ -1,11 +1,5 @@
 import { defineConfig } from 'vitest/config';
-
-// Centralized timeout configuration (milliseconds)
-// Why these values:
-// - TEST_TIMEOUT_MS: 60s is sufficient for I/O-bound Puppeteer tests (reduced from 30min)
-// - HOOK_TIMEOUT_MS: 60s allows browser launch + font discovery (critical path operations)
-const TEST_TIMEOUT_MS = 60000; // 60 seconds
-const HOOK_TIMEOUT_MS = 60000; // 60 seconds
+import { TEST_TIMEOUT_MS, HOOK_TIMEOUT_MS } from './config/timeouts.js';
 
 // Parallel execution configuration
 // Why 10: Puppeteer tests are I/O-bound (waiting for browser), not CPU-bound.

@@ -25,6 +25,7 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
+const { GIT_DIFF_TIMEOUT_MS, VITEST_RUN_TIMEOUT_MS } = require('../config/timeouts.cjs');
 
 const execFileAsync = promisify(execFile);
 
@@ -35,17 +36,8 @@ const execFileAsync = promisify(execFile);
 // Git configuration
 const DEFAULT_GIT_BASE_REF = 'HEAD'; // Default comparison point for git diff
 
-// Timeout configuration (milliseconds)
-// WHY: Without timeouts, git or vitest processes can hang forever, causing:
-// - Pre-commit hooks that never complete
-// - CI jobs that hit workflow timeout limits
-// - Non-deterministic failures that require manual intervention
-// WHAT NOT TO DO: Don't skip adding timeouts to "fast" commands like git diff.
-// Even git can hang on network-mounted repos, corrupted .git directories, or large diffs.
-const GIT_DIFF_TIMEOUT_MS = 30000; // 30 seconds for git diff operations
-const VITEST_RUN_TIMEOUT_MS = 600000; // 10 minutes for vitest execution
-
 // Test execution configuration
+// Timeout constants now imported from centralized config/timeouts.cjs
 const MAX_EXEC_BUFFER_BYTES = 10 * 1024 * 1024; // 10MB buffer for vitest output
 const RUN_ALL_TESTS_PATTERN = 'tests/**/*.test.js'; // Glob pattern to run all tests
 
@@ -176,7 +168,11 @@ const TEST_DEPENDENCIES = {
   'scripts/build-min.cjs': [], // Build script - doesn't affect tests
   'scripts/validate-build.cjs': [], // Build validation - doesn't affect tests
   'scripts/bump-version.cjs': [], // Version bumping - doesn't affect tests
-  'scripts/test-selective.cjs': [] // Test selection logic - doesn't affect test outcomes
+  'scripts/test-selective.cjs': [], // Test selection logic - doesn't affect test outcomes
+
+  // Centralized configuration
+  'config/timeouts.cjs': [RUN_ALL_TESTS_PATTERN], // Timeout config affects all tools
+  'config/timeouts.js': [RUN_ALL_TESTS_PATTERN] // Timeout config affects all tools
 };
 
 /**
