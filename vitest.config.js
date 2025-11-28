@@ -72,7 +72,9 @@ export default defineConfig({
     isolate: true,
 
     // Pool options for parallel execution
-    pool: 'forks',
+    // WORKAROUND: Using 'threads' instead of 'forks' to avoid Vitest 4.0.14 worker fork crash bug
+    // See: https://github.com/vitest-dev/vitest/issues/...
+    pool: 'threads',
 
     // Max concurrent tests
     maxConcurrency: MAX_CONCURRENT_TESTS,

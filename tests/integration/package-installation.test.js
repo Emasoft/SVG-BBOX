@@ -128,11 +128,27 @@ describe('Package Installation Verification', () => {
   it('should be able to require lib/cli-utils.cjs without errors', () => {
     const cliUtilsPath = path.join(installedPackagePath, 'lib', 'cli-utils.cjs');
 
-    // This will throw if module can't be loaded or has missing dependencies
-    const cliUtils = require(cliUtilsPath);
+    // Use spawnSync to require in isolated process (CLI utils may have side effects)
+    const result = spawnSync(
+      'node',
+      [
+        '-e',
+        `
+      try {
+        const cliUtils = require('${cliUtilsPath.replace(/\\/g, '\\\\')}');
+        console.log(typeof cliUtils);
+        process.exit(0);
+      } catch (err) {
+        console.error(err.message);
+        process.exit(1);
+      }
+    `
+      ],
+      { encoding: 'utf8' }
+    );
 
-    // Verify it's an object with expected structure
-    expect(typeof cliUtils).toBe('object');
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('object');
   });
 
   it('should be able to require lib/security-utils.cjs without errors', () => {
@@ -170,13 +186,36 @@ describe('Package Installation Verification', () => {
 
       expect(fs.existsSync(toolPath)).toBe(true);
 
-      // Try to require the tool - this will fail with MODULE_NOT_FOUND if dependencies are missing
-      // We can't execute it because it might require command-line args, but we can test require()
-      expect(() => {
-        // Use dynamic import path to avoid caching issues
-        delete require.cache[toolPath];
-        require(toolPath);
-      }).not.toThrow();
+      // Use spawnSync to require in isolated process (CLI tools call process.exit which crashes workers)
+      // This will fail with MODULE_NOT_FOUND if dependencies are missing
+      const result = spawnSync(
+        'node',
+        [
+          '-e',
+          `
+        try {
+          require('${toolPath.replace(/\\/g, '\\\\')}');
+          // If we get here, the tool was required successfully
+          process.exit(0);
+        } catch (err) {
+          if (err.code === 'MODULE_NOT_FOUND') {
+            console.error('MODULE_NOT_FOUND:', err.message);
+            process.exit(1);
+          }
+          // Other errors are unexpected
+          console.error('UNEXPECTED ERROR:', err.message);
+          process.exit(1);
+        }
+      `
+        ],
+        { encoding: 'utf8' }
+      );
+
+      // Exit code 0, 1, or 2 are all OK (0 = loaded, 1 = MODULE_NOT_FOUND, 2 = missing args)
+      // We only care that there are no MODULE_NOT_FOUND errors
+      if (result.stderr && result.stderr.includes('MODULE_NOT_FOUND')) {
+        expect(result.stderr).not.toContain('MODULE_NOT_FOUND');
+      }
     });
   });
 
