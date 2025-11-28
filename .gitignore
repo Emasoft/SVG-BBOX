@@ -60,6 +60,9 @@ lerna-debug.log*
 # Project-specific instructions (private)
 CLAUDE.md
 
+# Test tracking
+.last-test-run
+
 # OS files
 Thumbs.db
 .DS_Store

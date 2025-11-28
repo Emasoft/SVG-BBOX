@@ -25,9 +25,14 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
+const fs = require('fs');
 const { GIT_DIFF_TIMEOUT_MS, VITEST_RUN_TIMEOUT_MS } = require('../config/timeouts.cjs');
 
 const execFileAsync = promisify(execFile);
+
+// Timestamp tracking for filesystem-based change detection
+const TIMESTAMP_FILE = path.join(__dirname, '..', '.last-test-run');
+const PYTHON_SCRIPT = path.join(__dirname, '..', 'scripts_dev', 'util_changed_tracked_files.py');
 
 // ============================================================================
 // Configuration Constants - Single Source of Truth
@@ -78,6 +83,88 @@ function debug(message, data) {
     if (data !== undefined) {
       console.debug('  Data:', JSON.stringify(data, null, 2));
     }
+  }
+}
+
+// ============================================================================
+// Timestamp and Python Integration
+// ============================================================================
+
+/**
+ * Read the last test run timestamp from .last-test-run file
+ * @returns {Date|null} Last test run timestamp or null if file doesn't exist
+ */
+function getLastTestRunTimestamp() {
+  try {
+    const isoString = fs.readFileSync(TIMESTAMP_FILE, 'utf8').trim();
+    return new Date(isoString);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      debug('No .last-test-run file found, will use all changed files');
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Update the last test run timestamp to now
+ */
+function updateLastTestRunTimestamp() {
+  const now = new Date().toISOString();
+  fs.writeFileSync(TIMESTAMP_FILE, now, 'utf8');
+  debug(`Updated .last-test-run timestamp to: ${now}`);
+}
+
+/**
+ * Get changed files using Python script with filesystem timestamps
+ * @param {boolean} stagedOnly - If true, only get staged files
+ * @returns {Promise<string[]>} Array of changed file paths
+ */
+async function getChangedFilesViaPython(stagedOnly = true) {
+  const lastRun = getLastTestRunTimestamp();
+
+  if (!lastRun) {
+    debug('No timestamp baseline, falling back to git-based detection');
+    return null; // Fall back to git-based detection
+  }
+
+  const sinceISO = lastRun.toISOString();
+  debug(`Checking for files changed since: ${sinceISO}`);
+
+  try {
+    const { stdout } = await execFileAsync(
+      'python3',
+      [
+        '-c',
+        `
+import sys
+sys.path.insert(0, '${path.dirname(PYTHON_SCRIPT)}')
+from datetime import datetime
+from util_changed_tracked_files import list_changed_staged_files
+
+since = datetime.fromisoformat('${sinceISO}'.replace('Z', '+00:00'))
+files = list_changed_staged_files('.', since, include_unstaged=${!stagedOnly ? 'True' : 'False'})
+for f in files:
+    print(f)
+`
+      ],
+      {
+        cwd: path.join(__dirname, '..'),
+        timeout: GIT_DIFF_TIMEOUT_MS
+      }
+    );
+
+    const files = stdout
+      .trim()
+      .split('\n')
+      .filter((f) => f.length > 0);
+
+    debug(`Python script found ${files.length} changed files`);
+    return files;
+  } catch (err) {
+    console.warn(`${SYMBOLS.WARNING} Python script failed, falling back to git: ${err.message}`);
+    return null; // Fall back to git-based detection
   }
 }
 
@@ -243,6 +330,20 @@ async function getChangedFiles(baseRef) {
   validateGitRef(baseRef);
 
   debug(`Getting changed files against base ref: ${baseRef}`);
+
+  // Try Python-based detection first (uses filesystem timestamps + git staging)
+  // Falls back to pure git if:
+  // - No .last-test-run timestamp file exists
+  // - Python script fails
+  // - Python not available
+  const pythonFiles = await getChangedFilesViaPython(false); // include unstaged (matches git fallback behavior)
+  if (pythonFiles !== null) {
+    debug(`Using Python-based detection: ${pythonFiles.length} files`);
+    return pythonFiles;
+  }
+
+  // Fallback: Pure git-based detection
+  debug('Using git-based detection (fallback)');
 
   // FAIL-FAST: Let git errors propagate - don't hide configuration problems
   const { stdout } = await execFileAsync('git', ['diff', '--name-only', baseRef], {
@@ -413,6 +514,7 @@ async function main() {
     console.log(`${SYMBOLS.SUCCESS} No changes detected - running all tests`);
     if (!dryRun) {
       await runTests(new Set([RUN_ALL_TESTS_PATTERN]));
+      updateLastTestRunTimestamp(); // Update timestamp after successful run
     }
     return;
   }
@@ -427,6 +529,7 @@ async function main() {
     console.log(`${SYMBOLS.SUCCESS} Running all tests`);
     if (!dryRun) {
       await runTests(new Set([RUN_ALL_TESTS_PATTERN]));
+      updateLastTestRunTimestamp(); // Update timestamp after successful run
     }
     return;
   }
@@ -442,6 +545,7 @@ async function main() {
 
   // Run the selected tests
   await runTests(testsToRun);
+  updateLastTestRunTimestamp(); // Update timestamp after successful run
 }
 
 main().catch((error) => {
