@@ -218,6 +218,20 @@ output multiline content to stdout that CANNOT be suppressed with `2>/dev/null`.
 - Maintains consistency between package.json and git tags
 - Provides clear error messages when npm fails
 
+**Key Insight: The Source of Truth Pattern**
+
+The npm lifecycle hook contamination bug revealed a critical lesson about defensive programming: **capturing command output is inherently fragile when lifecycle hooks are involved**.
+
+The solution demonstrates the "source of truth" pattern:
+- **Instead of:** Capturing `npm version` output (which can be polluted by hooks, ANSI codes, verbose output)
+- **We do:** Silence npm entirely → verify success via exit code → read from package.json (authoritative source)
+
+This pattern is applicable beyond npm:
+- Any command that triggers hooks, plugins, or extensions may pollute stdout
+- Exit codes are reliable signals of success/failure
+- Configuration files are authoritative sources after commands modify them
+- Validation should happen on the authoritative data, not captured output
+
 **If Tag Creation Fails:**
 
 The safeguards will show:
