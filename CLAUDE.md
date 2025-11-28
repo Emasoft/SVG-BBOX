@@ -6,8 +6,105 @@
 
 - Always commit changes locally
 - Wait for user review before pushing commits
-- Wait for user approval before running `npm publish`
+- Wait for user approval before running releases
 - Add this to the todo list: "Wait for user review before pushing"
+
+## Release Workflow
+
+**Use the automated release script for all releases.**
+
+### Quick Start
+
+```bash
+# Release with version bump
+./scripts/release.sh patch   # 1.0.10 → 1.0.11
+./scripts/release.sh minor   # 1.0.10 → 1.1.0
+./scripts/release.sh major   # 1.0.10 → 2.0.0
+
+# Release specific version
+./scripts/release.sh 1.0.11
+```
+
+### What the Release Script Does (Proper Sequence)
+
+The script follows the **correct order** to avoid common errors:
+
+1. **Validates prerequisites** - gh CLI, npm, pnpm, jq, authentication
+2. **Checks working directory** - Must be clean, on main branch
+3. **Runs quality checks** - Linting, type checking, all tests
+4. **Bumps version** - Updates package.json and pnpm-lock.yaml
+5. **Generates release notes** - From git commits since last release
+6. **Commits version bump** - Creates commit for version change
+7. **Creates git tag** - Annotated tag with release info
+8. **Pushes to GitHub** - Pushes commits and tag
+9. **Creates GitHub Release** - 🔑 **THIS TRIGGERS THE WORKFLOW**
+10. **Waits for GitHub Actions** - Monitors "Publish to npm" workflow
+11. **Verifies npm publication** - Confirms package is live
+
+### Why This Order Matters
+
+**CRITICAL: GitHub Release must be created BEFORE npm publish!**
+
+- ❌ **WRONG:** Push tag → npm publish → GitHub Release (causes sync issues)
+- ✅ **CORRECT:** Push tag → GitHub Release → GitHub Actions publishes to npm
+
+The GitHub Actions workflow is triggered by the tag push, but creating the
+GitHub Release first ensures:
+
+- Release notes are properly attached to the tag
+- The release is visible on GitHub before npm
+- npm package links back to GitHub Release
+- Proper audit trail for compliance
+
+### Manual Release (Not Recommended)
+
+If you must release manually (script fails), follow this **exact sequence**:
+
+```bash
+# 1. Bump version
+npm version patch --no-git-tag-version  # or minor/major
+
+# 2. Commit version bump
+git add package.json pnpm-lock.yaml
+git commit -m "chore(release): Bump version to X.Y.Z"
+
+# 3. Create tag
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+
+# 4. Push commits and tag
+git push origin main
+git push origin vX.Y.Z
+
+# 5. Create GitHub Release (REQUIRED FIRST)
+gh release create vX.Y.Z --title "vX.Y.Z" --notes "Release notes here"
+
+# 6. Wait for GitHub Actions to publish to npm (automatic)
+gh run watch
+
+# 7. Verify npm publication
+npm view svg-bbox version
+```
+
+### Troubleshooting
+
+**Tag already exists:**
+
+```bash
+git tag -d vX.Y.Z          # Delete local tag
+git push origin :vX.Y.Z    # Delete remote tag (if pushed)
+```
+
+**GitHub Actions workflow not running:**
+
+- Check workflow file: `.github/workflows/publish.yml`
+- Verify tag format: Must be `vX.Y.Z` (with 'v' prefix)
+- Check workflow triggers: Should trigger on `tags: v*`
+
+**npm publish fails in workflow:**
+
+- Verify npm trusted publishing is configured on npmjs.com
+- Check Node.js version in workflow (must be 24 for npm 11.6.0)
+- Review workflow logs: `gh run view --log`
 
 ## JavaScript/TypeScript Code Fixing
 
