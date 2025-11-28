@@ -35,6 +35,16 @@ const execFileAsync = promisify(execFile);
 // Git configuration
 const DEFAULT_GIT_BASE_REF = 'HEAD'; // Default comparison point for git diff
 
+// Timeout configuration (milliseconds)
+// WHY: Without timeouts, git or vitest processes can hang forever, causing:
+// - Pre-commit hooks that never complete
+// - CI jobs that hit workflow timeout limits
+// - Non-deterministic failures that require manual intervention
+// WHAT NOT TO DO: Don't skip adding timeouts to "fast" commands like git diff.
+// Even git can hang on network-mounted repos, corrupted .git directories, or large diffs.
+const GIT_DIFF_TIMEOUT_MS = 30000; // 30 seconds for git diff operations
+const VITEST_RUN_TIMEOUT_MS = 600000; // 10 minutes for vitest execution
+
 // Test execution configuration
 const MAX_EXEC_BUFFER_BYTES = 10 * 1024 * 1024; // 10MB buffer for vitest output
 const RUN_ALL_TESTS_PATTERN = 'tests/**/*.test.js'; // Glob pattern to run all tests
@@ -178,7 +188,9 @@ async function getChangedFiles(baseRef) {
   debug(`Getting changed files against base ref: ${baseRef}`);
 
   // FAIL-FAST: Let git errors propagate - don't hide configuration problems
-  const { stdout } = await execFileAsync('git', ['diff', '--name-only', baseRef]);
+  const { stdout } = await execFileAsync('git', ['diff', '--name-only', baseRef], {
+    timeout: GIT_DIFF_TIMEOUT_MS
+  });
   const files = stdout
     .trim()
     .split('\n')
@@ -189,11 +201,11 @@ async function getChangedFiles(baseRef) {
   if (files.length === 0) {
     // No working directory changes - check staged files
     debug('No working directory changes, checking staged files...');
-    const { stdout: stagedStdout } = await execFileAsync('git', [
-      'diff',
-      '--cached',
-      '--name-only'
-    ]);
+    const { stdout: stagedStdout } = await execFileAsync(
+      'git',
+      ['diff', '--cached', '--name-only'],
+      { timeout: GIT_DIFF_TIMEOUT_MS }
+    );
     const stagedFiles = stagedStdout
       .trim()
       .split('\n')
@@ -310,7 +322,8 @@ async function runTests(patterns) {
     const { stdout, stderr } = await execFileAsync('npx', ['vitest', ...args], {
       cwd: path.join(__dirname, '..'),
       env: { ...process.env, FORCE_COLOR: '1' },
-      maxBuffer: MAX_EXEC_BUFFER_BYTES
+      maxBuffer: MAX_EXEC_BUFFER_BYTES,
+      timeout: VITEST_RUN_TIMEOUT_MS
     });
 
     // Print test output
