@@ -223,7 +223,7 @@ describe('Package Installation Verification', () => {
     expect(typeof packageJson.bin).toBe('object');
 
     // Verify each bin entry exists
-    Object.entries(packageJson.bin).forEach(([name, binPath]) => {
+    Object.entries(packageJson.bin).forEach(([_name, binPath]) => {
       const fullPath = path.join(installedPackagePath, binPath);
       expect(fs.existsSync(fullPath)).toBe(true);
     });

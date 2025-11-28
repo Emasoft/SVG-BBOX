@@ -17,9 +17,27 @@ body = """
     ## [unreleased]
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
+    {% if group == "Features" %}\
+    ### ★ New Features
+    {% elif group == "Bug Fixes" %}\
+    ### ✗ Bug Fixes
+    {% elif group == "Performance" %}\
+    ### ⚡ Performance Improvements
+    {% elif group == "Documentation" %}\
+    ### ◆ Documentation
+    {% elif group == "Security" %}\
+    ### ● Security
+    {% elif group == "Refactor" %}\
+    ### ↻ Code Refactoring
+    {% elif group == "Testing" %}\
+    ### ✓ Testing
+    {% elif group == "Styling" %}\
+    ### ◇ Styling
+    {% else %}\
     ### {{ group | striptags | trim | upper_first }}
+    {% endif %}\
     {% for commit in commits %}
-        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}{{ commit.message | upper_first }}\
+        - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} ⚠ **BREAKING**{% endif %}\
     {% endfor %}
 {% endfor %}\n
 """

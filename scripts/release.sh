@@ -2,15 +2,24 @@
 #
 # Release Script for svg-bbox
 #
-# Proper sequence: GitHub Release → npm publish
+# CRITICAL: Proper sequence to avoid race conditions
 #
-# This script automates the release process with the correct order of operations:
+# This script automates the release process with the CORRECT order:
 # 1. Validate environment and prerequisites
 # 2. Run all quality checks (lint, typecheck, tests)
-# 3. Create git tag
-# 4. Create GitHub Release (FIRST - this triggers the workflow)
-# 5. Wait for GitHub Actions to publish to npm
-# 6. Verify npm publication
+# 3. Bump version in package.json and commit
+# 4. Create git tag LOCALLY (don't push yet)
+# 5. Push commits to GitHub (tag stays local)
+# 6. Create GitHub Release → gh CLI pushes tag + creates release atomically
+# 7. Tag push triggers GitHub Actions workflow
+# 8. Wait for GitHub Actions to publish to npm (prepublishOnly hook runs in CI)
+# 9. Verify npm publication
+#
+# Why this order matters:
+# - Creating the GitHub Release BEFORE the workflow runs ensures release notes
+#   are attached to the tag when the workflow executes
+# - gh release create pushes the tag atomically with release creation
+# - Avoids race condition where workflow starts before release exists
 #
 # Usage:
 #   ./scripts/release.sh [version]
@@ -25,6 +34,8 @@
 #   - gh CLI installed and authenticated
 #   - npm installed
 #   - pnpm installed
+#   - jq installed
+#   - git-cliff installed (for release notes generation)
 #   - Clean working directory (no uncommitted changes)
 #   - On main branch
 #
@@ -85,6 +96,13 @@ validate_prerequisites() {
 
     if ! command_exists jq; then
         log_error "jq is not installed. Install with: brew install jq (macOS) or apt-get install jq (Linux)"
+        exit 1
+    fi
+
+    if ! command_exists git-cliff; then
+        log_error "git-cliff is not installed. Install from: https://github.com/orhun/git-cliff"
+        log_info "  macOS: brew install git-cliff"
+        log_info "  Linux: cargo install git-cliff"
         exit 1
     fi
 
@@ -182,84 +200,70 @@ run_quality_checks() {
     log_success "All quality checks passed"
 }
 
-# Generate release notes
+# Generate release notes using git-cliff
 generate_release_notes() {
     local VERSION=$1
     local PREVIOUS_TAG=$2
 
-    log_info "Generating release notes..."
+    log_info "Generating release notes using git-cliff..."
 
-    # Get commit range
+    # Check if git-cliff is installed
+    if ! command_exists git-cliff; then
+        log_error "git-cliff is not installed. Install from: https://github.com/orhun/git-cliff"
+        log_info "macOS: brew install git-cliff"
+        log_info "Linux: cargo install git-cliff"
+        exit 1
+    fi
+
+    # Generate changelog for the version range using git-cliff
     if [ -z "$PREVIOUS_TAG" ]; then
-        ALL_COMMITS=$(git log --pretty=format:"%s" --no-merges)
+        # First release - include all commits
+        CHANGELOG_SECTION=$(git-cliff --unreleased --strip header)
     else
-        ALL_COMMITS=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"%s" --no-merges)
+        # Generate changelog from previous tag to HEAD
+        CHANGELOG_SECTION=$(git-cliff --unreleased --strip header "${PREVIOUS_TAG}..")
     fi
 
-    # Categorize commits by type (user-facing only)
-    FEATURES=$(echo "$ALL_COMMITS" | grep -E "^feat(\(|:)" | sed 's/^feat[(:][^)]*[):]* */- /' || true)
-    BREAKING=$(echo "$ALL_COMMITS" | grep -E "^(feat|refactor|fix).*!" | sed 's/^[^!]*!: */- /' || true)
-    IMPROVEMENTS=$(echo "$ALL_COMMITS" | grep -E "^(perf|docs|style)(\(|:)" | sed 's/^[^:]*: */- /' || true)
-    FIXES=$(echo "$ALL_COMMITS" | grep -E "^fix(\(|:)" | sed 's/^fix[(:][^)]*[):]* */- /' || true)
+    if [ -z "$CHANGELOG_SECTION" ]; then
+        log_warning "No changes found by git-cliff"
+        CHANGELOG_SECTION="No notable changes in this release."
+    fi
 
-    # Build release notes with only non-empty sections
+    # Strip the "## [unreleased]" header since we use "What's Changed"
+    CHANGELOG_SECTION=$(echo "$CHANGELOG_SECTION" | sed '/^## \[unreleased\]/d')
+
+    # Count changes by category for summary
+    FEATURES_COUNT=$(echo "$CHANGELOG_SECTION" | grep -c "^- \*\*.*\*\*:" | grep -c "New Features" || echo 0)
+    FIXES_COUNT=$(echo "$CHANGELOG_SECTION" | grep -c "^- \*\*.*\*\*:" | grep -c "Bug Fixes" || echo 0)
+
+    # Build release notes with git-cliff output and enhanced formatting
     cat > /tmp/release-notes.md <<EOF
-## ${PACKAGE_NAME} v${VERSION}
+## What's Changed
 
-EOF
+${CHANGELOG_SECTION}
 
-    # Add breaking changes section if any
-    if [ -n "$BREAKING" ]; then
-        cat >> /tmp/release-notes.md <<EOF
-### ⚠️ Breaking Changes
+---
 
-${BREAKING}
+## ◆ Installation
 
-EOF
-    fi
-
-    # Add features section if any
-    if [ -n "$FEATURES" ]; then
-        cat >> /tmp/release-notes.md <<EOF
-### ✨ New Features
-
-${FEATURES}
-
-EOF
-    fi
-
-    # Add improvements section if any
-    if [ -n "$IMPROVEMENTS" ]; then
-        cat >> /tmp/release-notes.md <<EOF
-### 📈 Improvements
-
-${IMPROVEMENTS}
-
-EOF
-    fi
-
-    # Add fixes section if any
-    if [ -n "$FIXES" ]; then
-        cat >> /tmp/release-notes.md <<EOF
-### 🐛 Bug Fixes
-
-${FIXES}
-
-EOF
-    fi
-
-    # Add installation instructions
-    cat >> /tmp/release-notes.md <<EOF
-### Installation
+### npm / pnpm / yarn
 
 \`\`\`bash
 npm install ${PACKAGE_NAME}@${VERSION}
+pnpm add ${PACKAGE_NAME}@${VERSION}
+yarn add ${PACKAGE_NAME}@${VERSION}
 \`\`\`
 
 ### Browser (CDN)
 
+#### jsDelivr (Recommended)
 \`\`\`html
 <script src="https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${VERSION}/SvgVisualBBox.min.js"></script>
+\`\`\`
+
+#### unpkg
+\`\`\`html
+<script src="https://unpkg.com/${PACKAGE_NAME}@${VERSION}/SvgVisualBBox.min.js"></script>
 \`\`\`
 
 ---
@@ -267,7 +271,7 @@ npm install ${PACKAGE_NAME}@${VERSION}
 **Full Changelog**: https://github.com/\$(gh repo view --json nameWithOwner -q .nameWithOwner)/compare/${PREVIOUS_TAG}...v${VERSION}
 EOF
 
-    log_success "Release notes generated"
+    log_success "Release notes generated using git-cliff"
     log_info "Preview: /tmp/release-notes.md"
 }
 
@@ -301,37 +305,88 @@ create_git_tag() {
     log_success "Git tag created"
 }
 
-# Push commits and tag
-push_to_github() {
-    local VERSION=$1
+# Push commits only (tag will be pushed by gh release create)
+push_commits_to_github() {
+    log_info "Pushing commits to GitHub..."
 
-    log_info "Pushing to GitHub..."
-
-    # Push commits
     git push origin main
     log_success "Commits pushed"
 
-    # Push tag
-    git push origin "v$VERSION"
-    log_success "Tag pushed"
+    log_info "Waiting for CI workflow to complete (this may take 3-10 minutes)..."
+    wait_for_ci_workflow
 }
 
-# Create GitHub Release
+# Create GitHub Release (this pushes the tag and triggers the workflow)
 create_github_release() {
     local VERSION=$1
 
-    log_info "Creating GitHub Release..."
+    log_info "Creating GitHub Release (this will push the tag and trigger workflow)..."
 
     # Create release using gh CLI
+    # The tag already exists locally, gh will push it when creating the release
     gh release create "v$VERSION" \
         --title "v$VERSION" \
-        --notes-file /tmp/release-notes.md \
-        --verify-tag
+        --notes-file /tmp/release-notes.md
 
     log_success "GitHub Release created: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/v$VERSION"
+    log_success "Tag pushed and workflow triggered"
 }
 
-# Wait for GitHub Actions workflow
+# Wait for CI workflow after pushing commits
+wait_for_ci_workflow() {
+    local MAX_WAIT=600  # 10 minutes
+    local ELAPSED=0
+
+    sleep 5  # Give GitHub a moment to register the push
+
+    log_info "Monitoring CI workflow (lint, typecheck, test, e2e, coverage)..."
+
+    while [ $ELAPSED -lt $MAX_WAIT ]; do
+        # Get the latest CI workflow run for the main branch
+        WORKFLOW_STATUS=$(gh run list --workflow=ci.yml --branch=main --limit 1 --json status,conclusion -q '.[0].status' 2>/dev/null || echo "")
+
+        if [ -z "$WORKFLOW_STATUS" ]; then
+            echo -n "."
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+            continue
+        fi
+
+        if [ "$WORKFLOW_STATUS" = "completed" ]; then
+            WORKFLOW_CONCLUSION=$(gh run list --workflow=ci.yml --branch=main --limit 1 --json conclusion -q '.[0].conclusion')
+
+            if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
+                log_success "CI workflow completed successfully"
+                return 0
+            else
+                log_error "CI workflow failed with conclusion: $WORKFLOW_CONCLUSION"
+                log_error "View logs with: gh run view --log"
+
+                # Show failed job details
+                gh run list --workflow=ci.yml --branch=main --limit 1
+
+                # Get the run ID and show which jobs failed
+                RUN_ID=$(gh run list --workflow=ci.yml --branch=main --limit 1 --json databaseId -q '.[0].databaseId')
+                if [ -n "$RUN_ID" ]; then
+                    log_error "Failed jobs:"
+                    gh run view "$RUN_ID" --log-failed || true
+                fi
+
+                exit 1
+            fi
+        fi
+
+        echo -n "."
+        sleep 5
+        ELAPSED=$((ELAPSED + 5))
+    done
+
+    log_error "Timeout waiting for CI workflow (exceeded 10 minutes)"
+    log_warning "Check status manually: gh run watch"
+    exit 1
+}
+
+# Wait for Publish to npm workflow after creating GitHub Release
 wait_for_workflow() {
     local VERSION=$1
     local MAX_WAIT=300  # 5 minutes
@@ -343,17 +398,35 @@ wait_for_workflow() {
 
     while [ $ELAPSED -lt $MAX_WAIT ]; do
         # Get the latest workflow run for this tag
-        WORKFLOW_STATUS=$(gh run list --workflow=publish.yml --limit 1 --json status,conclusion -q '.[0].status')
+        WORKFLOW_STATUS=$(gh run list --workflow=publish.yml --limit 1 --json status,conclusion -q '.[0].status' 2>/dev/null || echo "")
+
+        if [ -z "$WORKFLOW_STATUS" ]; then
+            echo -n "."
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+            continue
+        fi
 
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
             WORKFLOW_CONCLUSION=$(gh run list --workflow=publish.yml --limit 1 --json conclusion -q '.[0].conclusion')
 
             if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
-                log_success "GitHub Actions workflow completed successfully"
+                log_success "Publish workflow completed successfully"
                 return 0
             else
-                log_error "GitHub Actions workflow failed with conclusion: $WORKFLOW_CONCLUSION"
+                log_error "Publish workflow failed with conclusion: $WORKFLOW_CONCLUSION"
+                log_error "View logs with: gh run view --log"
+
+                # Show failed job details
                 gh run list --workflow=publish.yml --limit 1
+
+                # Get the run ID and show logs
+                RUN_ID=$(gh run list --workflow=publish.yml --limit 1 --json databaseId -q '.[0].databaseId')
+                if [ -n "$RUN_ID" ]; then
+                    log_error "Failed logs:"
+                    gh run view "$RUN_ID" --log-failed || true
+                fi
+
                 exit 1
             fi
         fi
@@ -363,7 +436,8 @@ wait_for_workflow() {
         ELAPSED=$((ELAPSED + 5))
     done
 
-    log_error "Timeout waiting for GitHub Actions workflow"
+    log_error "Timeout waiting for Publish workflow (exceeded 5 minutes)"
+    log_warning "Check status manually: gh run watch"
     exit 1
 }
 
@@ -461,13 +535,15 @@ main() {
     # Step 9: Commit version bump
     commit_version_bump "$NEW_VERSION"
 
-    # Step 10: Create git tag
+    # Step 10: Create git tag (locally only, don't push yet)
     create_git_tag "$NEW_VERSION"
 
-    # Step 11: Push to GitHub
-    push_to_github "$NEW_VERSION"
+    # Step 11: Push commits to GitHub (tag stays local)
+    push_commits_to_github
 
-    # Step 12: Create GitHub Release (THIS TRIGGERS THE WORKFLOW)
+    # Step 12: Create GitHub Release (THIS pushes the tag and triggers the workflow)
+    # CRITICAL: This is the correct order - Release BEFORE workflow runs
+    # gh release create will push the tag, which triggers the workflow
     create_github_release "$NEW_VERSION"
 
     # Step 13: Wait for GitHub Actions workflow
