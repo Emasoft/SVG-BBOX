@@ -179,12 +179,65 @@ const TEST_DEPENDENCIES = {
 };
 
 /**
+ * Validate git reference to prevent command injection attacks
+ * @param {string} ref - Git reference to validate (e.g., "HEAD", "main", "origin/develop")
+ * @throws {Error} If ref contains dangerous characters
+ *
+ * WHY: Command injection vulnerability - malicious git refs can execute arbitrary code
+ * Even though execFileAsync doesn't spawn a shell, git itself can interpret certain
+ * characters dangerously. For example: "HEAD; rm -rf /" or "HEAD|malicious-command"
+ *
+ * WHAT NOT TO DO:
+ * - Don't use blacklists (always incomplete - can't predict all attack vectors)
+ * - Don't sanitize by escaping (brittle, error-prone, easy to bypass)
+ * - Don't trust git to validate (git accepts many dangerous patterns)
+ *
+ * SECURITY PRINCIPLE: Use whitelist validation - only allow known-safe characters
+ */
+function validateGitRef(ref) {
+  // Whitelist pattern: alphanumeric, forward slash, underscore, hyphen, dot, caret, tilde
+  // Covers standard git refs: HEAD, main, feature/foo, origin/main, HEAD~1, HEAD^, v1.0.0
+  const SAFE_GIT_REF_PATTERN = /^[a-zA-Z0-9/_.\-^~]+$/;
+
+  // Shell metacharacters that enable command injection attacks
+  const DANGEROUS_CHARS = [';', '|', '&', '`', '$', '(', ')', '<', '>', '\n', '\r'];
+
+  if (!ref || typeof ref !== 'string') {
+    throw new Error(
+      `Invalid git ref: must be a non-empty string (got ${typeof ref}: ${JSON.stringify(ref)})`
+    );
+  }
+
+  // Check for shell metacharacters first (most dangerous)
+  const foundDangerous = DANGEROUS_CHARS.filter((char) => ref.includes(char));
+  if (foundDangerous.length > 0) {
+    throw new Error(
+      `Invalid git ref: contains shell metacharacters (${foundDangerous.join(', ')}) ` +
+        `that could enable command injection attacks. Ref: "${ref}"`
+    );
+  }
+
+  // Whitelist validation: reject refs with any characters outside the safe pattern
+  if (!SAFE_GIT_REF_PATTERN.test(ref)) {
+    throw new Error(
+      `Invalid git ref: contains unsafe characters. ` +
+        `Only alphanumeric, /, _, -, ., ^, ~ are allowed. Ref: "${ref}"`
+    );
+  }
+
+  debug(`Git ref validated successfully: ${ref}`);
+}
+
+/**
  * Get list of changed files from git
  * @param {string} baseRef - Git reference to compare against
  * @returns {Promise<string[]>} List of changed file paths
  * @throws {Error} If git commands fail (FAIL-FAST: don't hide git configuration errors)
  */
 async function getChangedFiles(baseRef) {
+  // SECURITY: Validate git ref before using it in commands (Issue #10)
+  validateGitRef(baseRef);
+
   debug(`Getting changed files against base ref: ${baseRef}`);
 
   // FAIL-FAST: Let git errors propagate - don't hide configuration problems
