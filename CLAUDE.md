@@ -9,6 +9,19 @@
 - Wait for user approval before running `npm publish`
 - Add this to the todo list: "Wait for user review before pushing"
 
+## JavaScript/TypeScript Code Fixing
+
+**CRITICAL: Always use the correct code-fixer agent for the language!**
+
+- For JavaScript/TypeScript files (.js, .cjs, .mjs, .ts, .tsx): **ALWAYS use
+  `js-code-fixer` agent**
+- For Python files (.py): use `python-code-fixer` agent
+- NEVER use `python-code-fixer` on JavaScript/TypeScript files - it's the wrong
+  tool!
+- The `js-code-fixer` agent runs ESLint, TypeScript compiler (tsc), and Prettier
+- Can fix up to 20 JS/TS files in parallel by spawning 20 `js-code-fixer` agents
+  simultaneously
+
 ## Critical Discovery: npm Trusted Publishing with OIDC
 
 ### Problem Context
