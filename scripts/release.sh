@@ -31,6 +31,9 @@
 
 set -e  # Exit on error
 
+# Get package name from package.json
+PACKAGE_NAME=$(grep '"name"' package.json | head -1 | sed 's/.*"name": "\(.*\)".*/\1/')
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -195,7 +198,7 @@ generate_release_notes() {
 
     # Create release notes
     cat > /tmp/release-notes.md <<EOF
-## svg-bbox v${VERSION}
+## ${PACKAGE_NAME} v${VERSION}
 
 ### Changes
 
@@ -209,7 +212,7 @@ ${COMMITS}
 ### Installation
 
 \`\`\`bash
-npm install svg-bbox@${VERSION}
+npm install ${PACKAGE_NAME}@${VERSION}
 \`\`\`
 EOF
 
@@ -321,11 +324,11 @@ verify_npm_publication() {
     log_info "Verifying npm publication..."
 
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        NPM_VERSION=$(npm view svg-bbox version 2>/dev/null || echo "")
+        NPM_VERSION=$(npm view ${PACKAGE_NAME} version 2>/dev/null || echo "")
 
         if [ "$NPM_VERSION" = "$VERSION" ]; then
-            log_success "Package svg-bbox@$VERSION is live on npm!"
-            log_success "Install with: npm install svg-bbox@$VERSION"
+            log_success "Package ${PACKAGE_NAME}@$VERSION is live on npm!"
+            log_success "Install with: npm install ${PACKAGE_NAME}@$VERSION"
             return 0
         fi
 
@@ -335,7 +338,7 @@ verify_npm_publication() {
     done
 
     log_error "Package not found on npm after waiting"
-    log_warning "Check manually: npm view svg-bbox version"
+    log_warning "Check manually: npm view ${PACKAGE_NAME} version"
     exit 1
 }
 
@@ -343,7 +346,7 @@ verify_npm_publication() {
 main() {
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  SVG-BBOX Release Script"
+    echo "  ${PACKAGE_NAME} Release Script"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
 
@@ -428,8 +431,8 @@ main() {
     echo "═══════════════════════════════════════════════════════════"
     echo ""
     log_info "GitHub Release: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/v$NEW_VERSION"
-    log_info "npm Package: https://www.npmjs.com/package/svg-bbox"
-    log_info "Install: npm install svg-bbox@$NEW_VERSION"
+    log_info "npm Package: https://www.npmjs.com/package/${PACKAGE_NAME}"
+    log_info "Install: npm install ${PACKAGE_NAME}@$NEW_VERSION"
     echo ""
 
     # Cleanup
