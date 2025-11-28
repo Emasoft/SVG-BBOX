@@ -351,12 +351,14 @@ async function analyzeSvg(svgPath, browser) {
     }
 
     // Get width/height attributes
+    // CRITICAL FIX: Ignore percentage values (width="100%")
+    // parseFloat("100%") = 100, which is wrong - we need absolute pixel values
     const widthAttr = svg.getAttribute('width');
     const heightAttr = svg.getAttribute('height');
-    if (widthAttr) {
+    if (widthAttr && !widthAttr.includes('%')) {
       result.width = parseFloat(widthAttr);
     }
-    if (heightAttr) {
+    if (heightAttr && !heightAttr.includes('%')) {
       result.height = parseFloat(heightAttr);
     }
 
