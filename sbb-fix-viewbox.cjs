@@ -60,14 +60,15 @@ DESCRIPTION:
   by computing the full visual bbox of all content.
 
 USAGE:
-  node sbb-fix-viewbox.cjs input.svg [output.svg] [--auto-open] [--force] [--help]
+  node sbb-fix-viewbox.cjs input.svg [output.svg] [--auto-open] [--force] [--overwrite] [--help]
 
 ARGUMENTS:
   input.svg           Input SVG file to fix
-  output.svg          Output file path (default: input.fixed.svg)
+  output.svg          Output file path (default: input_fixed.svg)
 
 OPTIONS:
   --force             Force regeneration of viewBox and dimensions (ignore existing)
+  --overwrite         Overwrite input file (USE WITH CAUTION - loses original viewBox!)
   --auto-open         Automatically open fixed SVG in Chrome/Chromium
   --help, -h          Show this help message
 
@@ -133,6 +134,7 @@ function parseArgs(argv) {
   const positional = [];
   let autoOpen = false;
   let force = false;
+  let overwrite = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -141,6 +143,8 @@ function parseArgs(argv) {
       autoOpen = true;
     } else if (arg === '--force') {
       force = true;
+    } else if (arg === '--overwrite') {
+      overwrite = true;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -153,8 +157,18 @@ function parseArgs(argv) {
   }
 
   const input = positional[0];
-  const output = positional[1] || input.replace(/\.svg$/i, '') + '.fixed.svg';
-  return { input, output, autoOpen, force };
+  // SECURITY: Default to _fixed.svg suffix to preserve original
+  // Only overwrite if explicitly requested with --overwrite flag
+  let output;
+  if (overwrite) {
+    output = input;
+  } else if (positional[1]) {
+    output = positional[1];
+  } else {
+    output = input.replace(/\.svg$/i, '') + '_fixed.svg';
+  }
+
+  return { input, output, autoOpen, force, overwrite };
 }
 
 // SECURITY: Secure Puppeteer options
@@ -376,7 +390,16 @@ async function main() {
   // Display version
   printInfo(`sbb-fix-viewbox v${getVersion()} | svg-bbox toolkit\n`);
 
-  const { input, output, autoOpen, force } = parseArgs(process.argv);
+  const { input, output, autoOpen, force, overwrite } = parseArgs(process.argv);
+
+  // SECURITY: Warn when overwriting original file
+  if (overwrite) {
+    printWarning('⚠️  --overwrite flag detected: Original viewBox information will be lost!');
+    printWarning('   Original file will be overwritten. Press Ctrl+C to cancel...');
+    // Give user 2 seconds to cancel
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
   await fixSvgFile(input, output, autoOpen, force);
 }
 

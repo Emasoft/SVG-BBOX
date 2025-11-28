@@ -220,7 +220,7 @@ and this project adheres to
 - Add setViewBoxOnObjects() for viewBox reframing
 - Apply comprehensive security fixes to sbb-getbbox.cjs
 - Apply comprehensive security fixes to sbb-fix-viewbox.cjs
-- Apply comprehensive security fixes to sbb-render.cjs
+- Apply comprehensive security fixes to sbb-svg2png.cjs
 - Apply comprehensive security fixes to sbb-test.cjs
 - Apply comprehensive security fixes to sbb-comparer.cjs
 - Apply comprehensive security fixes to sbb-extractor.cjs

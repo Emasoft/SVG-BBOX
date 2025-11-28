@@ -169,7 +169,7 @@ describe('Package Installation Verification', () => {
   const cliTools = [
     'sbb-getbbox.cjs',
     'sbb-extract.cjs',
-    'sbb-render.cjs',
+    'sbb-svg2png.cjs',
     'sbb-fix-viewbox.cjs',
     'sbb-comparer.cjs',
     'sbb-test.cjs',

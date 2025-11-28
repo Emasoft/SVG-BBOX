@@ -249,7 +249,7 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
 1. **sbb-getbbox.cjs** (807 → 755 lines) - All 20 security fixes applied ✅
 2. **sbb-fix-viewbox.cjs** (298 → 362 lines) - All 20 fixes + undefined variable
    bug fixed ✅
-3. **sbb-render.cjs** (610 → 671 lines) - All 20 fixes + PNG output validation
+3. **sbb-svg2png.cjs** (610 → 671 lines) - All 20 fixes + PNG output validation
    ✅
 4. **sbb-test.cjs** (364 → 411 lines) - All 20 fixes + JSON/log output
    validation ✅

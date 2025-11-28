@@ -103,7 +103,7 @@ npx svg-bbox
 
 # Run specific tools
 npx sbb-getbbox myfile.svg
-npx sbb-render myfile.svg output.png
+npx sbb-svg2png myfile.svg output.png
 npx sbb-extract myfile.svg --list
 ```
 
@@ -122,7 +122,7 @@ yarn global add svg-bbox
 # After global install, run commands directly:
 svg-bbox              # Show all available commands
 sbb-getbbox file.svg  # Compute bounding box
-sbb-render file.svg output.png
+sbb-svg2png file.svg output.png
 ```
 
 ### Local Install (For Projects)
@@ -204,7 +204,7 @@ After installation, the following CLI commands are available:
   comparison)
 - `sbb-extract` - List, extract, and export SVG objects
 - `sbb-fix-viewbox` - Fix missing viewBox/dimensions
-- `sbb-render` - Render SVG to PNG
+- `sbb-svg2png` - Render SVG to PNG
 - `sbb-comparer` - Compare two SVGs visually (pixel-by-pixel)
 - `sbb-test` - Test library functions
 
@@ -335,7 +335,7 @@ browsers and Node.js (via Puppeteer).
 | **Core Tools (Our Visual BBox Algorithm)**        |                                                                                                                         |                                                            |                                                          |
 | `sbb-getbbox`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-getbbox.cjs)</div>            | Get bbox info using our pixel-accurate visual algorithm    | `sbb-getbbox drawing.svg`                                |
 | `sbb-extract`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-extract.cjs)</div>            | List/rename/extract/export SVG objects with visual catalog | `sbb-extract sprites.svg --list`                         |
-| `sbb-render`                                      | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-render.cjs)</div>             | Render SVG to PNG with accurate bbox                       | `sbb-render input.svg output.png`                        |
+| `sbb-svg2png`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-svg2png.cjs)</div>            | Render SVG to PNG with accurate bbox                       | `sbb-svg2png input.svg output.png`                       |
 | `sbb-fix-viewbox`                                 | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-fix-viewbox.cjs)</div>        | Repair missing/broken viewBox using visual bbox            | `sbb-fix-viewbox broken.svg fixed.svg`                   |
 | `sbb-comparer`                                    | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-comparer.cjs)</div>           | Visual diff between SVGs (pixel comparison)                | `sbb-comparer a.svg b.svg diff.png`                      |
 | `sbb-test`                                        | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-test.cjs)</div>               | Test bbox accuracy across methods                          | `sbb-test sample.svg`                                    |
@@ -373,7 +373,7 @@ This displays help with all available tools and usage examples.
 ### 2. Render an SVG to PNG at the correct size
 
 ```bash
-npx sbb-render input.svg output.png --mode full --scale 4
+npx sbb-svg2png input.svg output.png --mode full --scale 4
 ```
 
 - Detects the **full drawing extents**.
@@ -758,7 +758,7 @@ const path = require('path');
 
 // Get path to CLI tool
 const sbbGetBBox = path.join(__dirname, 'node_modules/.bin/sbb-getbbox');
-const sbbRender = path.join(__dirname, 'node_modules/.bin/sbb-render');
+const sbbRender = path.join(__dirname, 'node_modules/.bin/sbb-svg2png');
 const sbbFixer = path.join(__dirname, 'node_modules/.bin/sbb-fix-viewbox');
 
 // Compute bounding box
@@ -899,14 +899,14 @@ for:
 
 ## Tools CLI commands usage
 
-### Renderer: `sbb-render.cjs`
+### Renderer: `sbb-svg2png.cjs`
 
 Render SVG → PNG using Chrome + `SvgVisualBBox`.
 
 #### Syntax
 
 ```bash
-node sbb-render.cjs input.svg output.png \
+node sbb-svg2png.cjs input.svg output.png \
   [--mode full|visible|element] \
   [--element-id someId] \
   [--scale N] \
@@ -934,7 +934,7 @@ node sbb-render.cjs input.svg output.png \
 
 ```bash
 # Transparent PNG of what's actually visible in the viewBox
-node sbb-render.cjs map.svg map.png \
+node sbb-svg2png.cjs map.svg map.png \
   --mode visible \
   --margin 10 \
   --background transparent
@@ -1349,7 +1349,7 @@ results, especially for text elements.
 **For production use and accurate bounding box computation, always use the
 native svg-bbox tools:**
 
-- `sbb-render.cjs` - Native SVG rendering with accurate bbox
+- `sbb-svg2png.cjs` - Native SVG rendering with accurate bbox
 - `sbb-getbbox.cjs` - Precise bounding box calculation
 - `sbb-extract.cjs` - Multi-tool with accurate visual bbox
 
@@ -1498,7 +1498,7 @@ node sbb-inkscape-svg2png.cjs --batch icons.txt \
   --width 256 --height 256 --compression 9
 ```
 
-⚠️ **Note:** For production use, prefer `sbb-render.cjs` for accurate font
+⚠️ **Note:** For production use, prefer `sbb-svg2png.cjs` for accurate font
 rendering and bounding boxes.
 
 ---

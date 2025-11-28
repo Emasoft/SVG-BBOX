@@ -25,7 +25,7 @@
     "sbb-extract": "sbb-extract.cjs",
     "sbb-chrome-extract": "sbb-chrome-extract.cjs",
     "sbb-inkscape-extract": "sbb-inkscape-extract.cjs",
-    "sbb-render": "sbb-render.cjs",
+    "sbb-svg2png": "sbb-svg2png.cjs",
     "sbb-fix-viewbox": "sbb-fix-viewbox.cjs",
     "sbb-comparer": "sbb-comparer.cjs",
     "sbb-test": "sbb-test.cjs",

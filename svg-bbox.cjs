@@ -50,9 +50,9 @@ const TOOLS = [
     category: 'Core'
   },
   {
-    name: 'sbb-render',
+    name: 'sbb-svg2png',
     description: 'Render SVG to PNG with accurate bbox',
-    example: 'sbb-render input.svg output.png --scale 2',
+    example: 'sbb-svg2png input.svg output.png --scale 2',
     category: 'Core'
   },
   {
@@ -157,7 +157,7 @@ ${c.yellow}${c.bold}AVAILABLE COMMANDS:${c.reset}
   ${c.green}npx sbb-extract${c.reset} myfile.svg --list
 
   ${c.dim}# Render SVG to PNG at 2x scale${c.reset}
-  ${c.green}npx sbb-render${c.reset} myfile.svg myfile.png --scale 2
+  ${c.green}npx sbb-svg2png${c.reset} myfile.svg myfile.png --scale 2
 
 ${c.yellow}${c.bold}NAMING CONVENTION:${c.reset}
   ${c.dim}sbb-[function]${c.reset}           - Our reliable visual bbox algorithm
@@ -252,7 +252,7 @@ function main() {
   console.log('Did you mean to run one of these?');
   console.log(`  ${c.green}npx sbb-getbbox${c.reset} ${args.join(' ')}`);
   console.log(`  ${c.green}npx sbb-extract${c.reset} ${args.join(' ')}`);
-  console.log(`  ${c.green}npx sbb-render${c.reset} ${args.join(' ')}`);
+  console.log(`  ${c.green}npx sbb-svg2png${c.reset} ${args.join(' ')}`);
   process.exit(1);
 }
 

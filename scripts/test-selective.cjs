@@ -187,7 +187,7 @@ for f in files:
 // - sbb-extract.cjs → html-preview-structure, html-preview-rendering
 // - sbb-test.cjs → cli-security
 // - sbb-fix-viewbox.cjs → cli-security
-// - sbb-render.cjs → cli-security
+// - sbb-svg2png.cjs → cli-security
 // - sbb-getbbox.cjs → cli-security
 //
 // Tools that DON'T use SvgVisualBBox.js:
@@ -219,7 +219,7 @@ const TEST_DEPENDENCIES = {
 
   'sbb-fix-viewbox.cjs': ['tests/integration/cli-security.test.js'],
 
-  'sbb-render.cjs': ['tests/integration/cli-security.test.js'],
+  'sbb-svg2png.cjs': ['tests/integration/cli-security.test.js'],
 
   'sbb-test.cjs': ['tests/integration/cli-security.test.js'],
 

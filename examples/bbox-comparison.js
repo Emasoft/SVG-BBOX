@@ -79,7 +79,7 @@ run('Extracting with Inkscape', '../sbb-inkscape-extract.cjs', [
   inkscapeSvg
 ]);
 
-run('Rendering Inkscape result to PNG', '../sbb-render.cjs', [
+run('Rendering Inkscape result to PNG', '../sbb-svg2png.cjs', [
   inkscapeSvg,
   inkscapePng,
   '--mode',
@@ -107,7 +107,7 @@ run('Extracting with geometric getBBox', '../sbb-extractor.cjs', [
   '0'
 ]);
 
-run('Rendering getBBox result to PNG', '../sbb-render.cjs', [
+run('Rendering getBBox result to PNG', '../sbb-svg2png.cjs', [
   getbboxSvg,
   getbboxPng,
   '--mode',
@@ -133,7 +133,7 @@ run('Extracting with SvgVisualBBox', '../sbb-extractor.cjs', [
   '0'
 ]);
 
-run('Rendering SvgVisualBBox result to PNG', '../sbb-render.cjs', [
+run('Rendering SvgVisualBBox result to PNG', '../sbb-svg2png.cjs', [
   svgvisualbboxSvg,
   svgvisualbboxPng,
   '--mode',

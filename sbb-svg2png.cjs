@@ -3,7 +3,7 @@
  * Render SVG to PNG using Puppeteer/Chrome + SvgVisualBBox
  *
  * Usage:
- *   node render_svg_chrome.js input.svg output.png \
+ *   node sbb-svg2png.cjs input.svg output.png \
  *     [--mode full|visible|element] \
  *     [--element-id ID] \
  *     [--scale N] \
@@ -74,7 +74,7 @@ const {
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-render.cjs - Render SVG to PNG via Headless Chrome             ║
+║ sbb-svg2png.cjs - Render SVG to PNG via Headless Chrome             ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
@@ -82,7 +82,7 @@ DESCRIPTION:
   precise control over what gets rendered and how.
 
 USAGE:
-  node sbb-render.cjs input.svg output.png [options]
+  node sbb-svg2png.cjs input.svg output.png [options]
 
 ARGUMENTS:
   input.svg           Input SVG file to render
@@ -150,24 +150,24 @@ OPTIONS:
 EXAMPLES:
 
   # Render with default settings (visible mode, white background)
-  node sbb-render.cjs drawing.svg output.png
+  node sbb-svg2png.cjs drawing.svg output.png
 
   # Render full drawing regardless of viewBox
-  node sbb-render.cjs drawing.svg full.png --mode full
+  node sbb-svg2png.cjs drawing.svg full.png --mode full
 
   # Render with transparent background at high resolution
-  node sbb-render.cjs icon.svg icon.png --background transparent --scale 8
+  node sbb-svg2png.cjs icon.svg icon.png --background transparent --scale 8
 
   # Render only a specific element
-  node sbb-render.cjs sprites.svg logo.png \\
+  node sbb-svg2png.cjs sprites.svg logo.png \\
     --mode element --element-id logo_main --margin 5
 
   # Custom dimensions and background color
-  node sbb-render.cjs chart.svg chart.png \\
+  node sbb-svg2png.cjs chart.svg chart.png \\
     --width 1920 --height 1080 --background "#f0f0f0"
 
   # Render and immediately view
-  node sbb-render.cjs drawing.svg preview.png --auto-open
+  node sbb-svg2png.cjs drawing.svg preview.png --auto-open
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -676,7 +676,7 @@ ${sanitizedSvg}
 
 async function main() {
   // Display version
-  printInfo(`sbb-render v${getVersion()} | svg-bbox toolkit\n`);
+  printInfo(`sbb-svg2png v${getVersion()} | svg-bbox toolkit\n`);
 
   const opts = parseArgs(process.argv);
   await renderSvgWithModes(opts);
