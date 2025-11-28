@@ -51,10 +51,6 @@ async function extractTextBBoxes(svgFilePath) {
       <html>
         <head>
           <meta charset="utf-8">
-          <style>
-            body { margin: 0; padding: 20px; }
-            svg { border: 1px solid #ccc; }
-          </style>
         </head>
         <body>
           ${svgContent}

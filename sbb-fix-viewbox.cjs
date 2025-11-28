@@ -60,13 +60,14 @@ DESCRIPTION:
   by computing the full visual bbox of all content.
 
 USAGE:
-  node sbb-fix-viewbox.cjs input.svg [output.svg] [--auto-open] [--help]
+  node sbb-fix-viewbox.cjs input.svg [output.svg] [--auto-open] [--force] [--help]
 
 ARGUMENTS:
   input.svg           Input SVG file to fix
   output.svg          Output file path (default: input.fixed.svg)
 
 OPTIONS:
+  --force             Force regeneration of viewBox and dimensions (ignore existing)
   --auto-open         Automatically open fixed SVG in Chrome/Chromium
   --help, -h          Show this help message
 
@@ -131,12 +132,15 @@ function parseArgs(argv) {
 
   const positional = [];
   let autoOpen = false;
+  let force = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
 
     if (arg === '--auto-open') {
       autoOpen = true;
+    } else if (arg === '--force') {
+      force = true;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -150,7 +154,7 @@ function parseArgs(argv) {
 
   const input = positional[0];
   const output = positional[1] || input.replace(/\.svg$/i, '') + '.fixed.svg';
-  return { input, output, autoOpen };
+  return { input, output, autoOpen, force };
 }
 
 // SECURITY: Secure Puppeteer options
@@ -159,7 +163,7 @@ const PUPPETEER_OPTIONS = {
   args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
 };
 
-async function fixSvgFile(inputPath, outputPath, autoOpen = false) {
+async function fixSvgFile(inputPath, outputPath, autoOpen = false, force = false) {
   // SECURITY: Validate and sanitize input path
   const safePath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
@@ -218,7 +222,7 @@ ${sanitizedSvg}
     }, FONT_TIMEOUT_MS);
 
     // Run the fix inside the browser context
-    const fixedSvgString = await page.evaluate(async () => {
+    const fixedSvgString = await page.evaluate(async (forceRegenerate) => {
       /* eslint-disable no-undef */
       const SvgVisualBBox = window.SvgVisualBBox;
       if (!SvgVisualBBox) {
@@ -243,17 +247,25 @@ ${sanitizedSvg}
 
       const full = both.full; // {x,y,width,height} in SVG user units
 
-      // 2) Ensure viewBox
+      // 2) FORCE MODE: Delete existing attributes to ensure clean regeneration
+      if (forceRegenerate) {
+        // Remove existing viewBox, width, height to ensure no contamination
+        svg.removeAttribute('viewBox');
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+      }
+
+      // 3) Ensure viewBox
       // Define viewBox-like object type (not a full DOMRect, just coordinates)
       /** @type {{ x: number; y: number; width: number; height: number }} */
       let vb;
       const viewBoxBaseVal = svg.viewBox && svg.viewBox.baseVal;
-      if (!viewBoxBaseVal || !viewBoxBaseVal.width || !viewBoxBaseVal.height) {
-        // No viewBox → set it to full drawing bbox
+      if (forceRegenerate || !viewBoxBaseVal || !viewBoxBaseVal.width || !viewBoxBaseVal.height) {
+        // Force mode or no viewBox → set it to full drawing bbox
         svg.setAttribute('viewBox', `${full.x} ${full.y} ${full.width} ${full.height}`);
         vb = { x: full.x, y: full.y, width: full.width, height: full.height };
       } else {
-        // If there *is* a viewBox already, we won't change it here.
+        // If there *is* a viewBox already and not forcing, we won't change it here.
         vb = {
           x: viewBoxBaseVal.x,
           y: viewBoxBaseVal.y,
@@ -262,7 +274,7 @@ ${sanitizedSvg}
         };
       }
 
-      // 3) Ensure width/height attributes
+      // 4) Ensure width/height attributes
       const widthAttr = svg.getAttribute('width');
       const heightAttr = svg.getAttribute('height');
 
@@ -275,7 +287,11 @@ ${sanitizedSvg}
       let newWidth = widthAttr;
       let newHeight = heightAttr;
 
-      if (!hasWidth && !hasHeight) {
+      if (forceRegenerate) {
+        // Force mode: always regenerate width/height from viewBox (already deleted above)
+        newWidth = String(vb.width);
+        newHeight = String(vb.height);
+      } else if (!hasWidth && !hasHeight) {
         // Neither width nor height set → use viewBox width/height as px
         newWidth = String(vb.width);
         newHeight = String(vb.height);
@@ -296,7 +312,7 @@ ${sanitizedSvg}
           newHeight = String(vb.height || 1000);
         }
       } else {
-        // both width and height exist: keep as-is
+        // both width and height exist: keep as-is (unless forcing)
       }
 
       if (newWidth) {
@@ -311,7 +327,7 @@ ${sanitizedSvg}
       // In case the original file had extra stuff around the root, we just output the <svg> itself.
       /* eslint-enable no-undef */
       return serializer.serializeToString(svg);
-    });
+    }, force);
 
     // SECURITY: Validate output path and write safely
     const safeOutPath = validateOutputPath(outputPath, {
@@ -360,8 +376,8 @@ async function main() {
   // Display version
   printInfo(`sbb-fix-viewbox v${getVersion()} | svg-bbox toolkit\n`);
 
-  const { input, output, autoOpen } = parseArgs(process.argv);
-  await fixSvgFile(input, output, autoOpen);
+  const { input, output, autoOpen, force } = parseArgs(process.argv);
+  await fixSvgFile(input, output, autoOpen, force);
 }
 
 runCLI(main);

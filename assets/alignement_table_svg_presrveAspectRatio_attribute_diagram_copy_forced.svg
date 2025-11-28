@@ -1,0 +1,124 @@
+<svg version="1.1" id="svg22" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" viewBox="-0.0036467498634067397 -0.0008003404720682283 553.1702730481652 333.59939080302416" width="553.1702730481652" height="333.59939080302416">
+  <desc id="desc1">Example PreserveAspectRatio - illustrates preserveAspectRatio attribute</desc>
+  <style type="text/css" id="style1">
+    text { font-size: 9; }
+    rect { fill: none; stroke: blue; }
+  </style>
+  <defs id="defs3">
+    <g id="smile">
+      <rect x="0.5" y="0.5" width="29" height="39" style="fill:#000000;stroke:#ff0000" id="rect1"/>
+      <circle cx="15" cy="20" r="10" fill="#ffff00" id="circle1"/>
+      <circle cx="12" cy="17" r="1.5" fill="#000000" id="circle2"/>
+      <circle cx="17" cy="17" r="1.5" fill="#000000" id="circle3"/>
+      <path d="m 10,24 a 8,8 0 0 0 10,0" stroke="#000000" stroke-width="2" id="path3"/>
+    </g>
+  </defs>
+  <rect style="display:inline;fill:#fffdd3;fill-opacity:1;stroke:#0201fe;stroke-width:2.09951;stroke-linecap:round;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.995943" id="rect22" width="551.04236" height="331.45099" x="1.049755" y="1.049755"/>
+  <text x="15.326922" y="66.697113" id="text3">SVG to fit</text>
+  <g transform="translate(20.999999,72.911058)" id="g3">
+    <use href="#smile" id="use3"/>
+  </g>
+  <text x="10.999999" y="142.91106" id="text4">Viewport 1</text>
+  <g transform="translate(10.999999,152.91106)" id="g4">
+    <rect x="0.5" y="0.5" width="49" height="29" id="rect4"/>
+  </g>
+  <text x="10.999999" y="212.91106" id="text5">Viewport 2</text>
+  <g transform="translate(20.999999,222.91106)" id="g5">
+    <rect x="0.5" y="0.5" width="29" height="59" id="rect5"/>
+  </g>
+  <text x="101" y="62.911057" id="text6">--------------- meet ---------------</text>
+  <g id="g7" transform="translate(101,92.911058)">
+    <text y="-10" id="text7">xMin*</text>
+    <rect x="0.5" y="0.5" width="49" height="29" id="rect7"/>
+    <svg preserveAspectRatio="xMinYMin" viewBox="0 0 30 40" width="50" height="30" version="1.1" id="svg7">
+      <use href="#smile" id="use7"/>
+    </svg>
+  </g>
+  <g transform="translate(171,92.911058)" id="g8">
+    <text y="-10" id="text8">xMid*</text>
+    <rect x="0.5" y="0.5" width="49" height="29" id="rect8"/>
+    <svg preserveAspectRatio="xMidYMid" viewBox="0 0 30 40" width="50" height="30" version="1.1" id="svg8">
+      <use href="#smile" id="use8"/>
+    </svg>
+  </g>
+  <g transform="translate(242.70673,93.139423)" id="g9">
+    <text y="-10" id="text9">xMax*</text>
+    <rect x="0.5" y="0.5" width="49" height="29" id="rect9"/>
+    <svg preserveAspectRatio="xMaxYMax" viewBox="0 0 30 40" width="50" height="30" version="1.1" id="svg9">
+      <use href="#smile" id="use9"/>
+    </svg>
+  </g>
+  <g id="meet-group-2" transform="translate(360.79567,92.370193)">
+    <text x="0" y="-30" id="text10">---------- meet ----------</text>
+    <g id="g11">
+      <text y="-10" id="text11">*YMin</text>
+      <rect x="0.5" y="0.5" width="29" height="59" id="rect11"/>
+      <svg preserveAspectRatio="xMinYMin" viewBox="0 0 30 40" width="30" height="60" version="1.1" id="svg11">
+        <use href="#smile" id="use11"/>
+      </svg>
+    </g>
+    <g transform="translate(50)" id="g12">
+      <text y="-10" id="text12">*YMid</text>
+      <rect x="0.5" y="0.5" width="29" height="59" id="rect12"/>
+      <svg preserveAspectRatio="xMidYMid" viewBox="0 0 30 40" width="30" height="60" version="1.1" id="svg12">
+        <use href="#smile" id="use12"/>
+      </svg>
+    </g>
+    <g transform="translate(100)" id="g13">
+      <text y="-10" id="text13">*YMax</text>
+      <rect x="0.5" y="0.5" width="29" height="59" id="rect13"/>
+      <svg preserveAspectRatio="xMaxYMax" viewBox="0 0 30 40" width="30" height="60" version="1.1" id="svg13">
+        <use href="#smile" id="use13"/>
+      </svg>
+    </g>
+  </g>
+  <g id="slice-group-1" transform="translate(101,252.91106)">
+    <text x="0" y="-30" id="text14">---------- slice ----------</text>
+    <g id="g15">
+      <text y="-10" id="text15">xMin*</text>
+      <rect x="0.5" y="0.5" width="29" height="59" id="rect15"/>
+      <svg preserveAspectRatio="xMinYMin slice" viewBox="0 0 30 40" width="30" height="60" version="1.1" id="svg15">
+        <use href="#smile" id="use15"/>
+      </svg>
+    </g>
+    <g transform="translate(50)" id="g16">
+      <text y="-10" id="text16">xMid*</text>
+      <rect x="0.5" y="0.5" width="29" height="59" id="rect16"/>
+      <svg preserveAspectRatio="xMidYMid slice" viewBox="0 0 30 40" width="30" height="60" version="1.1" id="svg16">
+        <use href="#smile" id="use16"/>
+      </svg>
+    </g>
+    <g transform="translate(100)" id="g17">
+      <text y="-10" id="text17">xMax*</text>
+      <rect x="0.5" y="0.5" width="29" height="59" id="rect17"/>
+      <svg preserveAspectRatio="xMaxYMax slice" viewBox="0 0 30 40" width="30" height="60" version="1.1" id="svg17">
+        <use href="#smile" id="use17"/>
+      </svg>
+    </g>
+  </g>
+  <g id="slice-group-2" transform="translate(251,252.91106)">
+    <text x="0" y="-30" id="text18">--------------- slice ---------------</text>
+    <g id="g19">
+      <text y="-10" id="text19">*YMin</text>
+      <rect x="0.5" y="0.5" width="49" height="29" id="rect19"/>
+      <svg preserveAspectRatio="xMinYMin slice" viewBox="0 0 30 40" width="50" height="30" version="1.1" id="svg19">
+        <use href="#smile" id="use19"/>
+      </svg>
+    </g>
+    <g transform="translate(70)" id="g20">
+      <text y="-10" id="text20">*YMid</text>
+      <rect x="0.5" y="0.5" width="49" height="29" id="rect20"/>
+      <svg preserveAspectRatio="xMidYMid slice" viewBox="0 0 30 40" width="50" height="30" version="1.1" id="svg20">
+        <use href="#smile" id="use20"/>
+      </svg>
+    </g>
+    <g transform="translate(140)" id="g21">
+      <text y="-10" id="text21">*YMax</text>
+      <rect x="0.5" y="0.5" width="49" height="29" id="rect21"/>
+      <svg preserveAspectRatio="xMaxYMax slice" viewBox="0 0 30 40" width="50" height="30" version="1.1" id="svg21">
+        <use href="#smile" id="use21"/>
+      </svg>
+    </g>
+  </g>
+  <text x="276.57092" y="20.723558" id="text22" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:17.3333px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle" anchor="center"><tspan id="tspan24" x="276.57092" y="20.723558">Alignement options for the SVG attribute</tspan><tspan id="tspan25" style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold'" x="276.57092" y="42.390182">preserveAspectRatio</tspan></text>
+</svg>
