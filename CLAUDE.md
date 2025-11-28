@@ -111,6 +111,112 @@ git push origin :vX.Y.Z    # Delete remote tag (if pushed)
 - Check Node.js version in workflow (must be 24 for npm 11.6.0)
 - Review workflow logs: `gh run view --log`
 
+### Version Tag Format Requirements
+
+**CRITICAL: Git tags MUST use the 'v' prefix (e.g., v1.0.12)**
+
+The version tag format is tightly integrated across multiple systems:
+
+1. **publish.yml workflow** (`.github/workflows/publish.yml`):
+   - Triggers on tags matching `v*` pattern (line 5-6)
+   - Without 'v' prefix, npm publish workflow will NOT trigger
+
+2. **release.sh script** (`scripts/release.sh`):
+   - Always creates tags with 'v' prefix: `v${VERSION}`
+   - Used in: `create_git_tag()`, `create_github_release()`, changelog URLs
+
+3. **GitHub Release conventions**:
+   - Releases are titled `v1.0.12`
+   - Changelog links use `v${PREVIOUS_TAG}...v${VERSION}` format
+
+4. **npm semantic versioning**:
+   - npm internally uses `v` prefix for git tags
+   - Package version in package.json does NOT have 'v' (just `1.0.12`)
+
+**Version Format Summary:**
+
+| Location                     | Format     | Example   |
+| ---------------------------- | ---------- | --------- |
+| Git tag                      | vX.Y.Z     | v1.0.12   |
+| GitHub Release title         | vX.Y.Z     | v1.0.12   |
+| package.json version         | X.Y.Z      | 1.0.12    |
+| npm registry version         | X.Y.Z      | 1.0.12    |
+| release.sh internal VERSION  | X.Y.Z      | 1.0.12    |
+
+**DO NOT remove the 'v' prefix** - it would break the publish workflow trigger.
+
+### Release Script Security Safeguards
+
+**SECURITY: ANSI Code Contamination Prevention**
+
+The release script has comprehensive safeguards to prevent ANSI color codes from
+breaking git tag creation. This addresses a critical bug where colored terminal
+output contaminated version strings.
+
+**Historical Bug (Fixed in commit f1730c8):**
+
+```bash
+# BEFORE SAFEGUARDS:
+fatal: 'v?[0;34mℹ ?[0mBumping version (patch)...' is not a valid tag name
+```
+
+ANSI escape codes from log functions leaked into the VERSION variable, causing
+git tag creation to fail.
+
+**Safeguards Implemented:**
+
+1. **`strip_ansi()` function** - Removes all ANSI escape sequences:
+   - Strips `\x1b[...m` and `\033[...m` patterns
+   - Removes control characters `\000-\037`
+   - Multiple sed/tr passes for robust cleaning
+
+2. **`validate_version()` function** - Three-tier validation:
+   - Empty/whitespace check
+   - ANSI code detection (paranoid double-check)
+   - Semver format validation: `^[0-9]+\.[0-9]+\.[0-9]+$`
+   - Detailed error messages with hex dump for debugging
+
+3. **Applied in critical functions:**
+   - `bump_version()`: Strip + validate after npm version command
+   - `set_version()`: Validate input + verify package.json matches
+   - `create_git_tag()`: Strip + validate before tag creation
+   - `create_github_release()`: Strip + validate before release
+
+4. **npm command hardening:**
+   - Suppress stderr (`2>/dev/null`) to prevent verbose output contamination
+   - Maintain stdout for clean version capture
+   - Validate actual package.json version matches expected
+
+**Defensive Layers:**
+
+- **Prevent:** Suppress npm stderr at source
+- **Detect:** Strip ANSI codes from captured output
+- **Validate:** Verify semver format before use
+- **Verify:** Double-check package.json for version mismatches
+
+**Why These Safeguards Matter:**
+
+- Prevents release script failures due to colored output
+- Ensures git tags have clean, valid names
+- Maintains consistency between package.json and git tags
+- Provides detailed debugging information when validation fails
+- Protects against both current and future output contamination
+
+**If Tag Creation Fails:**
+
+The safeguards will show:
+```
+✗ Invalid version format: '<contaminated-string>'
+✗ Expected semver format (e.g., 1.0.12)
+✗ Got: <hex dump of actual bytes>
+```
+
+This helps diagnose whether the issue is:
+- ANSI codes in the output
+- npm verbose mode enabled
+- Unexpected characters in version string
+- Shell environment issues
+
 ## JavaScript/TypeScript Code Fixing
 
 **CRITICAL: Always use the correct code-fixer agent for the language!**
