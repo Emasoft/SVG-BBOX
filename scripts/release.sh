@@ -64,19 +64,19 @@ NC='\033[0m' # No Color
 
 # Helper functions
 log_info() {
-    echo -e "${BLUE}ℹ ${NC}$1"
+    echo -e "${BLUE}ℹ ${NC}$1" >&2
 }
 
 log_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}✓${NC} $1" >&2
 }
 
 log_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo -e "${YELLOW}⚠${NC} $1" >&2
 }
 
 log_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}✗${NC} $1" >&2
 }
 
 # Check if command exists
@@ -614,11 +614,11 @@ rollback_release() {
 
 # Main release function
 main() {
-    echo ""
-    echo "═══════════════════════════════════════════════════════════"
-    echo "  ${PACKAGE_NAME} Release Script"
-    echo "═══════════════════════════════════════════════════════════"
-    echo ""
+    echo "" >&2
+    echo "═══════════════════════════════════════════════════════════" >&2
+    echo "  ${PACKAGE_NAME} Release Script" >&2
+    echo "═══════════════════════════════════════════════════════════" >&2
+    echo "" >&2
 
     # Parse arguments
     SKIP_CONFIRMATION=false
@@ -669,9 +669,9 @@ main() {
             ;;
     esac
 
-    echo ""
+    echo "" >&2
     log_info "Release version: $NEW_VERSION"
-    echo ""
+    echo "" >&2
 
     # Step 5: Check if version already published (idempotency)
     EXISTING_NPM_VERSION=$(npm view ${PACKAGE_NAME} version 2>/dev/null || echo "")
@@ -728,15 +728,15 @@ main() {
     verify_npm_publication "$NEW_VERSION" || rollback_release "$NEW_VERSION" "npm-verify"
 
     # Success!
-    echo ""
-    echo "═══════════════════════════════════════════════════════════"
+    echo "" >&2
+    echo "═══════════════════════════════════════════════════════════" >&2
     log_success "Release v$NEW_VERSION completed successfully!"
-    echo "═══════════════════════════════════════════════════════════"
-    echo ""
+    echo "═══════════════════════════════════════════════════════════" >&2
+    echo "" >&2
     log_info "GitHub Release: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/v$NEW_VERSION"
     log_info "npm Package: https://www.npmjs.com/package/${PACKAGE_NAME}"
     log_info "Install: npm install ${PACKAGE_NAME}@$NEW_VERSION"
-    echo ""
+    echo "" >&2
 
     # Cleanup
     rm -f /tmp/release-notes.md /tmp/lint-output.log /tmp/typecheck-output.log /tmp/test-output.log
