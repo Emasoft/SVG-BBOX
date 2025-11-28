@@ -182,17 +182,28 @@ for f in files:
  * DRY Principle: Shared test patterns defined as constants to avoid duplication
  */
 
-// Core library tests - all browser-dependent functionality
+// Core library tests - ONLY for tools that actually load SvgVisualBBox.js
+// Tools that load SvgVisualBBox.js (via page.addScriptTag):
+// - sbb-extract.cjs → html-preview-structure, html-preview-rendering
+// - sbb-test.cjs → cli-security
+// - sbb-fix-viewbox.cjs → cli-security
+// - sbb-render.cjs → cli-security
+// - sbb-getbbox.cjs → cli-security
+//
+// Tools that DON'T use SvgVisualBBox.js:
+// - sbb-comparer.cjs (uses own comparison logic, no browser)
+// - sbb-inkscape-*.cjs (uses Inkscape CLI, not SvgVisualBBox.js)
+// - sbb-chrome-*.cjs (uses Chrome DevTools Protocol, not SvgVisualBBox.js)
 const LIBRARY_DEPENDENT_TESTS = [
-  'tests/unit/**/*.test.js',
-  'tests/integration/sbb-comparer.test.js',
-  'tests/integration/html-preview-structure.test.js',
-  'tests/integration/html-preview-rendering.test.js',
-  'tests/integration/cli-security.test.js'
+  'tests/unit/**/*.test.js', // Unit tests that directly test the library
+  'tests/integration/html-preview-structure.test.js', // Tests sbb-extract.cjs
+  'tests/integration/html-preview-rendering.test.js', // Tests sbb-extract.cjs
+  'tests/integration/cli-security.test.js' // Tests sbb-test/fix-viewbox/render/getbbox
+  // NOTE: sbb-comparer.test.js is NOT included - sbb-comparer doesn't use SvgVisualBBox.js
 ];
 
 const TEST_DEPENDENCIES = {
-  // TESTING RULE 1: Core library affects all browser-dependent tests
+  // TESTING RULE 1: Core library affects ONLY tests for tools that import it
   'SvgVisualBBox.js': LIBRARY_DEPENDENT_TESTS,
   'SvgVisualBBox.min.js': LIBRARY_DEPENDENT_TESTS,
 
