@@ -52,6 +52,9 @@ const {
   printWarning: _printWarning
 } = require('./lib/cli-utils.cjs');
 
+// Centralized timeout configuration
+const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
+
 /**
  * Launch Puppeteer with the best available browser:
  *  1. Try bundled Chromium (default Puppeteer behavior).
@@ -138,10 +141,6 @@ function makeHtmlShell() {
   </body>
 </html>`;
 }
-
-// SECURITY: Constants for timeouts
-const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
-const _FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 /**
  * Main test runner.

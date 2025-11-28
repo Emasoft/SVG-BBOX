@@ -27,6 +27,7 @@ const puppeteer = require('puppeteer');
 const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
 const { getVersion, printVersion, hasVersionFlag: _hasVersionFlag } = require('./version.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -151,10 +152,6 @@ function parseArgs(argv) {
   const output = positional[1] || input.replace(/\.svg$/i, '') + '.fixed.svg';
   return { input, output, autoOpen };
 }
-
-// SECURITY: Constants for timeouts
-const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
-const FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 // SECURITY: Secure Puppeteer options
 const PUPPETEER_OPTIONS = {

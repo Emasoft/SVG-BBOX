@@ -14,12 +14,9 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const puppeteer = require('puppeteer');
 const { getVersion } = require('./version.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 const _execFilePromise = promisify(execFile);
-
-// SECURITY: Constants for timeouts and limits
-const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
-const FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 // SECURITY: Import security utilities
 const {

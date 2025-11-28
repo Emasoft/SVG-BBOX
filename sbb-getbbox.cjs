@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { getVersion, printVersion: _printVersion } = require('./version.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // Import security utilities
 const {
@@ -46,12 +47,6 @@ const {
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-/** Maximum time to wait for browser operations (30 seconds) */
-const BROWSER_TIMEOUT_MS = 30000;
-
-/** Maximum time to wait for fonts to load (8 seconds) */
-const FONT_TIMEOUT_MS = 8000;
 
 /** Puppeteer launch options */
 const PUPPETEER_OPTIONS = {

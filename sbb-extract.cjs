@@ -159,10 +159,7 @@ const {
   printVersion: _printVersion,
   hasVersionFlag: _hasVersionFlag
 } = require('./version.cjs');
-
-// SECURITY: Constants for timeouts and limits
-const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
-const _FONT_TIMEOUT_MS = 8000; // 8 seconds
+const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
 const {

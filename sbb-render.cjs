@@ -48,6 +48,7 @@ const {
   printVersion: _printVersion,
   hasVersionFlag: _hasVersionFlag
 } = require('./version.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -286,10 +287,6 @@ function parseArgs(argv) {
 }
 
 // ---------- core render logic ----------
-
-// SECURITY: Constants for timeouts
-const BROWSER_TIMEOUT_MS = 30000; // 30 seconds
-const FONT_TIMEOUT_MS = 8000; // 8 seconds
 
 // SECURITY: Secure Puppeteer options
 const PUPPETEER_OPTIONS = {
