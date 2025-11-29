@@ -213,6 +213,156 @@ check_main_branch() {
     log_success "On main branch"
 }
 
+# PHASE 1.5: Validate version synchronization across files
+# Check that package.json version matches version.cjs and minified preamble
+validate_version_sync() {
+    log_info "Validating version synchronization..."
+
+    # Get version from package.json
+    local PKG_VERSION
+    PKG_VERSION=$(get_current_version)
+
+    # Get version from version.cjs
+    local VERSION_CJS_VERSION
+    if [ -f "version.cjs" ]; then
+        # Extract version from: const VERSION = '1.0.12';
+        VERSION_CJS_VERSION=$(grep "const VERSION" version.cjs | sed "s/.*'\([^']*\)'.*/\1/" | head -1)
+        if [ -z "$VERSION_CJS_VERSION" ]; then
+            log_warning "Could not extract version from version.cjs"
+        elif [ "$PKG_VERSION" != "$VERSION_CJS_VERSION" ]; then
+            log_error "Version mismatch: package.json=$PKG_VERSION, version.cjs=$VERSION_CJS_VERSION"
+            log_error "Run 'npm run build' to sync versions, then commit"
+            return 1
+        fi
+    else
+        log_warning "version.cjs not found - skipping version.cjs check"
+    fi
+
+    # Get version from SvgVisualBBox.min.js preamble comment
+    local MINIFIED_VERSION
+    if [ -f "SvgVisualBBox.min.js" ]; then
+        # Extract version from preamble: /*! SvgVisualBBox v1.0.12 - ...
+        MINIFIED_VERSION=$(head -1 SvgVisualBBox.min.js | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' | sed 's/v//')
+        if [ -z "$MINIFIED_VERSION" ]; then
+            log_warning "Could not extract version from SvgVisualBBox.min.js preamble"
+        elif [ "$PKG_VERSION" != "$MINIFIED_VERSION" ]; then
+            log_error "Version mismatch: package.json=$PKG_VERSION, SvgVisualBBox.min.js=$MINIFIED_VERSION"
+            log_error "Run 'npm run build' to regenerate minified file, then commit"
+            return 1
+        fi
+    else
+        log_warning "SvgVisualBBox.min.js not found - skipping minified preamble check"
+    fi
+
+    log_success "Version synchronization validated: $PKG_VERSION"
+    return 0
+}
+
+# PHASE 1.6: Validate UMD wrapper syntax before release
+# Ensures the minified file can be parsed by Node.js without syntax errors
+# and properly exports the SvgVisualBBox namespace
+validate_umd_wrapper() {
+    log_info "Validating UMD wrapper syntax..."
+
+    local MINIFIED_FILE="SvgVisualBBox.min.js"
+
+    # Check if minified file exists
+    if [ ! -f "$MINIFIED_FILE" ]; then
+        log_error "Minified file not found: $MINIFIED_FILE"
+        log_error "Run 'npm run build' to generate minified file"
+        return 1
+    fi
+
+    # Step 1: Use node --check to validate JavaScript syntax
+    # This parses the file without executing it - fast and safe
+    if ! node --check "$MINIFIED_FILE" 2>/dev/null; then
+        log_error "Syntax error in $MINIFIED_FILE"
+        log_error "The minification may have introduced invalid JavaScript"
+        log_error "Run 'npm run build' and check for errors"
+        return 1
+    fi
+
+    log_success "Minified file has valid JavaScript syntax"
+
+    # Step 2: Verify UMD wrapper structure contains expected exports
+    # The minified file is browser-targeted, so we verify structure via grep
+    # rather than trying to execute browser-dependent code in Node.js
+    local EXPECTED_EXPORTS=(
+        "getSvgElementVisualBBoxTwoPassAggressive"
+        "getSvgElementsUnionVisualBBox"
+        "waitForDocumentFonts"
+    )
+
+    for export_name in "${EXPECTED_EXPORTS[@]}"; do
+        if ! grep -q "$export_name" "$MINIFIED_FILE"; then
+            log_error "UMD wrapper missing expected export: $export_name"
+            log_error "The minification may have removed or corrupted this function"
+            return 1
+        fi
+    done
+
+    # Step 3: Verify UMD factory pattern structure
+    # Check for the characteristic UMD wrapper pattern
+    if ! grep -q 'module.exports' "$MINIFIED_FILE"; then
+        log_error "UMD wrapper missing CommonJS export (module.exports)"
+        return 1
+    fi
+
+    if ! grep -q 'SvgVisualBBox' "$MINIFIED_FILE"; then
+        log_error "UMD wrapper missing SvgVisualBBox namespace"
+        return 1
+    fi
+
+    log_success "UMD wrapper structure verified (exports and namespace present)"
+
+    return 0
+}
+
+# PHASE 1.8: Check if git tag already exists (locally or remotely)
+# Prevents duplicate releases and detects stale local tags
+check_tag_not_exists() {
+    local VERSION=$1
+
+    # Check local tags
+    if git tag -l "v$VERSION" | grep -q "v$VERSION"; then
+        log_error "Git tag v$VERSION already exists locally"
+        log_info "To delete: git tag -d v$VERSION"
+        return 1
+    fi
+
+    # Check remote tags
+    if git ls-remote --tags origin 2>/dev/null | grep -q "refs/tags/v$VERSION"; then
+        log_error "Git tag v$VERSION already exists on remote"
+        log_info "To delete: git push origin :refs/tags/v$VERSION"
+        return 1
+    fi
+
+    return 0
+}
+
+# PHASE 1.8: Display pre-flight checklist header
+show_preflight_header() {
+    echo "" >&2
+    echo "┌──────────────────────────────────────────────────────────────┐" >&2
+    echo "│                    PRE-FLIGHT CHECKLIST                      │" >&2
+    echo "└──────────────────────────────────────────────────────────────┘" >&2
+    echo "" >&2
+}
+
+# PHASE 1.8: Display pre-flight checklist summary
+show_preflight_summary() {
+    local PASSED=$1
+    local TOTAL=$2
+
+    echo "" >&2
+    if [ "$PASSED" -eq "$TOTAL" ]; then
+        log_success "Pre-flight checklist passed ($PASSED/$TOTAL checks)"
+    else
+        log_error "Pre-flight checklist failed ($PASSED/$TOTAL checks)"
+    fi
+    echo "" >&2
+}
+
 # Get current version from package.json
 get_current_version() {
     grep '"version"' package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/'
@@ -493,6 +643,11 @@ create_git_tag() {
 push_commits_to_github() {
     log_info "Pushing commits to GitHub..."
 
+    # PHASE 1.1: Capture the HEAD commit SHA BEFORE pushing for workflow filtering
+    local HEAD_SHA
+    HEAD_SHA=$(git rev-parse HEAD)
+    log_info "Pushing commit: ${HEAD_SHA:0:7}"
+
     # Use retry logic for git push (network operation)
     if ! retry_with_backoff "git push origin main"; then
         log_error "Failed to push commits after retries"
@@ -501,7 +656,8 @@ push_commits_to_github() {
     log_success "Commits pushed"
 
     log_info "Waiting for CI workflow to complete (this may take 3-10 minutes)..."
-    wait_for_ci_workflow
+    # PHASE 1.1: Pass commit SHA to wait_for_ci_workflow for filtering
+    wait_for_ci_workflow "$HEAD_SHA"
 }
 
 # Create GitHub Release (this pushes the tag and triggers the workflow)
@@ -546,41 +702,47 @@ create_github_release() {
 }
 
 # Wait for CI workflow after pushing commits
+# PHASE 1.1: Filter by commit SHA to avoid race conditions with other commits
 wait_for_ci_workflow() {
-    local MAX_WAIT=600  # 10 minutes
+    local COMMIT_SHA=$1  # The commit SHA we just pushed
+    local MAX_WAIT=600   # 10 minutes
     local ELAPSED=0
 
     sleep 5  # Give GitHub a moment to register the push
 
-    log_info "Monitoring CI workflow (lint, typecheck, test, e2e, coverage)..."
+    log_info "Monitoring CI workflow for commit ${COMMIT_SHA:0:7}..."
+    log_info "  (lint, typecheck, test, e2e, coverage)"
 
     while [ $ELAPSED -lt $MAX_WAIT ]; do
-        # Get the latest CI workflow run for the main branch
-        WORKFLOW_STATUS=$(gh run list --workflow=ci.yml --branch=main --limit 1 --json status,conclusion -q '.[0].status' 2>/dev/null || echo "")
+        # PHASE 1.1: Filter workflows by HEAD commit SHA to avoid race conditions
+        # This ensures we only track the workflow for OUR specific commit
+        WORKFLOW_JSON=$(gh run list --workflow=ci.yml --branch=main --limit 5 --json status,conclusion,headSha,databaseId 2>/dev/null || echo "[]")
 
-        if [ -z "$WORKFLOW_STATUS" ]; then
+        # Find the workflow run matching our commit SHA
+        MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r --arg sha "$COMMIT_SHA" '.[] | select(.headSha == $sha) | {status, conclusion, databaseId}' 2>/dev/null | head -1)
+
+        if [ -z "$MATCHING_RUN" ] || [ "$MATCHING_RUN" = "null" ]; then
             echo -n "."
             sleep 5
             ELAPSED=$((ELAPSED + 5))
             continue
         fi
 
+        WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status')
+
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
-            WORKFLOW_CONCLUSION=$(gh run list --workflow=ci.yml --branch=main --limit 1 --json conclusion -q '.[0].conclusion')
+            WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion')
+            RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId')
 
             if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
-                log_success "CI workflow completed successfully"
+                log_success "CI workflow completed successfully for ${COMMIT_SHA:0:7}"
                 return 0
             else
                 log_error "CI workflow failed with conclusion: $WORKFLOW_CONCLUSION"
-                log_error "View logs with: gh run view --log"
+                log_error "View logs with: gh run view $RUN_ID --log"
 
                 # Show failed job details
-                gh run list --workflow=ci.yml --branch=main --limit 1
-
-                # Get the run ID and show which jobs failed
-                RUN_ID=$(gh run list --workflow=ci.yml --branch=main --limit 1 --json databaseId -q '.[0].databaseId')
-                if [ -n "$RUN_ID" ]; then
+                if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
                     log_error "Failed jobs:"
                     gh run view "$RUN_ID" --log-failed || true
                 fi
@@ -595,47 +757,67 @@ wait_for_ci_workflow() {
     done
 
     log_error "Timeout waiting for CI workflow (exceeded 10 minutes)"
+    log_error "Commit SHA: $COMMIT_SHA"
     log_warning "Check status manually: gh run watch"
     exit 1
 }
 
 # Wait for Publish to npm workflow after creating GitHub Release
+# PHASE 1.2: Increased timeout to 10 minutes + filter by tag commit SHA
 wait_for_workflow() {
     local VERSION=$1
-    local MAX_WAIT=300  # 5 minutes
+    local MAX_WAIT=600  # PHASE 1.2: 10 minutes (up from 5 minutes)
     local ELAPSED=0
 
     log_info "Waiting for GitHub Actions 'Publish to npm' workflow..."
+    log_info "  Version: v$VERSION (timeout: 10 minutes)"
 
     sleep 5  # Give GitHub a moment to register the tag
 
-    while [ $ELAPSED -lt $MAX_WAIT ]; do
-        # Get the latest workflow run for this tag
-        WORKFLOW_STATUS=$(gh run list --workflow=publish.yml --limit 1 --json status,conclusion -q '.[0].status' 2>/dev/null || echo "")
+    # PHASE 1.2: Get the commit SHA for the tag to filter workflows
+    local TAG_SHA
+    TAG_SHA=$(git rev-list -n 1 "v$VERSION" 2>/dev/null || echo "")
+    if [ -n "$TAG_SHA" ]; then
+        log_info "  Tag commit: ${TAG_SHA:0:7}"
+    fi
 
-        if [ -z "$WORKFLOW_STATUS" ]; then
+    while [ $ELAPSED -lt $MAX_WAIT ]; do
+        # PHASE 1.2: Get workflow runs with SHA filtering when possible
+        WORKFLOW_JSON=$(gh run list --workflow=publish.yml --limit 5 --json status,conclusion,headSha,databaseId 2>/dev/null || echo "[]")
+
+        # PHASE 1.2: Find the workflow run matching our tag commit SHA
+        local MATCHING_RUN=""
+        if [ -n "$TAG_SHA" ]; then
+            MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r --arg sha "$TAG_SHA" '.[] | select(.headSha == $sha) | {status, conclusion, databaseId}' 2>/dev/null | head -1)
+        fi
+
+        # Fallback to latest workflow if no SHA match (for backwards compatibility)
+        if [ -z "$MATCHING_RUN" ] || [ "$MATCHING_RUN" = "null" ]; then
+            MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r '.[0] | {status, conclusion, databaseId}' 2>/dev/null)
+        fi
+
+        if [ -z "$MATCHING_RUN" ] || [ "$MATCHING_RUN" = "null" ]; then
             echo -n "."
             sleep 5
             ELAPSED=$((ELAPSED + 5))
             continue
         fi
 
+        WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status')
+
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
-            WORKFLOW_CONCLUSION=$(gh run list --workflow=publish.yml --limit 1 --json conclusion -q '.[0].conclusion')
+            WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion')
+            RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId')
 
             if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
                 log_success "Publish workflow completed successfully"
                 return 0
             else
                 log_error "Publish workflow failed with conclusion: $WORKFLOW_CONCLUSION"
-                log_error "View logs with: gh run view --log"
+                log_error "View logs with: gh run view $RUN_ID --log"
 
                 # Show failed job details
-                gh run list --workflow=publish.yml --limit 1
-
-                # Get the run ID and show logs
-                RUN_ID=$(gh run list --workflow=publish.yml --limit 1 --json databaseId -q '.[0].databaseId')
-                if [ -n "$RUN_ID" ]; then
+                if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
                     log_error "Failed logs:"
                     gh run view "$RUN_ID" --log-failed || true
                 fi
@@ -649,36 +831,171 @@ wait_for_workflow() {
         ELAPSED=$((ELAPSED + 5))
     done
 
-    log_error "Timeout waiting for Publish workflow (exceeded 5 minutes)"
+    log_error "Timeout waiting for Publish workflow (exceeded 10 minutes)"
+    log_error "Version: v$VERSION"
     log_warning "Check status manually: gh run watch"
     exit 1
 }
 
 # Verify npm publication
+# PHASE 1.3: 5 minute total timeout with exponential backoff retry logic
 verify_npm_publication() {
     local VERSION=$1
-    local MAX_RETRIES=12  # 1 minute with 5-second intervals
-    local RETRY_COUNT=0
+    local MAX_WAIT=300   # PHASE 1.3: 5 minutes total timeout
+    local ELAPSED=0
+    local BACKOFF=5      # Start with 5 second intervals
+    local MAX_BACKOFF=30 # Cap at 30 second intervals
+    local ATTEMPT=1
 
     log_info "Verifying npm publication..."
+    log_info "  Waiting for ${PACKAGE_NAME}@$VERSION to appear on registry..."
 
-    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        NPM_VERSION=$(npm view ${PACKAGE_NAME} version 2>/dev/null || echo "")
+    while [ $ELAPSED -lt $MAX_WAIT ]; do
+        # Check npm registry for the version
+        NPM_VERSION=$(npm view "${PACKAGE_NAME}@$VERSION" version 2>/dev/null || echo "")
 
         if [ "$NPM_VERSION" = "$VERSION" ]; then
+            echo ""  # Newline after progress dots
             log_success "Package ${PACKAGE_NAME}@$VERSION is live on npm!"
             log_success "Install with: npm install ${PACKAGE_NAME}@$VERSION"
             return 0
         fi
 
+        # PHASE 1.3: Exponential backoff (5s → 10s → 20s → 30s cap)
         echo -n "."
-        sleep 5
-        RETRY_COUNT=$((RETRY_COUNT + 1))
+        sleep $BACKOFF
+        ELAPSED=$((ELAPSED + BACKOFF))
+        ATTEMPT=$((ATTEMPT + 1))
+
+        # Double the backoff for next iteration, capped at MAX_BACKOFF
+        if [ $BACKOFF -lt $MAX_BACKOFF ]; then
+            BACKOFF=$((BACKOFF * 2))
+            if [ $BACKOFF -gt $MAX_BACKOFF ]; then
+                BACKOFF=$MAX_BACKOFF
+            fi
+        fi
     done
 
-    log_error "Package not found on npm after waiting"
-    log_warning "Check manually: npm view ${PACKAGE_NAME} version"
+    echo ""  # Newline after progress dots
+    log_error "Package ${PACKAGE_NAME}@$VERSION not found on npm after 5 minutes"
+    log_warning "npm registry propagation may still be in progress"
+    log_warning "Check manually: npm view ${PACKAGE_NAME}@$VERSION version"
+    log_info "If the version appears later, the release was successful"
     exit 1
+}
+
+# Verify post-publish installation
+# PHASE 1.4: Test that the published package actually works after npm install
+# This catches packaging bugs like missing files in package.json "files" array
+verify_post_publish_installation() {
+    local VERSION=$1
+    local TEMP_DIR
+
+    log_info "Verifying package installation in clean environment..."
+
+    # Create isolated temp directory (simulates fresh user environment)
+    TEMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'svg-bbox-verify')
+    log_info "  Test directory: $TEMP_DIR"
+
+    # Trap to ensure cleanup on exit
+    trap "rm -rf '$TEMP_DIR'" EXIT
+
+    # Initialize npm project
+    log_info "  → Initializing npm project..."
+    if ! (cd "$TEMP_DIR" && npm init -y >/dev/null 2>&1); then
+        log_warning "npm init failed in temp directory"
+        rm -rf "$TEMP_DIR"
+        trap - EXIT
+        return 0  # Non-fatal: package is already on npm, just can't verify
+    fi
+
+    # Install package from registry (not local tarball)
+    log_info "  → Installing ${PACKAGE_NAME}@$VERSION from npm registry..."
+    if ! (cd "$TEMP_DIR" && npm install "${PACKAGE_NAME}@$VERSION" --no-save 2>&1 | tail -5); then
+        log_warning "npm install failed - package may not be fully propagated yet"
+        rm -rf "$TEMP_DIR"
+        trap - EXIT
+        return 0  # Non-fatal: registry may still be propagating
+    fi
+
+    local INSTALLED_PATH="$TEMP_DIR/node_modules/${PACKAGE_NAME}"
+
+    # Verify package exists
+    if [ ! -d "$INSTALLED_PATH" ]; then
+        log_error "Package not found at $INSTALLED_PATH after install"
+        rm -rf "$TEMP_DIR"
+        trap - EXIT
+        return 1
+    fi
+
+    # PHASE 1.4: Test that require('svg-bbox') loads without MODULE_NOT_FOUND
+    log_info "  → Verifying require('svg-bbox') works..."
+    REQUIRE_TEST=$(cd "$TEMP_DIR" && node -e "try { require('svg-bbox'); console.log('OK'); } catch(e) { console.log(e.code || e.message); process.exit(1); }" 2>&1)
+    if [ "$REQUIRE_TEST" != "OK" ]; then
+        log_error "require('svg-bbox') failed: $REQUIRE_TEST"
+        log_error "This indicates a packaging bug - missing files or broken dependencies"
+        rm -rf "$TEMP_DIR"
+        trap - EXIT
+        return 1
+    fi
+    log_success "  require('svg-bbox') works"
+
+    # PHASE 1.4: Test CLI tools with --help
+    # All 13 CLI tools defined in package.json bin
+    local CLI_TOOLS=(
+        "svg-bbox"
+        "sbb-getbbox"
+        "sbb-chrome-getbbox"
+        "sbb-inkscape-getbbox"
+        "sbb-extract"
+        "sbb-chrome-extract"
+        "sbb-inkscape-extract"
+        "sbb-svg2png"
+        "sbb-fix-viewbox"
+        "sbb-comparer"
+        "sbb-test"
+        "sbb-inkscape-text2path"
+        "sbb-inkscape-svg2png"
+    )
+
+    log_info "  → Testing CLI tools with --help..."
+    local FAILED_TOOLS=""
+
+    for TOOL in "${CLI_TOOLS[@]}"; do
+        local TOOL_PATH="$INSTALLED_PATH/${TOOL}.cjs"
+
+        # Check if tool file exists
+        if [ ! -f "$TOOL_PATH" ]; then
+            FAILED_TOOLS="${FAILED_TOOLS}${TOOL} (file missing) "
+            continue
+        fi
+
+        # Run tool with --help in subshell (some tools may call process.exit)
+        # We only care that it doesn't throw MODULE_NOT_FOUND
+        HELP_OUTPUT=$(cd "$TEMP_DIR" && timeout 10 node "$TOOL_PATH" --help 2>&1 || echo "TIMEOUT_OR_ERROR")
+
+        # Check for MODULE_NOT_FOUND errors
+        if echo "$HELP_OUTPUT" | grep -q "MODULE_NOT_FOUND\|Cannot find module"; then
+            FAILED_TOOLS="${FAILED_TOOLS}${TOOL} (missing deps) "
+        fi
+    done
+
+    if [ -n "$FAILED_TOOLS" ]; then
+        log_error "Some CLI tools failed verification: $FAILED_TOOLS"
+        log_error "This indicates missing files in package.json 'files' array"
+        rm -rf "$TEMP_DIR"
+        trap - EXIT
+        return 1
+    fi
+
+    log_success "  All ${#CLI_TOOLS[@]} CLI tools verified"
+
+    # Cleanup
+    rm -rf "$TEMP_DIR"
+    trap - EXIT
+
+    log_success "Post-publish installation verification passed"
+    return 0
 }
 
 # Rollback on failure
@@ -747,18 +1064,51 @@ main() {
         exit 1
     fi
 
-    # Step 1: Validate prerequisites
+    # ══════════════════════════════════════════════════════════════════
+    # PHASE 1.8: PRE-FLIGHT CHECKLIST
+    # Consolidates all pre-release validations for clear visibility
+    # ══════════════════════════════════════════════════════════════════
+    show_preflight_header
+
+    local PREFLIGHT_CHECKS=0
+    local PREFLIGHT_TOTAL=5
+
+    # Pre-flight Check 1: Prerequisites (commands and auth)
+    log_info "[1/5] Checking required tools and authentication..."
     validate_prerequisites
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 
-    # Step 2: Check working directory and branch
+    # Pre-flight Check 2: Clean working directory
+    log_info "[2/5] Checking working directory..."
     check_clean_working_dir
-    check_main_branch
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 
-    # Step 3: Get current version
+    # Pre-flight Check 3: On main branch
+    log_info "[3/5] Checking current branch..."
+    check_main_branch
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
+
+    # Pre-flight Check 4: Version synchronization (PHASE 1.5)
+    log_info "[4/5] Validating version synchronization..."
+    validate_version_sync || exit 1
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
+
+    # Pre-flight Check 5: UMD wrapper syntax (PHASE 1.6)
+    log_info "[5/5] Validating UMD wrapper syntax..."
+    validate_umd_wrapper || exit 1
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
+
+    show_preflight_summary $PREFLIGHT_CHECKS $PREFLIGHT_TOTAL
+
+    # ══════════════════════════════════════════════════════════════════
+    # VERSION DETERMINATION
+    # ══════════════════════════════════════════════════════════════════
+
+    # Get current version
     CURRENT_VERSION=$(get_current_version)
     log_info "Current version: $CURRENT_VERSION"
 
-    # Step 4: Determine new version
+    # Determine new version
     case $VERSION_ARG in
         patch|minor|major)
             NEW_VERSION=$(bump_version "$VERSION_ARG")
@@ -772,7 +1122,12 @@ main() {
     log_info "Release version: $NEW_VERSION"
     echo "" >&2
 
-    # Step 5: Check if version already published (idempotency)
+    # ══════════════════════════════════════════════════════════════════
+    # VERSION-DEPENDENT CHECKS (require knowing the target version)
+    # ══════════════════════════════════════════════════════════════════
+
+    # Check if version already published on npm (idempotency)
+    log_info "Checking npm registry for existing version..."
     EXISTING_NPM_VERSION=$(npm view ${PACKAGE_NAME} version 2>/dev/null || echo "")
     if [ "$EXISTING_NPM_VERSION" = "$NEW_VERSION" ]; then
         log_warning "Version $NEW_VERSION is already published on npm"
@@ -780,8 +1135,23 @@ main() {
         git checkout package.json pnpm-lock.yaml 2>/dev/null || true
         exit 0
     fi
+    log_success "Version $NEW_VERSION not yet published on npm"
 
-    # Step 6: Confirm with user (unless --yes flag)
+    # PHASE 1.8: Check if git tag already exists (prevents duplicate releases)
+    log_info "Checking for existing git tag..."
+    if ! check_tag_not_exists "$NEW_VERSION"; then
+        log_error "Cannot proceed - tag already exists"
+        log_info "Restoring package.json..."
+        git checkout package.json pnpm-lock.yaml 2>/dev/null || true
+        exit 1
+    fi
+    log_success "Git tag v$NEW_VERSION does not exist"
+
+    # ══════════════════════════════════════════════════════════════════
+    # USER CONFIRMATION
+    # ══════════════════════════════════════════════════════════════════
+
+    # Confirm with user (unless --yes flag)
     if [ "$SKIP_CONFIRMATION" = false ]; then
         read -p "$(echo -e ${YELLOW}Do you want to release v$NEW_VERSION? [y/N]${NC} )" -n 1 -r
         echo
@@ -794,37 +1164,53 @@ main() {
         log_info "Skipping confirmation (--yes flag)"
     fi
 
-    # Step 7: Auto-fix common issues
+    # ══════════════════════════════════════════════════════════════════
+    # QUALITY CHECKS AND AUTO-FIX
+    # ══════════════════════════════════════════════════════════════════
+
+    # Auto-fix common issues
     auto_fix_issues || rollback_release "$NEW_VERSION" "auto-fix"
 
-    # Step 8: Run quality checks
+    # Run quality checks (lint, typecheck, tests)
     run_quality_checks || rollback_release "$NEW_VERSION" "quality-checks"
 
-    # Step 9: Get previous tag for release notes
+    # ══════════════════════════════════════════════════════════════════
+    # RELEASE EXECUTION
+    # ══════════════════════════════════════════════════════════════════
+
+    # Get previous tag for release notes
     PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-    # Step 10: Generate release notes
+    # Generate release notes
     generate_release_notes "$NEW_VERSION" "$PREVIOUS_TAG" || rollback_release "$NEW_VERSION" "release-notes"
 
-    # Step 11: Commit version bump
+    # Commit version bump
     commit_version_bump "$NEW_VERSION" || rollback_release "$NEW_VERSION" "commit-version"
 
-    # Step 12: Create git tag (locally only, don't push yet)
+    # Create git tag (locally only, don't push yet)
     create_git_tag "$NEW_VERSION" || rollback_release "$NEW_VERSION" "create-tag"
 
-    # Step 13: Push commits to GitHub (tag stays local)
+    # Push commits to GitHub (tag stays local)
     push_commits_to_github || rollback_release "$NEW_VERSION" "push-commits"
 
-    # Step 14: Create GitHub Release (THIS pushes the tag and triggers the workflow)
+    # Create GitHub Release (THIS pushes the tag and triggers the workflow)
     # CRITICAL: This is the correct order - Release BEFORE workflow runs
     # gh release create will push the tag, which triggers the workflow
     create_github_release "$NEW_VERSION" || rollback_release "$NEW_VERSION" "create-release"
 
-    # Step 15: Wait for GitHub Actions workflow
+    # ══════════════════════════════════════════════════════════════════
+    # VERIFICATION
+    # ══════════════════════════════════════════════════════════════════
+
+    # Wait for GitHub Actions workflow
     wait_for_workflow "$NEW_VERSION" || rollback_release "$NEW_VERSION" "workflow-wait"
 
-    # Step 16: Verify npm publication
+    # Verify npm publication
     verify_npm_publication "$NEW_VERSION" || rollback_release "$NEW_VERSION" "npm-verify"
+
+    # PHASE 1.4 - Verify package works after installation
+    # This catches packaging bugs like missing files in package.json "files" array
+    verify_post_publish_installation "$NEW_VERSION" || log_warning "Post-publish verification had issues (non-fatal)"
 
     # Success!
     echo "" >&2

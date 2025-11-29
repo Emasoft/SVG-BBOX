@@ -143,15 +143,69 @@ function makeHtmlShell() {
 }
 
 /**
+ * Print help message and exit.
+ */
+function showHelp() {
+  console.log(`sbb-test v${getVersion()} - Test all SvgVisualBBox library functions
+
+Usage:
+  sbb-test <path/to/file.svg>
+  sbb-test [options]
+
+Description:
+  Loads an SVG file, runs all exported SvgVisualBBox functions, and writes
+  results to JSON and error log files in the current directory.
+
+Options:
+  -h, --help      Show this help message
+  -v, --version   Show version information
+
+Output Files:
+  <basename>-bbox-results.json   Test results (JSON)
+  <basename>-bbox-errors.log     Errors and diagnostics
+
+Functions Tested:
+  - getSvgElementVisualBBoxTwoPassAggressive
+  - getSvgElementsUnionVisualBBox
+  - getSvgElementVisibleAndFullBBoxes
+  - getSvgRootViewBoxExpansionForFullDrawing
+
+Examples:
+  sbb-test logo.svg           Test logo.svg
+  sbb-test assets/icon.svg    Test icon.svg
+`);
+  process.exit(0);
+}
+
+/**
+ * Print version and exit.
+ */
+function showVersion() {
+  console.log(`sbb-test v${getVersion()}`);
+  process.exit(0);
+}
+
+/**
  * Main test runner.
  */
 async function runTest() {
-  // Display version
+  const args = process.argv.slice(2);
+
+  // Handle --help and --version flags FIRST (before any validation)
+  if (args.includes('--help') || args.includes('-h')) {
+    showHelp();
+  }
+  if (args.includes('--version') || args.includes('-v')) {
+    showVersion();
+  }
+
+  // Display version header after flag checks
   printInfo(`sbb-test v${getVersion()} | svg-bbox toolkit\n`);
 
-  const args = process.argv.slice(2);
   if (args.length < 1) {
-    throw new ValidationError('Usage: node sbb-test.cjs path/to/file.svg');
+    throw new ValidationError(
+      'Usage: node sbb-test.cjs path/to/file.svg\nUse --help for more information.'
+    );
   }
 
   // SECURITY: Validate and sanitize input path

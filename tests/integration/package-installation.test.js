@@ -257,31 +257,71 @@ describe('Package Installation Verification', () => {
     });
   });
 
-  it('should be able to run sbb-getbbox --help without errors', () => {
-    const toolPath = path.join(installedPackagePath, 'sbb-getbbox.cjs');
+  // PHASE 2.1: Test ALL 13 CLI tools with --help
+  // Chrome-based tools should exit 0 with usage info
+  const chromeToolsWithHelp = [
+    { tool: 'svg-bbox.cjs', name: 'svg-bbox' },
+    { tool: 'sbb-getbbox.cjs', name: 'sbb-getbbox' },
+    { tool: 'sbb-extract.cjs', name: 'sbb-extract' },
+    { tool: 'sbb-svg2png.cjs', name: 'sbb-svg2png' },
+    { tool: 'sbb-fix-viewbox.cjs', name: 'sbb-fix-viewbox' },
+    { tool: 'sbb-comparer.cjs', name: 'sbb-comparer' },
+    { tool: 'sbb-test.cjs', name: 'sbb-test' },
+    { tool: 'sbb-chrome-getbbox.cjs', name: 'sbb-chrome-getbbox' },
+    { tool: 'sbb-chrome-extract.cjs', name: 'sbb-chrome-extract' }
+  ];
 
-    // Run the tool with --help flag - using spawnSync for safety
-    const result = spawnSync('node', [toolPath, '--help'], {
-      cwd: tempDir,
-      encoding: 'utf8'
+  chromeToolsWithHelp.forEach(({ tool, name }) => {
+    it(`should be able to run ${name} --help without errors`, () => {
+      const toolPath = path.join(installedPackagePath, tool);
+
+      const result = spawnSync('node', [toolPath, '--help'], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        timeout: 10000 // 10 second timeout
+      });
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(name);
+      // Check for 'usage' or 'USAGE' in output (case-insensitive)
+      expect(result.stdout.toLowerCase()).toMatch(/usage|available commands/);
     });
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('sbb-getbbox');
-    expect(result.stdout.toLowerCase()).toContain('usage');
   });
 
-  it('should be able to run svg-bbox --help without errors', () => {
-    const toolPath = path.join(installedPackagePath, 'svg-bbox.cjs');
+  // Inkscape tools may exit early if Inkscape not installed, but --help should
+  // be processed first in well-designed CLIs. We test what we can.
+  const inkscapeToolsWithHelp = [
+    { tool: 'sbb-inkscape-getbbox.cjs', name: 'sbb-inkscape-getbbox' },
+    { tool: 'sbb-inkscape-extract.cjs', name: 'sbb-inkscape-extract' },
+    { tool: 'sbb-inkscape-svg2png.cjs', name: 'sbb-inkscape-svg2png' },
+    { tool: 'sbb-inkscape-text2path.cjs', name: 'sbb-inkscape-text2path' }
+  ];
 
-    const result = spawnSync('node', [toolPath, '--help'], {
-      cwd: tempDir,
-      encoding: 'utf8'
+  inkscapeToolsWithHelp.forEach(({ tool, name }) => {
+    it(`should be able to run ${name} --help (may require Inkscape)`, () => {
+      const toolPath = path.join(installedPackagePath, tool);
+
+      const result = spawnSync('node', [toolPath, '--help'], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        timeout: 10000 // 10 second timeout
+      });
+
+      // Inkscape tools may exit with 0 (help shown) or 1 (Inkscape not found)
+      // The key test is that it runs without MODULE_NOT_FOUND errors
+      if (result.status === 0) {
+        // If it exits 0, verify help was shown
+        expect(result.stdout).toContain(name);
+      } else {
+        // If it exits non-zero, verify it's NOT a MODULE_NOT_FOUND error
+        // (Inkscape not installed is acceptable, missing deps is not)
+        const combinedOutput = (result.stdout || '') + (result.stderr || '');
+        expect(combinedOutput).not.toContain('MODULE_NOT_FOUND');
+        expect(combinedOutput).not.toContain('Cannot find module');
+        // Verify it mentioned Inkscape (expected failure reason)
+        expect(combinedOutput.toLowerCase()).toMatch(/inkscape|usage/i);
+      }
     });
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('svg-bbox');
-    expect(result.stdout.toLowerCase()).toContain('usage');
   });
 
   it('should have package.json with correct main entry point', () => {
@@ -303,6 +343,160 @@ describe('Package Installation Verification', () => {
     Object.entries(packageJson.bin).forEach(([_name, binPath]) => {
       const fullPath = path.join(installedPackagePath, binPath);
       expect(fs.existsSync(fullPath)).toBe(true);
+    });
+  });
+
+  // PHASE 2.3: Verify bin symlinks work via node_modules/.bin/
+  // This catches cross-platform issues with:
+  // 1. Missing/incorrect shebang (#!/usr/bin/env node)
+  // 2. CRLF line endings that break shebang on Unix/macOS
+  // 3. npm not creating symlinks properly
+  // 4. File permissions (executable bit on Unix)
+  // 5. Windows .cmd wrapper files
+  // 6. PowerShell script (.ps1) files on Windows
+  describe('Bin Symlinks Verification', () => {
+    const isWindows = process.platform === 'win32';
+    // Reserved for future platform-specific tests (prefixed with _ to satisfy linter)
+    const _isMacOS = process.platform === 'darwin';
+    const _isLinux = process.platform === 'linux';
+
+    it('should have created bin symlinks in node_modules/.bin/', () => {
+      const binDir = path.join(tempDir, 'node_modules', '.bin');
+      expect(fs.existsSync(binDir)).toBe(true);
+
+      const packageJsonPath = path.join(installedPackagePath, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+      // Check each bin command has appropriate files
+      Object.keys(packageJson.bin).forEach((cmdName) => {
+        if (isWindows) {
+          // Windows creates .cmd (batch) and optionally .ps1 (PowerShell)
+          const cmdPath = path.join(binDir, `${cmdName}.cmd`);
+          expect(fs.existsSync(cmdPath)).toBe(true);
+        } else {
+          // Unix/macOS creates symlinks (no extension)
+          const binPath = path.join(binDir, cmdName);
+          expect(fs.existsSync(binPath)).toBe(true);
+
+          // Verify it's actually a symlink (not a copy)
+          const stats = fs.lstatSync(binPath);
+          expect(stats.isSymbolicLink()).toBe(true);
+        }
+      });
+    });
+
+    it('should have correct shebang in all CLI tool files', () => {
+      const packageJsonPath = path.join(installedPackagePath, 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+      Object.entries(packageJson.bin).forEach(([name, binPath]) => {
+        const fullPath = path.join(installedPackagePath, binPath);
+        // Read as buffer to detect line endings precisely
+        const buffer = fs.readFileSync(fullPath);
+        const content = buffer.toString('utf8');
+        const firstLine = content.split('\n')[0];
+
+        // Must start with shebang for Unix execution
+        expect(firstLine.startsWith('#!/usr/bin/env node')).toBe(true);
+
+        // Must NOT have CRLF on the shebang line (breaks Unix/macOS execution)
+        // CRLF would make the interpreter "node\r" instead of "node"
+        expect(firstLine.endsWith('\r')).toBe(false);
+
+        // Check the first few bytes are NOT a BOM (Byte Order Mark)
+        // UTF-8 BOM is EF BB BF which would break the shebang
+        if (buffer.length >= 3) {
+          const hasBOM = buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf;
+          expect(hasBOM).toBe(false);
+        }
+
+        // On Unix, verify file has executable bit set (npm should do this)
+        if (!isWindows) {
+          try {
+            fs.accessSync(fullPath, fs.constants.X_OK);
+          } catch {
+            // Some systems don't set executable on install, npm handles via symlink
+            // This is informational, not a hard failure
+            console.log(`Note: ${name} file not directly executable (OK if symlink works)`);
+          }
+        }
+      });
+    });
+
+    // Test that svg-bbox can be executed via node_modules/.bin/ symlink
+    it('should be able to run svg-bbox via node_modules/.bin/ symlink', () => {
+      const binDir = path.join(tempDir, 'node_modules', '.bin');
+      const svgBboxBin = isWindows
+        ? path.join(binDir, 'svg-bbox.cmd')
+        : path.join(binDir, 'svg-bbox');
+
+      // Use shell:true on all platforms for consistency
+      // This is how npm scripts actually run commands
+      const result = spawnSync(svgBboxBin, ['--help'], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        timeout: 15000, // Increased for slow CI
+        shell: true, // Always use shell - matches real usage
+        env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}` }
+      });
+
+      // Check for MODULE_NOT_FOUND first (critical error)
+      const combinedOutput = (result.stdout || '') + (result.stderr || '');
+      expect(combinedOutput).not.toContain('MODULE_NOT_FOUND');
+      expect(combinedOutput).not.toContain('Cannot find module');
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('svg-bbox');
+      expect(result.stdout.toLowerCase()).toMatch(/usage|available commands/);
+    });
+
+    // Test that sbb-getbbox can be executed via node_modules/.bin/ symlink
+    it('should be able to run sbb-getbbox via node_modules/.bin/ symlink', () => {
+      const binDir = path.join(tempDir, 'node_modules', '.bin');
+      const sbbGetbboxBin = isWindows
+        ? path.join(binDir, 'sbb-getbbox.cmd')
+        : path.join(binDir, 'sbb-getbbox');
+
+      const result = spawnSync(sbbGetbboxBin, ['--help'], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        timeout: 15000,
+        shell: true,
+        env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}` }
+      });
+
+      // Check for MODULE_NOT_FOUND first (critical error)
+      const combinedOutput = (result.stdout || '') + (result.stderr || '');
+      expect(combinedOutput).not.toContain('MODULE_NOT_FOUND');
+      expect(combinedOutput).not.toContain('Cannot find module');
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('sbb-getbbox');
+      expect(result.stdout.toLowerCase()).toMatch(/usage/);
+    });
+
+    // Test npx-style execution (how users typically run local packages)
+    it('should be able to run svg-bbox via npx-style PATH lookup', () => {
+      const binDir = path.join(tempDir, 'node_modules', '.bin');
+
+      // Simulate npx by adding .bin to PATH and running command by name
+      const result = spawnSync('svg-bbox', ['--help'], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        timeout: 15000,
+        shell: true,
+        env: {
+          ...process.env,
+          PATH: `${binDir}${path.delimiter}${process.env.PATH}`
+        }
+      });
+
+      // This is how npx and npm scripts execute - via PATH lookup
+      const combinedOutput = (result.stdout || '') + (result.stderr || '');
+      expect(combinedOutput).not.toContain('MODULE_NOT_FOUND');
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('svg-bbox');
     });
   });
 });
