@@ -6,6 +6,14 @@ import { TEST_TIMEOUT_MS, HOOK_TIMEOUT_MS } from './config/timeouts.js';
 // Higher concurrency (vs default 5) maximizes throughput without CPU saturation.
 const MAX_CONCURRENT_TESTS = 10;
 
+// Generate timestamped log filename for test output
+// Format: tests/logs/vitest-YYYY-MM-DD-HH-MM-SS.log
+const getLogFilename = () => {
+  const now = new Date();
+  const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  return `tests/logs/vitest-${timestamp}.log`;
+};
+
 export default defineConfig({
   test: {
     // Test environment
@@ -65,8 +73,14 @@ export default defineConfig({
       'tests/e2e/**' // Playwright E2E tests - run separately via test:e2e
     ],
 
-    // Reporter
-    reporters: ['verbose'],
+    // Reporter configuration
+    // - 'verbose' for console output (CI needs this)
+    // - 'json' writes to timestamped log file in tests/logs/ for local analysis
+    reporters: process.env.CI ? ['verbose'] : ['verbose', 'json'],
+
+    // Output file for JSON reporter (timestamped log file)
+    // Only used when running locally (not in CI)
+    outputFile: process.env.CI ? undefined : getLogFilename(),
 
     // Disable isolation for faster tests
     isolate: true,
