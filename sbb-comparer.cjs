@@ -1493,6 +1493,18 @@ async function generateHtmlReport(
 /**
  * Regenerate viewBox for an SVG file using sbb-fix-viewbox with --force
  * Returns path to the fixed SVG file
+ *
+ * DEPENDENCY NOTE:
+ * This function depends on sbb-fix-viewbox.cjs as a subprocess.
+ * It relies on the output being a valid SVG file with properly set
+ * viewBox, width, and height attributes.
+ *
+ * The output format of sbb-fix-viewbox is a design contract - see the
+ * "OUTPUT FORMAT CONTRACT" comment in sbb-fix-viewbox.cjs header.
+ *
+ * @param {string} svgPath - Path to the SVG file needing viewBox regeneration
+ * @returns {Promise<string>} Path to the fixed SVG file with viewBox set
+ * @throws {SVGBBoxError} If sbb-fix-viewbox fails to regenerate the viewBox
  */
 async function regenerateViewBox(svgPath) {
   // Create output path with _viewbox_fixed suffix

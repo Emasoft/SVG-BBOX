@@ -19,6 +19,18 @@
  *   - If the <svg> has no viewBox, sets viewBox to that bbox.
  *   - If width/height are missing, synthesizes them from the viewBox and aspect ratio.
  *   - Serializes the updated SVG and saves it.
+ *
+ * OUTPUT FORMAT CONTRACT - DO NOT CHANGE:
+ *   This tool's output format is a design requirement. Other tools in the svg-bbox
+ *   toolkit depend on this tool as a subprocess and rely on the output being a valid
+ *   SVG file with properly set viewBox, width, and height attributes.
+ *
+ *   Dependencies:
+ *   - sbb-comparer.cjs calls this tool via subprocess to regenerate missing viewBox
+ *     before performing aspect ratio comparisons. It expects the output file to be
+ *     a valid SVG with viewBox/width/height attributes.
+ *
+ *   Any changes to the output format would require updating dependent tools.
  */
 
 const fs = require('fs');
