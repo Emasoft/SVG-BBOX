@@ -425,19 +425,35 @@ describe('Security Utils', () => {
     });
 
     // eslint-disable-next-line vitest/expect-expect
-    it('should skip empty or invalid entries', () => {
-      /**Test that empty or malformed entries are skipped*/
+    // eslint-disable-next-line vitest/expect-expect
+    it('should throw on any invalid entries (fail-fast behavior)', () => {
+      /**Test that invalid mappings trigger immediate error (fail-fast for security)*/
       const mixedMappings = [
         { from: 'valid1', to: 'new1' },
-        { from: '', to: 'new2' }, // Empty from - skip
-        { from: 'valid3' }, // Missing to - skip
+        { from: '', to: 'new2' }, // Empty from - INVALID
+        { from: 'valid3' }, // Missing to - INVALID
         { from: 'valid4', to: 'new4' }
       ];
 
-      const result = securityUtils.validateRenameMapping(mixedMappings);
+      // New behavior: throws immediately on any invalid entries (security audit fix)
+      // Previously: silently skipped invalid entries (security risk)
+      assert.throws(
+        () => securityUtils.validateRenameMapping(mixedMappings),
+        /invalid rename mapping/i
+      );
+    });
+
+    it('should return only valid entries when all inputs are valid', () => {
+      /**Test that valid mappings pass through correctly*/
+      const validMappings = [
+        { from: 'valid1', to: 'new1' },
+        { from: 'valid2', to: 'new2' }
+      ];
+
+      const result = securityUtils.validateRenameMapping(validMappings);
       assert.strictEqual(result.length, 2);
       assert.strictEqual(result[0].from, 'valid1');
-      assert.strictEqual(result[1].from, 'valid4');
+      assert.strictEqual(result[1].from, 'valid2');
     });
 
     // eslint-disable-next-line vitest/expect-expect
@@ -445,9 +461,11 @@ describe('Security Utils', () => {
       /**Test that error is thrown when all mappings are invalid*/
       const invalidMappings = [{ from: '', to: '' }, { from: 'only-from' }];
 
+      // New behavior: throws detailed error listing all invalid mappings
+      // Format: "Found N invalid rename mappings:\n  - Entry 1: ...\n  - Entry 2: ..."
       assert.throws(
         () => securityUtils.validateRenameMapping(invalidMappings),
-        /No valid rename mappings found/
+        /invalid rename mapping/i
       );
     });
   });
