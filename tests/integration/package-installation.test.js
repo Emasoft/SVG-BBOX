@@ -39,10 +39,13 @@ describe('Package Installation Verification', () => {
     console.log(`\n  Test directory: ${tempDir}`);
 
     // Run npm pack to create tarball (same as what gets published)
+    // CRITICAL: Use shell: true on Windows because npm is actually npm.cmd
+    // Without shell: true, spawnSync cannot find the npm executable on Windows
     console.log('  Creating package tarball...');
     const packResult = spawnSync('npm', ['pack'], {
       cwd: process.cwd(),
-      encoding: 'utf8'
+      encoding: 'utf8',
+      shell: true // Required for Windows - npm is npm.cmd, not npm.exe
     });
 
     if (packResult.status !== 0) {
@@ -67,9 +70,7 @@ describe('Package Installation Verification', () => {
         console.log(`  Found tarball via fallback: ${expectedTarball}`);
         packageTarball = expectedTarball;
       } else {
-        throw new Error(
-          'npm pack succeeded but produced no output and tarball not found'
-        );
+        throw new Error('npm pack succeeded but produced no output and tarball not found');
       }
     } else {
       // Extract tarball filename from output (last line)
@@ -81,10 +82,12 @@ describe('Package Installation Verification', () => {
     console.log(`  Tarball created: ${packageTarball}`);
 
     // Install the tarball in temp directory
+    // CRITICAL: Use shell: true on Windows because npm is actually npm.cmd
     console.log('  Installing package from tarball...');
     const installResult = spawnSync('npm', ['install', '--no-save', tarballPath], {
       cwd: tempDir,
-      encoding: 'utf8'
+      encoding: 'utf8',
+      shell: true // Required for Windows - npm is npm.cmd, not npm.exe
     });
 
     if (installResult.status !== 0) {
