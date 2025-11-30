@@ -42,7 +42,7 @@ const {
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
-function printHelp() {
+function _printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
 ║ sbb-comparer.cjs - SVG Visual Comparison Tool                        ║
@@ -140,7 +140,7 @@ OUTPUT:
 `);
 }
 
-function printVersion(toolName) {
+function _printVersion(toolName) {
   const version = getVersion();
   console.log(`${toolName} v${version} | svg-bbox toolkit`);
 }
@@ -150,108 +150,135 @@ function printVersion(toolName) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function parseArgs(argv) {
+  const { createModeArgParser } = require('./lib/cli-utils.cjs');
+
+  // Create the mode-aware parser with flag-based mode triggers
+  const parser = createModeArgParser({
+    name: 'sbb-comparer',
+    description: 'Compare two SVG files visually',
+    defaultMode: 'normal',
+    modeFlags: {
+      '--batch': { mode: 'batch', consumesValue: true, valueTarget: 'batchFile' }
+    },
+    globalFlags: [
+      { name: 'json', type: 'boolean', description: 'Output results as JSON' },
+      { name: 'verbose', type: 'boolean', description: 'Show detailed progress information' },
+      { name: 'out-diff', type: 'string', description: 'Output diff PNG file path' },
+      {
+        name: 'threshold',
+        type: 'number',
+        default: 1,
+        description: 'Pixel difference threshold (1-20)'
+      },
+      {
+        name: 'alignment',
+        type: 'string',
+        default: 'origin',
+        description: 'Alignment mode: origin|viewbox-topleft|viewbox-center|object:ID|custom:x,y'
+      },
+      {
+        name: 'resolution',
+        type: 'string',
+        default: 'viewbox',
+        description: 'Resolution mode: nominal|viewbox|full|scale|stretch|clip'
+      },
+      {
+        name: 'meet-rule',
+        type: 'string',
+        default: 'xMidYMid',
+        description: 'Aspect ratio rule for scale mode'
+      },
+      {
+        name: 'slice-rule',
+        type: 'string',
+        default: 'xMidYMid',
+        description: 'Aspect ratio rule for clip mode'
+      },
+      {
+        name: 'add-missing-viewbox',
+        type: 'boolean',
+        description: 'Force regenerate viewBox for SVGs without one'
+      },
+      {
+        name: 'aspect-ratio-threshold',
+        type: 'number',
+        default: 0.001,
+        description: 'Maximum allowed aspect ratio difference (0-1)'
+      }
+    ],
+    modes: {
+      normal: {
+        description: 'Compare two SVG files',
+        positional: [
+          { name: 'svg1', required: true, description: 'First SVG file' },
+          { name: 'svg2', required: true, description: 'Second SVG file' }
+        ]
+      },
+      batch: {
+        description: 'Compare multiple SVG pairs from a file',
+        positional: [] // No positional args, uses batchFile from modeFlag
+      }
+    }
+  });
+
+  // Parse the arguments
+  const result = parser(argv);
+
+  // Map parser output to the expected legacy format for backward compatibility
   const args = {
-    svg1: null,
-    svg2: null,
-    outDiff: null,
-    threshold: 1,
-    alignment: 'origin',
-    alignmentParam: null,
-    resolution: 'viewbox',
-    meetRule: 'xMidYMid',
-    sliceRule: 'xMidYMid',
-    json: false,
-    verbose: false,
-    batch: null, // Path to batch comparison file
-    addMissingViewbox: false, // Force regenerate viewBox for SVGs without one
-    aspectRatioThreshold: 0.001 // Maximum allowed difference in aspect ratios
+    svg1: result.positional[0] || null,
+    svg2: result.positional[1] || null,
+    outDiff: result.flags['out-diff'] || null,
+    threshold: result.flags.threshold || 1,
+    alignment: 'origin', // Will be set below after parsing
+    alignmentParam: null, // Will be set below after parsing
+    resolution: result.flags.resolution || 'viewbox',
+    meetRule: result.flags['meet-rule'] || 'xMidYMid',
+    sliceRule: result.flags['slice-rule'] || 'xMidYMid',
+    json: result.flags.json || false,
+    verbose: result.flags.verbose || false,
+    batch: result.flags.batchFile || null,
+    addMissingViewbox: result.flags['add-missing-viewbox'] || false,
+    aspectRatioThreshold: result.flags['aspect-ratio-threshold'] || 0.001
   };
 
-  for (let i = 2; i < argv.length; i++) {
-    const arg = argv[i];
+  // Validate threshold range (1-20)
+  if (args.threshold < 1 || args.threshold > 20) {
+    throw new Error('--threshold must be between 1 and 20');
+  }
 
-    if (arg === '--help' || arg === '-h') {
-      printHelp();
-      process.exit(0);
-    } else if (arg === '--version' || arg === '-v') {
-      printVersion('sbb-comparer');
-      process.exit(0);
-    } else if (arg === '--json') {
-      args.json = true;
-    } else if (arg === '--verbose') {
-      args.verbose = true;
-    } else if (arg === '--out-diff' && i + 1 < argv.length) {
-      args.outDiff = argv[++i];
-    } else if (arg === '--threshold' && i + 1 < argv.length) {
-      args.threshold = parseInt(argv[++i], 10);
-      if (args.threshold < 1 || args.threshold > 20) {
-        console.error('Error: --threshold must be between 1 and 20');
-        process.exit(2);
-      }
-    } else if (arg === '--alignment' && i + 1 < argv.length) {
-      const alignValue = argv[++i];
-      if (alignValue.startsWith('object:')) {
-        args.alignment = 'object';
-        args.alignmentParam = alignValue.substring(7);
-      } else if (alignValue.startsWith('custom:')) {
-        args.alignment = 'custom';
-        const coords = alignValue.substring(7).split(',');
-        if (coords.length !== 2) {
-          console.error('Error: custom alignment requires x,y coordinates');
-          process.exit(2);
-        }
-        args.alignmentParam = { x: parseFloat(coords[0]), y: parseFloat(coords[1]) };
-      } else {
-        args.alignment = alignValue;
-      }
-    } else if (arg === '--resolution' && i + 1 < argv.length) {
-      args.resolution = argv[++i];
-    } else if (arg === '--meet-rule' && i + 1 < argv.length) {
-      args.meetRule = argv[++i];
-    } else if (arg === '--slice-rule' && i + 1 < argv.length) {
-      args.sliceRule = argv[++i];
-    } else if (arg === '--batch' && i + 1 < argv.length) {
-      args.batch = argv[++i];
-    } else if (arg === '--add-missing-viewbox') {
-      args.addMissingViewbox = true;
-    } else if (arg === '--aspect-ratio-threshold' && i + 1 < argv.length) {
-      args.aspectRatioThreshold = parseFloat(argv[++i]);
-      if (args.aspectRatioThreshold < 0 || args.aspectRatioThreshold > 1) {
-        console.error('Error: --aspect-ratio-threshold must be between 0 and 1');
-        process.exit(2);
-      }
-    } else if (!arg.startsWith('-')) {
-      if (!args.svg1) {
-        args.svg1 = arg;
-      } else if (!args.svg2) {
-        args.svg2 = arg;
-      } else {
-        console.error(`Error: Unexpected argument: ${arg}`);
-        process.exit(2);
-      }
-    } else {
-      console.error(`Error: Unknown option: ${arg}`);
-      process.exit(2);
+  // Validate aspectRatioThreshold range (0-1)
+  if (args.aspectRatioThreshold < 0 || args.aspectRatioThreshold > 1) {
+    throw new Error('--aspect-ratio-threshold must be between 0 and 1');
+  }
+
+  // Parse alignment flag (handle object:ID and custom:x,y syntax)
+  const alignValue = result.flags.alignment || 'origin';
+  if (alignValue.startsWith('object:')) {
+    args.alignment = 'object';
+    args.alignmentParam = alignValue.substring(7);
+    if (!args.alignmentParam) {
+      throw new Error('--alignment object: requires an ID (e.g., object:myElementId)');
     }
-  }
-
-  // Validate required arguments
-  // In batch mode, we don't need svg1/svg2
-  if (!args.batch && (!args.svg1 || !args.svg2)) {
-    console.error('Error: Two SVG files required (or use --batch <file>)');
-    console.error('Usage: node sbb-comparer.cjs svg1.svg svg2.svg [options]');
-    console.error('   or: node sbb-comparer.cjs --batch <file> [options]');
-    process.exit(2);
-  }
-
-  // Batch mode requires only --batch, no individual SVG files
-  if (args.batch && (args.svg1 || args.svg2)) {
-    console.error('Error: --batch mode cannot be combined with individual SVG file arguments');
-    process.exit(2);
+  } else if (alignValue.startsWith('custom:')) {
+    args.alignment = 'custom';
+    const coordStr = alignValue.substring(7);
+    const coords = coordStr.split(',');
+    if (coords.length !== 2) {
+      throw new Error('--alignment custom: requires x,y coordinates (e.g., custom:100,200)');
+    }
+    const x = parseFloat(coords[0]);
+    const y = parseFloat(coords[1]);
+    if (!isFinite(x) || !isFinite(y)) {
+      throw new Error('--alignment custom: coordinates must be valid numbers');
+    }
+    args.alignmentParam = { x, y };
+  } else {
+    args.alignment = alignValue;
   }
 
   // Set default output diff file (only for non-batch mode)
-  if (!args.batch && !args.outDiff) {
+  if (!args.batch && !args.outDiff && args.svg1 && args.svg2) {
     const base1 = path.basename(args.svg1, path.extname(args.svg1));
     const base2 = path.basename(args.svg2, path.extname(args.svg2));
     args.outDiff = `${base1}_vs_${base2}_diff.png`;
