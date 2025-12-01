@@ -425,7 +425,6 @@ describe('Security Utils', () => {
     });
 
     // eslint-disable-next-line vitest/expect-expect
-    // eslint-disable-next-line vitest/expect-expect
     it('should throw on any invalid entries (fail-fast behavior)', () => {
       /**Test that invalid mappings trigger immediate error (fail-fast for security)*/
       const mixedMappings = [
