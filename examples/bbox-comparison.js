@@ -5,8 +5,8 @@
  *
  * This script demonstrates the differences between three bbox calculation methods:
  * 1. Inkscape BBox (via sbb-inkscape-extract)
- * 2. Chrome .getBBox() (via sbb-extractor with geometric mode)
- * 3. SvgVisualBBox (via sbb-extractor with visual mode)
+ * 2. Chrome .getBBox() (via sbb-extract with geometric mode)
+ * 3. SvgVisualBBox (via sbb-extract with visual mode)
  *
  * Usage:
  *   node bbox-comparison.js <svg-file> <object-id>
@@ -96,9 +96,9 @@ console.log('══════════════════════�
 const getbboxSvg = path.join(outputDir, `${objectId}_getbbox.svg`);
 const getbboxPng = path.join(outputDir, `${objectId}_getbbox.png`);
 
-// Note: For demonstration, we use sbb-extractor which internally uses .getBBox()
+// Note: For demonstration, we use sbb-extract which internally uses .getBBox()
 // In a real scenario, you'd need to implement a version that uses geometric getBBox
-run('Extracting with geometric getBBox', '../sbb-extractor.cjs', [
+run('Extracting with geometric getBBox', '../sbb-extract.cjs', [
   svgFile,
   '--extract',
   objectId,
@@ -124,7 +124,7 @@ console.log('══════════════════════�
 const svgvisualbboxSvg = path.join(outputDir, `${objectId}_svgvisualbbox.svg`);
 const svgvisualbboxPng = path.join(outputDir, `${objectId}_svgvisualbbox.png`);
 
-run('Extracting with SvgVisualBBox', '../sbb-extractor.cjs', [
+run('Extracting with SvgVisualBBox', '../sbb-extract.cjs', [
   svgFile,
   '--extract',
   objectId,

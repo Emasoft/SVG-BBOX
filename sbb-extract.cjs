@@ -2263,7 +2263,7 @@ async function renameIds(
 
 async function main() {
   // Display version
-  printInfo(`sbb-extractor v${getVersion()} | svg-bbox toolkit\n`);
+  printInfo(`sbb-extract v${getVersion()} | svg-bbox toolkit\n`);
 
   const opts = parseArgs(process.argv);
 

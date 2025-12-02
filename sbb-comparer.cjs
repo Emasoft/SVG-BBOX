@@ -1096,7 +1096,7 @@ async function generateHtmlReport(
       width: auto;
       height: auto;
 
-      /* Dotted border matching sbb-extractor - shows actual SVG boundary */
+      /* Dotted border matching sbb-extract - shows actual SVG boundary */
       border: 1px dashed rgba(0,0,0,0.4);
       padding: 4px;
     }

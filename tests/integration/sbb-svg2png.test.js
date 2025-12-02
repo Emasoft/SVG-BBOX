@@ -254,9 +254,10 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       expect(hasTransparentPixels(png)).toBe(true);
     });
 
-    it('should render with black background (default)', async () => {
+    it('should render with white background (default)', async () => {
       /**
-       * Test black background (default behavior)
+       * Test white background (default behavior)
+       * sbb-svg2png uses white as the default background color
        */
       const svgPath = path.join(tempDir, 'white-bg.svg');
       const pngPath = path.join(tempDir, 'white-bg.png');
@@ -273,10 +274,10 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       const png = await parsePng(pngPath);
       const color = getCornerColor(png);
-      // Default background is black RGB(0, 0, 0)
-      expect(color.r).toBe(0);
-      expect(color.g).toBe(0);
-      expect(color.b).toBe(0);
+      // Default background is white RGB(255, 255, 255)
+      expect(color.r).toBe(255);
+      expect(color.g).toBe(255);
+      expect(color.b).toBe(255);
     });
 
     it('should render with custom hex color background', async () => {

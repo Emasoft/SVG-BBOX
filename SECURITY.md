@@ -242,7 +242,7 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
 
 - Applying security fixes to remaining 2 CLI tools:
   - sbb-comparer.cjs (1399 lines) - 0% complete
-  - sbb-extractor.cjs (2255 lines, 4 modes) - 0% complete
+  - sbb-extract.cjs (2255 lines, 4 modes) - 0% complete
 
 ✅ **CLI Tools Completed (4/6):**
 
