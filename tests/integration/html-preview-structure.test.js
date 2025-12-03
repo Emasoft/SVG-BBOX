@@ -34,7 +34,9 @@ import { test, describe, expect, beforeAll, afterAll } from 'vitest';
 // See: https://github.com/jsdom/jsdom/issues/3613
 const nodeVersion = parseInt(process.versions.node.split('.')[0]);
 if (nodeVersion === 18) {
+  // eslint-disable-next-line vitest/no-disabled-tests -- Intentional: jsdom incompatible with Node 18
   describe.skip('HTML Preview Structure Validation (skipped on Node 18)', () => {
+    // eslint-disable-next-line vitest/no-disabled-tests -- Intentional: jsdom incompatible with Node 18
     test.skip('jsdom incompatible with Node 18', () => {});
   });
 } else {
