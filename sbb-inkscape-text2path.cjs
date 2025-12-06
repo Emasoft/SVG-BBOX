@@ -64,13 +64,29 @@ ARGUMENTS:
 
 OPTIONS:
   --batch <file.txt>    Process multiple SVG files listed in text file
-                        (one file path per line)
+                        Supports two formats per line:
+                        - Input only: input.svg (output auto-generated)
+                        - Input/output pair: input.svg<TAB>output.svg
+                        Lines starting with # are comments
   --overwrite           Overwrite output file if it exists
   --skip-comparison     Skip automatic similarity check with sbb-compare
                         (only applies to single file mode)
   --json                Output results as JSON
   --help                Show this help
   --version             Show version
+
+BATCH FILE FORMAT:
+  Each line can be:
+  - Input file only:     input.svg
+    (Output: input-paths.svg in same directory)
+  - Input/output pair:   input.svg<TAB>output.svg
+    (Tab-separated or space-separated if both end in .svg)
+
+  Example batch file (files.txt):
+    # Comment line - ignored
+    simple.svg
+    drawing.svg    drawing_converted.svg
+    /path/to/input.svg    /other/path/output_inkscape.svg
 
 EXAMPLES:
 
@@ -83,7 +99,7 @@ EXAMPLES:
   # Skip automatic comparison
   node sbb-inkscape-text2path.cjs input.svg output.svg --skip-comparison
 
-  # Batch conversion with comparison
+  # Batch conversion with explicit output paths
   node sbb-inkscape-text2path.cjs --batch files.txt
 
   # Batch conversion without comparison (faster)
@@ -377,7 +393,13 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
 
 /**
  * Read and parse batch file list.
- * Returns array of file paths.
+ * Returns array of { input, output } objects.
+ *
+ * Batch file format supports two formats:
+ * 1. Input only (output auto-generated): input.svg
+ * 2. Input/output pair (tab or space separated): input.svg output.svg
+ *
+ * Lines starting with # are comments and are ignored.
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file
@@ -396,23 +418,57 @@ function readBatchFile(batchFilePath) {
     throw new ValidationError(`Batch file is empty: ${safeBatchPath}`);
   }
 
-  // SECURITY: Validate each file path in batch for shell metacharacters
-  // This prevents command injection attacks via malicious batch file contents
-  lines.forEach((line, index) => {
-    try {
-      // Check for shell metacharacters without full path validation
-      // (full validation happens later during processing)
-      if (SHELL_METACHARACTERS.test(line)) {
-        throw new Error('contains shell metacharacters');
+  // Parse each line into { input, output } pairs
+  const filePairs = lines.map((line, index) => {
+    // Split by tab first (more reliable for paths with spaces), then by space
+    // Try tab-separated first
+    let parts = line
+      .split('\t')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    // If only one part after tab split, try space-separated
+    // But be careful: paths might contain spaces, so only split on multiple spaces
+    // or when it's clear there are two .svg files
+    if (parts.length === 1) {
+      // Look for pattern: something.svg something.svg (two SVG files)
+      const svgMatch = line.match(/^(.+\.svg)\s+(.+\.svg)$/i);
+      if (svgMatch) {
+        parts = [svgMatch[1].trim(), svgMatch[2].trim()];
       }
-    } catch (err) {
-      throw new ValidationError(
-        `Invalid file path at line ${index + 1} in batch file: ${err.message}`
-      );
     }
+
+    // SECURITY: Validate each path for shell metacharacters
+    parts.forEach((part) => {
+      if (SHELL_METACHARACTERS.test(part)) {
+        throw new ValidationError(
+          `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
+        );
+      }
+    });
+
+    if (parts.length === 0) {
+      throw new ValidationError(`Empty line at line ${index + 1} in batch file`);
+    }
+
+    const inputFile = parts[0];
+
+    // If output is specified, use it; otherwise auto-generate
+    let outputFile;
+    if (parts.length >= 2) {
+      // Explicit output path provided
+      outputFile = parts[1];
+    } else {
+      // Auto-generate output: <input>-paths.svg in same directory
+      const baseName = path.basename(inputFile, path.extname(inputFile));
+      const dirName = path.dirname(inputFile);
+      outputFile = path.join(dirName, `${baseName}-paths.svg`);
+    }
+
+    return { input: inputFile, output: outputFile };
   });
 
-  return lines;
+  return filePairs;
 }
 
 /**
@@ -522,22 +578,21 @@ async function main() {
 
   // BATCH MODE
   if (args.batch) {
-    const inputFiles = readBatchFile(args.batch);
+    // readBatchFile now returns array of { input, output } pairs
+    const filePairs = readBatchFile(args.batch);
     const results = [];
 
     if (!args.json) {
-      printInfo(`Processing ${inputFiles.length} file(s) in batch mode...\n`);
+      printInfo(`Processing ${filePairs.length} file(s) in batch mode...\n`);
     }
 
-    for (let i = 0; i < inputFiles.length; i++) {
-      const inputFile = inputFiles[i];
-      const baseName = path.basename(inputFile, path.extname(inputFile));
-      const dirName = path.dirname(inputFile);
-      const outputFile = path.join(dirName, `${baseName}-paths.svg`);
+    for (let i = 0; i < filePairs.length; i++) {
+      const { input: inputFile, output: outputFile } = filePairs[i];
 
       try {
         if (!args.json) {
-          printInfo(`[${i + 1}/${inputFiles.length}] Converting: ${inputFile}`);
+          printInfo(`[${i + 1}/${filePairs.length}] Converting: ${inputFile}`);
+          printInfo(`    Target: ${outputFile}`);
         }
 
         const result = await processSingleFile(
@@ -587,7 +642,7 @@ async function main() {
         JSON.stringify(
           {
             mode: 'batch',
-            totalFiles: inputFiles.length,
+            totalFiles: filePairs.length,
             successful: results.filter((r) => !r.error).length,
             failed: results.filter((r) => r.error).length,
             results: results
@@ -603,7 +658,7 @@ async function main() {
 
       if (failed === 0) {
         printSuccess(
-          `Batch complete! ${successful}/${inputFiles.length} files converted successfully.`
+          `Batch complete! ${successful}/${filePairs.length} files converted successfully.`
         );
       } else {
         printWarning(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
