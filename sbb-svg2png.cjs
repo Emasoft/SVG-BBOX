@@ -56,6 +56,7 @@ const {
   validateOutputPath,
   readSVGFileSafe,
   sanitizeSVGContent,
+  SHELL_METACHARACTERS,
   SVGBBoxError: _SVGBBoxError,
   ValidationError: _ValidationError,
   FileSystemError
@@ -83,6 +84,7 @@ DESCRIPTION:
 
 USAGE:
   node sbb-svg2png.cjs input.svg output.png [options]
+  node sbb-svg2png.cjs --batch <file> [options]
 
 ARGUMENTS:
   input.svg           Input SVG file to render
@@ -142,6 +144,14 @@ OPTIONS:
   --auto-open
       Automatically open PNG in Chrome/Chromium after rendering
 
+  --batch <file>
+      Batch processing mode using file list
+      Supports two formats per line:
+        - Input only: input.svg (output auto-generated as input.png)
+        - Input/output pair: input.svg<TAB>output.png
+      Lines starting with # are comments
+      All rendering options apply to each file
+
   --help, -h
       Show this help message
 
@@ -168,6 +178,10 @@ EXAMPLES:
 
   # Render and immediately view
   node sbb-svg2png.cjs drawing.svg preview.png --auto-open
+
+  # Batch render with shared settings
+  node sbb-svg2png.cjs --batch files.txt \\
+    --mode full --scale 8 --background transparent
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -202,11 +216,6 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
-  if (args.length < 2) {
-    printHelp();
-    process.exit(1);
-  }
-
   const positional = [];
   const options = {
     mode: 'visible',
@@ -216,7 +225,8 @@ function parseArgs(argv) {
     height: null,
     background: 'white',
     margin: 0,
-    autoOpen: false
+    autoOpen: false,
+    batch: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -267,6 +277,10 @@ function parseArgs(argv) {
         case 'auto-open':
           options.autoOpen = true;
           break;
+        case 'batch':
+          options.batch = next || null;
+          useNext();
+          break;
         default:
           console.warn('Unknown option:', key);
       }
@@ -275,15 +289,107 @@ function parseArgs(argv) {
     }
   }
 
-  if (positional.length < 2) {
-    console.error('You must provide at least input.svg and output.png.');
+  // Validate required arguments
+  if (!options.batch && positional.length < 2) {
+    console.error('Error: You must provide input.svg and output.png (or use --batch <file>).');
+    console.error('Usage: node sbb-svg2png.cjs input.svg output.png [options]');
+    console.error('   or: node sbb-svg2png.cjs --batch <file> [options]');
     process.exit(1);
   }
 
-  options.input = positional[0];
-  options.output = positional[1];
+  // Batch mode cannot have individual input/output files
+  if (options.batch && positional.length > 0) {
+    console.error('Error: --batch mode cannot be combined with individual SVG file arguments');
+    process.exit(1);
+  }
+
+  // Set input/output for single file mode
+  if (!options.batch) {
+    options.input = positional[0];
+    options.output = positional[1];
+  }
 
   return options;
+}
+
+// ---------- batch file processing ----------
+
+/**
+ * Read and parse batch file.
+ * Returns array of { input, output } objects.
+ *
+ * Batch file format supports two formats:
+ * 1. Input only (output auto-generated): input.svg
+ * 2. Input/output pair (tab or space separated): input.svg<TAB>output.png
+ *
+ * Lines starting with # are comments and are ignored.
+ */
+function readBatchFile(batchFilePath) {
+  // SECURITY: Validate batch file path
+  const safeBatchPath = validateFilePath(batchFilePath, {
+    requiredExtensions: ['.txt'],
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safeBatchPath, 'utf-8');
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new _ValidationError(`Batch file is empty: ${safeBatchPath}`);
+  }
+
+  // Parse each line into { input, output } pairs
+  const filePairs = lines.map((line, index) => {
+    // Split by tab first (more reliable for paths with spaces), then by space
+    // Try tab-separated first
+    let parts = line
+      .split('\t')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    // If only one part after tab split, try space-separated
+    // Look for pattern: something.svg something.png (SVG + PNG files)
+    if (parts.length === 1) {
+      const fileMatch = line.match(/^(.+\.svg)\s+(.+\.png)$/i);
+      if (fileMatch) {
+        parts = [fileMatch[1].trim(), fileMatch[2].trim()];
+      }
+    }
+
+    // SECURITY: Validate each path for shell metacharacters
+    parts.forEach((part) => {
+      if (SHELL_METACHARACTERS.test(part)) {
+        throw new _ValidationError(
+          `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
+        );
+      }
+    });
+
+    if (parts.length === 0) {
+      throw new _ValidationError(`Empty line at line ${index + 1} in batch file`);
+    }
+
+    const inputFile = parts[0];
+
+    // If output is specified, use it; otherwise auto-generate
+    let outputFile;
+    if (parts.length >= 2) {
+      // Explicit output path provided
+      outputFile = parts[1];
+    } else {
+      // Auto-generate output: <input>.png in same directory
+      const baseName = path.basename(inputFile, path.extname(inputFile));
+      const dirName = path.dirname(inputFile);
+      outputFile = path.join(dirName, `${baseName}.png`);
+    }
+
+    return { input: inputFile, output: outputFile };
+  });
+
+  return filePairs;
 }
 
 // ---------- core render logic ----------
@@ -687,6 +793,63 @@ async function main() {
   printInfo(`sbb-svg2png v${getVersion()} | svg-bbox toolkit\n`);
 
   const opts = parseArgs(process.argv);
+
+  // BATCH MODE: Render multiple SVG files
+  if (opts.batch) {
+    const filePairs = readBatchFile(opts.batch);
+
+    console.log(`Processing ${filePairs.length} SVG files from ${opts.batch}...\n`);
+
+    const results = [];
+    for (let i = 0; i < filePairs.length; i++) {
+      const { input: svgPath, output: pngPath } = filePairs[i];
+
+      console.log(`[${i + 1}/${filePairs.length}] Rendering ${svgPath}...`);
+      console.log(`    Target: ${pngPath}`);
+
+      try {
+        // Use the same rendering options for all files in batch
+        await renderSvgWithModes({
+          input: svgPath,
+          output: pngPath,
+          mode: opts.mode,
+          elementId: opts.elementId,
+          scale: opts.scale,
+          width: opts.width,
+          height: opts.height,
+          background: opts.background,
+          margin: opts.margin,
+          autoOpen: false // Never auto-open in batch mode
+        });
+
+        results.push({
+          success: true,
+          input: svgPath,
+          output: pngPath
+        });
+      } catch (error) {
+        results.push({
+          success: false,
+          input: svgPath,
+          error: error.message
+        });
+
+        _printError(`  ✗ Failed: ${error.message}`);
+      }
+    }
+
+    // Summary
+    const successful = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
+
+    console.log(`\n${'═'.repeat(78)}`);
+    console.log(`Summary: ${successful} successful, ${failed} failed`);
+    console.log('═'.repeat(78));
+
+    return;
+  }
+
+  // SINGLE FILE MODE
   await renderSvgWithModes(opts);
 }
 

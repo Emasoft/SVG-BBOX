@@ -48,6 +48,7 @@ const {
   readSVGFileSafe,
   sanitizeSVGContent,
   writeFileSafe,
+  SHELL_METACHARACTERS,
   SVGBBoxError: _SVGBBoxError,
   ValidationError: _ValidationError,
   FileSystemError
@@ -56,7 +57,7 @@ const {
 const {
   runCLI,
   printSuccess,
-  printError: _printError,
+  printError,
   printInfo,
   printWarning
 } = require('./lib/cli-utils.cjs');
@@ -72,16 +73,23 @@ DESCRIPTION:
   by computing the full visual bbox of all content.
 
 USAGE:
-  node sbb-fix-viewbox.cjs input.svg [output.svg] [--auto-open] [--force] [--overwrite] [--help]
+  node sbb-fix-viewbox.cjs input.svg [output.svg] [options]
+  node sbb-fix-viewbox.cjs --batch files.txt [options]
 
 ARGUMENTS:
   input.svg           Input SVG file to fix
   output.svg          Output file path (default: input_fixed.svg)
 
 OPTIONS:
+  --batch <file.txt>  Process multiple SVG files listed in text file
+                      Supports two formats per line:
+                      - Input only: input.svg (output auto-generated)
+                      - Input/output pair: input.svg<TAB>output.svg
+                      Lines starting with # are comments
   --force             Force regeneration of viewBox and dimensions (ignore existing)
   --overwrite         Overwrite input file (USE WITH CAUTION - loses original viewBox!)
   --auto-open         Automatically open fixed SVG in Chrome/Chromium
+                      (only applies to single file mode)
   --help, -h          Show this help message
 
 WHAT IT DOES:
@@ -109,16 +117,35 @@ AUTO-REPAIR RULES:
   • preserveAspectRatio:
       Not modified (browser defaults apply)
 
+BATCH FILE FORMAT:
+  Each line can be:
+  - Input file only:     input.svg
+    (Output: input_fixed.svg in same directory)
+  - Input/output pair:   input.svg<TAB>output.svg
+    (Tab-separated or space-separated if both end in .svg)
+
+  Example batch file (files.txt):
+    # Comment line - ignored
+    simple.svg
+    drawing.svg    drawing_repaired.svg
+    /path/to/input.svg    /other/path/output_fixed.svg
+
 EXAMPLES:
   # Fix SVG with default output name
   node sbb-fix-viewbox.cjs broken.svg
-  → Creates: broken.fixed.svg
+  → Creates: broken_fixed.svg
 
   # Fix with custom output path
   node sbb-fix-viewbox.cjs broken.svg repaired.svg
 
   # Fix and automatically open in browser
   node sbb-fix-viewbox.cjs broken.svg --auto-open
+
+  # Batch processing with explicit output paths
+  node sbb-fix-viewbox.cjs --batch files.txt
+
+  # Batch processing with force regeneration
+  node sbb-fix-viewbox.cjs --batch files.txt --force
 
 USE CASES:
   • SVG exports from design tools missing viewBox
@@ -138,15 +165,11 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
-  if (args.length < 1) {
-    printHelp();
-    process.exit(1);
-  }
-
   const positional = [];
   let autoOpen = false;
   let force = false;
   let overwrite = false;
+  let batch = null;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -157,30 +180,127 @@ function parseArgs(argv) {
       force = true;
     } else if (arg === '--overwrite') {
       overwrite = true;
+    } else if (arg === '--batch' && i + 1 < args.length) {
+      batch = args[++i];
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
     } else if (arg === '--version' || arg === '-v') {
       printVersion('sbb-fix-viewbox');
       process.exit(0);
-    } else {
+    } else if (!arg.startsWith('-')) {
       positional.push(arg);
+    } else {
+      throw new _ValidationError(`Unknown option: ${arg}`);
     }
   }
 
-  const input = positional[0];
-  // SECURITY: Default to _fixed.svg suffix to preserve original
-  // Only overwrite if explicitly requested with --overwrite flag
-  let output;
-  if (overwrite) {
-    output = input;
-  } else if (positional[1]) {
-    output = positional[1];
-  } else {
-    output = input.replace(/\.svg$/i, '') + '_fixed.svg';
+  // Validate batch vs single mode
+  if (batch && positional.length > 0) {
+    throw new _ValidationError('Cannot use both --batch and input file argument');
   }
 
-  return { input, output, autoOpen, force, overwrite };
+  // Validate required arguments
+  if (!batch && positional.length < 1) {
+    printHelp();
+    process.exit(1);
+  }
+
+  const input = positional[0] || null;
+  // SECURITY: Default to _fixed.svg suffix to preserve original
+  // Only overwrite if explicitly requested with --overwrite flag
+  let output = null;
+  if (input) {
+    if (overwrite) {
+      output = input;
+    } else if (positional[1]) {
+      output = positional[1];
+    } else {
+      output = input.replace(/\.svg$/i, '') + '_fixed.svg';
+    }
+  }
+
+  return { input, output, autoOpen, force, overwrite, batch };
+}
+
+/**
+ * Read and parse batch file list.
+ * Returns array of { input, output } objects.
+ *
+ * Batch file format supports two formats:
+ * 1. Input only (output auto-generated): input.svg
+ * 2. Input/output pair (tab or space separated): input.svg output.svg
+ *
+ * Lines starting with # are comments and are ignored.
+ */
+function readBatchFile(batchFilePath) {
+  // SECURITY: Validate batch file
+  const safeBatchPath = validateFilePath(batchFilePath, {
+    requiredExtensions: ['.txt'],
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safeBatchPath, 'utf-8');
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new _ValidationError(`Batch file is empty: ${safeBatchPath}`);
+  }
+
+  // Parse each line into { input, output } pairs
+  const filePairs = lines.map((line, index) => {
+    // Split by tab first (more reliable for paths with spaces), then by space
+    // Try tab-separated first
+    let parts = line
+      .split('\t')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    // If only one part after tab split, try space-separated
+    // But be careful: paths might contain spaces, so only split on multiple spaces
+    // or when it's clear there are two .svg files
+    if (parts.length === 1) {
+      // Look for pattern: something.svg something.svg (two SVG files)
+      const svgMatch = line.match(/^(.+\.svg)\s+(.+\.svg)$/i);
+      if (svgMatch) {
+        parts = [svgMatch[1].trim(), svgMatch[2].trim()];
+      }
+    }
+
+    // SECURITY: Validate each path for shell metacharacters
+    parts.forEach((part) => {
+      if (SHELL_METACHARACTERS.test(part)) {
+        throw new _ValidationError(
+          `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
+        );
+      }
+    });
+
+    if (parts.length === 0) {
+      throw new _ValidationError(`Empty line at line ${index + 1} in batch file`);
+    }
+
+    const inputFile = parts[0];
+
+    // If output is specified, use it; otherwise auto-generate
+    let outputFile;
+    if (parts.length >= 2) {
+      // Explicit output path provided
+      outputFile = parts[1];
+    } else {
+      // Auto-generate output: <input>_fixed.svg in same directory
+      const baseName = path.basename(inputFile, path.extname(inputFile));
+      const dirName = path.dirname(inputFile);
+      outputFile = path.join(dirName, `${baseName}_fixed.svg`);
+    }
+
+    return { input: inputFile, output: outputFile };
+  });
+
+  return filePairs;
 }
 
 // SECURITY: Secure Puppeteer options
@@ -402,16 +522,67 @@ async function main() {
   // Display version
   printInfo(`sbb-fix-viewbox v${getVersion()} | svg-bbox toolkit\n`);
 
-  const { input, output, autoOpen, force, overwrite } = parseArgs(process.argv);
+  const { input, output, autoOpen, force, overwrite, batch } = parseArgs(process.argv);
 
   // SECURITY: Warn when overwriting original file
-  if (overwrite) {
+  if (overwrite && !batch) {
     printWarning('⚠️  --overwrite flag detected: Original viewBox information will be lost!');
     printWarning('   Original file will be overwritten. Press Ctrl+C to cancel...');
     // Give user 2 seconds to cancel
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
+  // BATCH MODE
+  if (batch) {
+    const filePairs = readBatchFile(batch);
+    const results = [];
+
+    printInfo(`Processing ${filePairs.length} file(s) in batch mode...\n`);
+
+    for (let i = 0; i < filePairs.length; i++) {
+      const { input: inputFile, output: outputFile } = filePairs[i];
+
+      try {
+        printInfo(`[${i + 1}/${filePairs.length}] Fixing: ${inputFile}`);
+        printInfo(`    Target: ${outputFile}`);
+
+        await fixSvgFile(inputFile, outputFile, false, force);
+
+        results.push({
+          input: inputFile,
+          output: outputFile,
+          success: true
+        });
+
+        console.log(`  ✓ ${path.basename(outputFile)}`);
+      } catch (err) {
+        results.push({
+          input: inputFile,
+          output: outputFile,
+          success: false,
+          error: err.message
+        });
+
+        printError(`  ✗ Failed: ${inputFile}`);
+        printError(`    ${err.message}`);
+      }
+    }
+
+    // Print summary
+    console.log('');
+    const successful = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
+
+    if (failed === 0) {
+      printSuccess(`Batch complete! ${successful}/${filePairs.length} files fixed successfully.`);
+    } else {
+      printWarning(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+    }
+
+    return;
+  }
+
+  // SINGLE FILE MODE
   await fixSvgFile(input, output, autoOpen, force);
 }
 

@@ -8,9 +8,11 @@
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-// const path = require('path'); // Reserved for future use
+const path = require('path');
 const { getVersion } = require('./version.cjs');
 const { printError, printSuccess, printInfo, runCLI } = require('./lib/cli-utils.cjs');
+// SECURITY: Import security utilities
+const { SHELL_METACHARACTERS, SVGBBoxError } = require('./lib/security-utils.cjs');
 
 /**
  * Extract SVG element using native .getBBox() method
@@ -238,14 +240,32 @@ DESCRIPTION:
 
 USAGE:
   sbb-chrome-extract input.svg --id <element-id> --output <output.svg> [options]
+  sbb-chrome-extract --batch <file> [options]
 
-REQUIRED ARGUMENTS:
+REQUIRED ARGUMENTS (SINGLE MODE):
   input.svg               Input SVG file path
   --id <element-id>       ID of the element to extract
 
 OUTPUT OPTIONS:
-  --output <path>         Output SVG file path (required)
+  --output <path>         Output SVG file path (required in single mode)
   --png <path>            Also render PNG to this path (optional)
+
+BATCH PROCESSING:
+  --batch <file>          Process multiple extractions from batch file
+                          Format per line: input.svg object_id output.svg
+                          (tab or space separated)
+                          Lines starting with # are comments
+
+BATCH FILE FORMAT:
+  Each line contains: input.svg object_id output.svg
+  - Tab-separated or space-separated
+  - Lines starting with # are comments
+
+  Example batch file (extractions.txt):
+    # Extract text elements from drawing
+    drawing.svg text39 text39.svg
+    drawing.svg text40 text40.svg
+    drawing.svg logo logo.svg
 
 BBOX OPTIONS:
   --margin <number>       Margin around bbox in SVG units (default: 5)
@@ -296,6 +316,12 @@ EXAMPLES:
     --output icon.svg --png icon.png \\
     --scale 8 --background "rgba(255, 255, 255, 0.9)"
 
+  # Batch extraction from file list
+  sbb-chrome-extract --batch extractions.txt
+
+  # Batch extraction with margin and PNG output
+  sbb-chrome-extract --batch extractions.txt --margin 10
+
 ═══════════════════════════════════════════════════════════════════════════════
 
 COMPARISON NOTES:
@@ -316,6 +342,75 @@ USE CASES:
   • Benchmark against other extraction methods
   • Educational purposes showing why accurate bbox matters
 `);
+}
+
+/**
+ * Read and parse batch file list.
+ * Returns array of { input, objectId, output } objects.
+ *
+ * Batch file format:
+ * - Each line: input.svg object_id output.svg
+ * - Tab or space separated
+ * - Lines starting with # are comments
+ */
+function readBatchFile(batchFilePath) {
+  // Check batch file exists
+  if (!fs.existsSync(batchFilePath)) {
+    throw new SVGBBoxError(`Batch file not found: ${batchFilePath}`);
+  }
+
+  const content = fs.readFileSync(batchFilePath, 'utf-8');
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new SVGBBoxError(`Batch file is empty: ${batchFilePath}`);
+  }
+
+  // Parse each line into { input, objectId, output } objects
+  const entries = lines.map((line, index) => {
+    // Split by tab first (more reliable for paths with spaces), then by space
+    let parts = line
+      .split('\t')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    // If only one part after tab split, try space-separated
+    if (parts.length === 1) {
+      // Look for pattern: input.svg object_id output.svg (three parts)
+      const svgMatch = line.match(/^(.+\.svg)\s+(\S+)\s+(.+\.svg)$/i);
+      if (svgMatch) {
+        parts = [svgMatch[1].trim(), svgMatch[2].trim(), svgMatch[3].trim()];
+      }
+    }
+
+    // SECURITY: Validate each path for shell metacharacters
+    parts.forEach((part) => {
+      if (SHELL_METACHARACTERS.test(part)) {
+        throw new SVGBBoxError(
+          `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
+        );
+      }
+    });
+
+    if (parts.length < 3) {
+      throw new SVGBBoxError(
+        `Invalid format at line ${index + 1} in batch file.\n` +
+          `Expected: input.svg object_id output.svg\n` +
+          `Got: ${line}`
+      );
+    }
+
+    const inputFile = parts[0];
+    const objectId = parts[1];
+    const outputFile = parts[2];
+
+    return { input: inputFile, objectId, output: outputFile };
+  });
+
+  return entries;
 }
 
 /**
@@ -345,7 +440,8 @@ function parseArgs(argv) {
     scale: 4,
     width: null,
     height: null,
-    background: 'transparent'
+    background: 'transparent',
+    batch: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -362,6 +458,10 @@ function parseArgs(argv) {
       }
 
       switch (name) {
+        case 'batch':
+          options.batch = next || null;
+          useNext();
+          break;
         case 'id':
           options.id = next || null;
           useNext();
@@ -411,29 +511,40 @@ function parseArgs(argv) {
     }
   }
 
+  // Validate batch vs single mode
+  if (options.batch && positional.length > 0) {
+    printError('Cannot use both --batch and input file argument');
+    process.exit(1);
+  }
+
   // Validate required arguments
-  if (positional.length < 1) {
+  if (!options.batch && positional.length < 1) {
     printError('Missing required argument: input.svg');
     console.log('\nUsage: sbb-chrome-extract input.svg --id <element-id> --output <output.svg>');
+    console.log('   or: sbb-chrome-extract --batch <file> [options]');
     process.exit(1);
   }
 
-  if (!options.id) {
-    printError('Missing required option: --id <element-id>');
-    process.exit(1);
-  }
+  // In single mode, --id and --output are required
+  // In batch mode, they are NOT required (come from batch file)
+  if (!options.batch) {
+    if (!options.id) {
+      printError('Missing required option: --id <element-id>');
+      process.exit(1);
+    }
 
-  if (!options.output) {
-    printError('Missing required option: --output <output.svg>');
-    process.exit(1);
-  }
+    if (!options.output) {
+      printError('Missing required option: --output <output.svg>');
+      process.exit(1);
+    }
 
-  options.input = positional[0];
+    options.input = positional[0];
 
-  // Check input file exists
-  if (!fs.existsSync(options.input)) {
-    printError(`Input file not found: ${options.input}`);
-    process.exit(1);
+    // Check input file exists
+    if (!fs.existsSync(options.input)) {
+      printError(`Input file not found: ${options.input}`);
+      process.exit(1);
+    }
   }
 
   return options;
@@ -447,7 +558,70 @@ async function main() {
 
   const options = parseArgs(process.argv);
 
-  // Extract options for the extraction function
+  // BATCH MODE
+  if (options.batch) {
+    const entries = readBatchFile(options.batch);
+    const results = [];
+
+    printInfo(`Processing ${entries.length} extraction(s) in batch mode...\n`);
+
+    for (let i = 0; i < entries.length; i++) {
+      const { input: inputFile, objectId, output: outputFile } = entries[i];
+
+      try {
+        printInfo(`[${i + 1}/${entries.length}] Extracting "${objectId}" from ${inputFile}...`);
+
+        const extractOptions = {
+          inputFile,
+          elementId: objectId,
+          outputSvg: outputFile,
+          outputPng: null, // PNG not supported in batch mode (could be extended)
+          margin: options.margin,
+          background: options.background,
+          scale: options.scale,
+          width: options.width,
+          height: options.height
+        };
+
+        await extractWithGetBBox(extractOptions);
+
+        results.push({
+          inputPath: inputFile,
+          objectId,
+          outputPath: outputFile,
+          error: undefined
+        });
+
+        console.log(`  ✓ ${path.basename(outputFile)}`);
+      } catch (err) {
+        const errorResult = {
+          inputPath: inputFile,
+          objectId,
+          outputPath: outputFile,
+          error: err.message
+        };
+        results.push(errorResult);
+
+        console.error(`  ✗ Failed: ${inputFile}`);
+        console.error(`    ${err.message}`);
+      }
+    }
+
+    // Output batch summary
+    console.log('');
+    const successful = results.filter((r) => !r.error).length;
+    const failed = results.filter((r) => r.error).length;
+
+    if (failed === 0) {
+      printSuccess(`Batch complete! ${successful}/${entries.length} extraction(s) successful.`);
+    } else {
+      printInfo(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+    }
+
+    return;
+  }
+
+  // SINGLE FILE MODE
   const extractOptions = {
     inputFile: options.input,
     elementId: options.id,

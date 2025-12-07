@@ -116,7 +116,7 @@
  *   node extract_svg_objects.js input.svg --export-all out-dir
  *     [--margin N] [--export-groups] [--json]
  *
- *   • “Objects” = path, rect, circle, ellipse, polygon, polyline, text,
+ *   • "Objects" = path, rect, circle, ellipse, polygon, polyline, text,
  *                 image, use, symbol, and (optionally) g.
  *   • Each object is exported to its own SVG file with:
  *       - A viewBox = visual bbox (+ margin).
@@ -129,6 +129,21 @@
  *         again as a separate SVG (prefixed file names).
  *       - Even if two groups have the same content or one is nested in the
  *         other, each group gets its own SVG.
+ *
+ *   BATCH MODE:
+ *   -----------
+ *   node extract_svg_objects.js --export-all out-dir --batch files.txt
+ *     [--margin N] [--export-groups] [--json]
+ *
+ *   • Process multiple SVG files listed in a batch file (one path per line)
+ *   • Lines starting with # are ignored (comments)
+ *   • Each SVG's objects are exported to a timestamped subfolder:
+ *       out-dir/<basename>_YYYYMMDD_HHMMSS/
+ *   • Example batch file (files.txt):
+ *       # My SVG files to process
+ *       drawing1.svg
+ *       /path/to/drawing2.svg
+ *       icons/sprite-sheet.svg
  *
  *
  * JSON OUTPUT (--json)
@@ -170,6 +185,7 @@ const {
   writeFileSafe,
   readJSONFileSafe,
   validateRenameMapping,
+  SHELL_METACHARACTERS,
   SVGBBoxError,
   ValidationError,
   FileSystemError: _FileSystemError
@@ -178,7 +194,7 @@ const {
 const {
   runCLI,
   printSuccess: _printSuccess,
-  printError: _printError,
+  printError,
   printInfo,
   printWarning
 } = require('./lib/cli-utils.cjs');
@@ -249,9 +265,10 @@ function parseArgs(argv) {
             validator: (v) => v >= 0,
             validationError: 'Margin must be >= 0'
           },
-          { name: 'export-groups', type: 'boolean', description: 'Export groups too' }
+          { name: 'export-groups', type: 'boolean', description: 'Export groups too' },
+          { name: 'batch', type: 'string', description: 'Batch file with SVG paths (one per line)' }
         ],
-        positional: [{ name: 'input', required: true, description: 'Input SVG file' }]
+        positional: [{ name: 'input', required: false, description: 'Input SVG file' }]
       },
       rename: {
         description: 'Rename objects according to a JSON mapping',
@@ -278,6 +295,7 @@ function parseArgs(argv) {
     assignIds: result.flags['assign-ids'] || false,
     outFixed: result.flags['out-fixed'] || null,
     exportGroups: result.flags['export-groups'] || false,
+    batch: result.flags.batch || null,
     json: result.flags.json || false,
     outHtml: result.flags['out-html'] || null,
     renameJson: result.flags.renameJson || null,
@@ -304,6 +322,46 @@ function parseArgs(argv) {
   }
 
   return options;
+}
+
+// -------- Batch File Reading --------
+
+/**
+ * Read and parse batch file list for --export-all mode.
+ * Returns array of SVG file paths.
+ *
+ * Batch file format:
+ * - One SVG file path per line
+ * - Lines starting with # are comments and are ignored
+ * - Empty lines are ignored
+ */
+function readBatchFile(batchFilePath) {
+  // SECURITY: Validate batch file
+  const safeBatchPath = validateFilePath(batchFilePath, {
+    requiredExtensions: ['.txt'],
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safeBatchPath, 'utf-8');
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new ValidationError(`Batch file is empty: ${safeBatchPath}`);
+  }
+
+  // SECURITY: Validate each path for shell metacharacters
+  lines.forEach((line, index) => {
+    if (SHELL_METACHARACTERS.test(line)) {
+      throw new ValidationError(
+        `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
+      );
+    }
+  });
+
+  return lines;
 }
 
 // -------- shared browser/page setup --------
@@ -2289,14 +2347,120 @@ async function main() {
         opts.ignoreResolution
       );
     } else if (opts.mode === 'exportAll') {
-      await exportAllObjects(
-        opts.input,
-        opts.outDir,
-        opts.margin,
-        opts.exportGroups,
-        opts.json,
-        opts.ignoreResolution
-      );
+      // Check if batch mode
+      if (opts.batch) {
+        // Batch mode: process multiple SVG files
+        if (!opts.json) {
+          printInfo('Batch mode: processing multiple SVG files...\n');
+        }
+
+        // Ensure --export-all is specified (batch requires it)
+        if (!opts.outDir) {
+          throw new ValidationError('Batch mode requires --export-all with output directory');
+        }
+
+        const svgFiles = readBatchFile(opts.batch);
+        const results = [];
+
+        for (let i = 0; i < svgFiles.length; i++) {
+          const svgFile = svgFiles[i];
+
+          try {
+            // Generate timestamp for this SVG's output folder
+            const now = new Date();
+            const timestamp = [
+              now.getFullYear(),
+              String(now.getMonth() + 1).padStart(2, '0'),
+              String(now.getDate()).padStart(2, '0'),
+              '_',
+              String(now.getHours()).padStart(2, '0'),
+              String(now.getMinutes()).padStart(2, '0'),
+              String(now.getSeconds()).padStart(2, '0')
+            ].join('');
+
+            // Get base name without extension
+            const baseName = path.basename(svgFile, path.extname(svgFile));
+
+            // Create output directory: <basename>_<timestamp>/
+            const outputDir = path.join(opts.outDir, `${baseName}_${timestamp}`);
+
+            if (!opts.json) {
+              printInfo(`[${i + 1}/${svgFiles.length}] Processing: ${svgFile}`);
+              printInfo(`    Output: ${outputDir}`);
+            }
+
+            // Export all objects for this SVG
+            await exportAllObjects(
+              svgFile,
+              outputDir,
+              opts.margin,
+              opts.exportGroups,
+              false, // Don't output JSON for individual files in batch mode
+              opts.ignoreResolution
+            );
+
+            results.push({
+              input: path.resolve(svgFile),
+              outputDir: path.resolve(outputDir),
+              success: true
+            });
+
+            if (!opts.json) {
+              printInfo(`    ✓ Completed\n`);
+            }
+          } catch (err) {
+            results.push({
+              input: path.resolve(svgFile),
+              error: err.message,
+              success: false
+            });
+
+            if (!opts.json) {
+              printError(`    ✗ Failed: ${err.message}\n`);
+            }
+          }
+        }
+
+        // Output batch summary
+        if (opts.json) {
+          console.log(
+            JSON.stringify(
+              {
+                mode: 'exportAll',
+                batchMode: true,
+                totalFiles: svgFiles.length,
+                successful: results.filter((r) => r.success).length,
+                failed: results.filter((r) => !r.success).length,
+                results: results
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          const successful = results.filter((r) => r.success).length;
+          const failed = results.filter((r) => !r.success).length;
+
+          console.log('');
+          if (failed === 0) {
+            printInfo(
+              `Batch complete! ${successful}/${svgFiles.length} files processed successfully.`
+            );
+          } else {
+            printWarning(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+          }
+        }
+      } else {
+        // Single file mode
+        await exportAllObjects(
+          opts.input,
+          opts.outDir,
+          opts.margin,
+          opts.exportGroups,
+          opts.json,
+          opts.ignoreResolution
+        );
+      }
     } else if (opts.mode === 'rename') {
       await renameIds(
         opts.input,
