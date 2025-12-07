@@ -144,6 +144,118 @@ describe('sbb-inkscape-extract Integration Tests', () => {
     });
   });
 
+  describe('Batch Mode', () => {
+    it('should process batch file with multiple extractions', async () => {
+      if (!inkscapeAvailable) {
+        console.warn('⚠️  Skipping test: Inkscape not installed');
+        return;
+      }
+
+      // Create batch file with relative paths
+      const batchFile = path.join(TEMP_DIR, 'batch-extract.txt');
+      const inputSvg = path.join(FIXTURES_DIR, 'multi-objects.svg');
+      const batchContent = `# Batch extraction test
+${inputSvg}\trect1\tbatch_rect1.svg
+${inputSvg}\tcircle1\tbatch_circle1.svg
+${inputSvg} text1 batch_text1.svg`;
+
+      fs.writeFileSync(batchFile, batchContent);
+
+      // Run batch extraction from TEMP_DIR so relative paths work
+      const { stdout } = await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
+        timeout: 60000,
+        cwd: TEMP_DIR
+      });
+
+      // Check outputs exist
+      expect(fs.existsSync(path.join(TEMP_DIR, 'batch_rect1.svg'))).toBe(true);
+      expect(fs.existsSync(path.join(TEMP_DIR, 'batch_circle1.svg'))).toBe(true);
+      expect(fs.existsSync(path.join(TEMP_DIR, 'batch_text1.svg'))).toBe(true);
+
+      // Verify stdout shows progress
+      expect(stdout).toContain('[1/3]');
+      expect(stdout).toContain('[2/3]');
+      expect(stdout).toContain('[3/3]');
+      expect(stdout).toContain('Batch complete');
+    });
+
+    it('should handle batch file with comments and empty lines', async () => {
+      if (!inkscapeAvailable) {
+        console.warn('⚠️  Skipping test: Inkscape not installed');
+        return;
+      }
+
+      // Create batch file with comments and relative paths
+      const batchFile = path.join(TEMP_DIR, 'batch-comments.txt');
+      const inputSvg = path.join(FIXTURES_DIR, 'multi-objects.svg');
+      const batchContent = `# This is a comment
+
+# Extract rect
+${inputSvg}\trect1\tbatch_comment_rect.svg
+
+# Another comment
+`;
+
+      fs.writeFileSync(batchFile, batchContent);
+
+      // Run batch extraction from TEMP_DIR so relative paths work
+      await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
+        timeout: 60000,
+        cwd: TEMP_DIR
+      });
+
+      // Check output exists
+      expect(fs.existsSync(path.join(TEMP_DIR, 'batch_comment_rect.svg'))).toBe(true);
+    });
+
+    it('should fail for empty batch file', async () => {
+      const batchFile = path.join(TEMP_DIR, 'batch-empty.txt');
+      fs.writeFileSync(batchFile, '# Only comments\n\n');
+
+      await expect(
+        execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
+          timeout: 30000
+        })
+      ).rejects.toThrow();
+    });
+
+    it('should fail for invalid batch file format', async () => {
+      const batchFile = path.join(TEMP_DIR, 'batch-invalid.txt');
+      fs.writeFileSync(batchFile, 'only-one-field.svg\n');
+
+      await expect(
+        execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
+          timeout: 30000
+        })
+      ).rejects.toThrow();
+    });
+
+    it('should apply margin to all batch extractions', async () => {
+      if (!inkscapeAvailable) {
+        console.warn('⚠️  Skipping test: Inkscape not installed');
+        return;
+      }
+
+      // Create batch file with relative paths
+      const batchFile = path.join(TEMP_DIR, 'batch-margin.txt');
+      const inputSvg = path.join(FIXTURES_DIR, 'multi-objects.svg');
+      const batchContent = `${inputSvg}\trect1\tbatch_margin_rect.svg
+${inputSvg}\tcircle1\tbatch_margin_circle.svg`;
+
+      fs.writeFileSync(batchFile, batchContent);
+
+      // Run batch extraction with margin from TEMP_DIR
+      await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile, '--margin', '5'], {
+        timeout: 60000,
+        cwd: TEMP_DIR
+      });
+
+      // Check outputs exist
+      expect(fs.existsSync(path.join(TEMP_DIR, 'batch_margin_rect.svg'))).toBe(true);
+      expect(fs.existsSync(path.join(TEMP_DIR, 'batch_margin_circle.svg'))).toBe(true);
+    });
+  });
+
   describe('Help and Version', () => {
     it('should display help text', async () => {
       const { stdout } = await execFilePromise('node', [EXTRACT_PATH, '--help']);
@@ -151,6 +263,7 @@ describe('sbb-inkscape-extract Integration Tests', () => {
       expect(stdout).toContain('sbb-inkscape-extract');
       expect(stdout).toContain('Extract a single object');
       expect(stdout).toContain('--id');
+      expect(stdout).toContain('--batch');
     });
 
     it('should display version', async () => {

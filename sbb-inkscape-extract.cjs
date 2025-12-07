@@ -20,6 +20,7 @@ const execFilePromise = promisify(execFile);
 const {
   validateFilePath,
   validateOutputPath,
+  SHELL_METACHARACTERS,
   SVGBBoxError,
   ValidationError: _ValidationError
 } = require('./lib/security-utils.cjs');
@@ -42,13 +43,32 @@ DESCRIPTION:
 
 USAGE:
   node sbb-inkscape-extract.cjs input.svg --id <object-id> [options]
+  node sbb-inkscape-extract.cjs --batch <file> [options]
 
 OPTIONS:
-  --id <id>                 ID of the object to extract (required)
+  --id <id>                 ID of the object to extract (required in single mode)
   --output <file>           Output SVG file (default: <input>_<id>.svg)
   --margin <pixels>         Margin around extracted object in pixels
+  --batch <file>            Process multiple extractions from batch file
   --help                    Show this help
   --version                 Show version
+
+BATCH PROCESSING:
+  --batch <file>            Process multiple extractions from file list
+                            Format per line: input.svg object_id output.svg
+                            (tab or space separated)
+                            Lines starting with # are comments
+
+BATCH FILE FORMAT:
+  Each line contains: input.svg object_id output.svg
+  - Tab-separated or space-separated
+  - Lines starting with # are comments
+
+  Example batch file (extractions.txt):
+    # Extract icons from sprite sheet
+    sprite.svg icon_home home.svg
+    sprite.svg icon_settings settings.svg
+    sprite.svg icon_user user.svg
 
 EXAMPLES:
 
@@ -60,6 +80,12 @@ EXAMPLES:
 
   # Extract with 10px margin
   node sbb-inkscape-extract.cjs sprite.svg --id icon_home --margin 10
+
+  # Batch extraction from file list
+  node sbb-inkscape-extract.cjs --batch extractions.txt
+
+  # Batch extraction with margin
+  node sbb-inkscape-extract.cjs --batch extractions.txt --margin 10
 
 OUTPUT:
   Creates a new SVG file containing only the specified object.
@@ -85,7 +111,8 @@ function parseArgs(argv) {
     input: null,
     objectId: null,
     output: null,
-    margin: null
+    margin: null,
+    batch: null
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -97,6 +124,8 @@ function parseArgs(argv) {
     } else if (arg === '--version' || arg === '-v') {
       printVersion('sbb-inkscape-extract');
       process.exit(0);
+    } else if (arg === '--batch' && i + 1 < argv.length) {
+      args.batch = argv[++i];
     } else if (arg === '--id' && i + 1 < argv.length) {
       args.objectId = argv[++i];
     } else if (arg === '--output' && i + 1 < argv.length) {
@@ -120,21 +149,30 @@ function parseArgs(argv) {
     }
   }
 
+  // Validate batch vs single mode
+  if (args.batch && args.input) {
+    console.error('Error: Cannot use both --batch and input file argument');
+    process.exit(2);
+  }
+
   // Validate required arguments
-  if (!args.input) {
-    console.error('Error: Input SVG file required');
+  if (!args.batch && !args.input) {
+    console.error('Error: Input SVG file or --batch option required');
+    console.error('Usage: node sbb-inkscape-extract.cjs input.svg --id <object-id> [options]');
+    console.error('   or: node sbb-inkscape-extract.cjs --batch <file> [options]');
+    process.exit(2);
+  }
+
+  // In single mode, --id is required
+  // In batch mode, --id is NOT required (IDs come from batch file)
+  if (!args.batch && !args.objectId) {
+    console.error('Error: --id <object-id> is required in single file mode');
     console.error('Usage: node sbb-inkscape-extract.cjs input.svg --id <object-id> [options]');
     process.exit(2);
   }
 
-  if (!args.objectId) {
-    console.error('Error: --id <object-id> is required');
-    console.error('Usage: node sbb-inkscape-extract.cjs input.svg --id <object-id> [options]');
-    process.exit(2);
-  }
-
-  // Set default output file
-  if (!args.output) {
+  // Set default output file (only for single mode)
+  if (args.input && !args.output) {
     const inputBase = path.basename(args.input, path.extname(args.input));
     args.output = `${inputBase}_${args.objectId}.svg`;
   }
@@ -244,6 +282,80 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// BATCH PROCESSING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Read and parse batch file list.
+ * Returns array of { input, objectId, output } objects.
+ *
+ * Batch file format:
+ * - Each line: input.svg object_id output.svg
+ * - Tab or space separated
+ * - Lines starting with # are comments
+ */
+function readBatchFile(batchFilePath) {
+  // SECURITY: Validate batch file
+  const safeBatchPath = validateFilePath(batchFilePath, {
+    requiredExtensions: ['.txt'],
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safeBatchPath, 'utf-8');
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new SVGBBoxError(`Batch file is empty: ${safeBatchPath}`);
+  }
+
+  // Parse each line into { input, objectId, output } objects
+  const entries = lines.map((line, index) => {
+    // Split by tab first (more reliable for paths with spaces), then by space
+    let parts = line
+      .split('\t')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    // If only one part after tab split, try space-separated
+    if (parts.length === 1) {
+      // Look for pattern: input.svg object_id output.svg (three parts)
+      const svgMatch = line.match(/^(.+\.svg)\s+(\S+)\s+(.+\.svg)$/i);
+      if (svgMatch) {
+        parts = [svgMatch[1].trim(), svgMatch[2].trim(), svgMatch[3].trim()];
+      }
+    }
+
+    // SECURITY: Validate each path for shell metacharacters
+    parts.forEach((part) => {
+      if (SHELL_METACHARACTERS.test(part)) {
+        throw new SVGBBoxError(
+          `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
+        );
+      }
+    });
+
+    if (parts.length < 3) {
+      throw new SVGBBoxError(
+        `Invalid format at line ${index + 1} in batch file.\n` +
+          `Expected: input.svg object_id output.svg\n` +
+          `Got: ${line}`
+      );
+    }
+
+    const inputFile = parts[0];
+    const objectId = parts[1];
+    const outputFile = parts[2];
+
+    return { input: inputFile, objectId, output: outputFile };
+  });
+
+  return entries;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -252,6 +364,58 @@ async function main() {
 
   printInfo(`sbb-inkscape-extract v${getVersion()} | svg-bbox toolkit\n`);
 
+  // BATCH MODE
+  if (args.batch) {
+    const entries = readBatchFile(args.batch);
+    const results = [];
+
+    printInfo(`Processing ${entries.length} extraction(s) in batch mode...\n`);
+
+    for (let i = 0; i < entries.length; i++) {
+      const { input: inputFile, objectId, output: outputFile } = entries[i];
+
+      try {
+        printInfo(`[${i + 1}/${entries.length}] Extracting "${objectId}" from ${inputFile}...`);
+
+        const result = await extractObjectWithInkscape(
+          inputFile,
+          objectId,
+          outputFile,
+          args.margin
+        );
+
+        results.push(result);
+
+        console.log(`  ✓ ${path.basename(result.outputPath)}`);
+      } catch (err) {
+        const errorResult = {
+          inputPath: inputFile,
+          objectId,
+          outputPath: outputFile,
+          error: err.message
+        };
+        results.push(errorResult);
+
+        console.error(`  ✗ Failed: ${inputFile}`);
+        console.error(`    ${err.message}`);
+      }
+    }
+
+    // Output batch summary
+    console.log('');
+    const successful = results.filter((r) => !r.error).length;
+    const failed = results.filter((r) => r.error).length;
+
+    if (failed === 0) {
+      printSuccess(`Batch complete! ${successful}/${entries.length} extraction(s) successful.`);
+    } else {
+      printInfo(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+    }
+
+    return;
+  }
+
+  // SINGLE FILE MODE
   console.log(`Extracting object "${args.objectId}" from ${args.input}...`);
 
   const result = await extractObjectWithInkscape(

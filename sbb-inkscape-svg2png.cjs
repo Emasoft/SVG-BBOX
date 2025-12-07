@@ -23,6 +23,7 @@ const execFilePromise = promisify(execFile);
 const {
   validateFilePath,
   validateOutputPath,
+  SHELL_METACHARACTERS,
   SVGBBoxError,
   ValidationError
 } = require('./lib/security-utils.cjs');
@@ -88,7 +89,10 @@ LEGACY FILE HANDLING:
 
 BATCH PROCESSING:
   --batch <file>            Batch export mode using file list
-                            Format: svg_path.svg (one file per line)
+                            Supports two formats per line:
+                            - Input only: input.svg (output auto-generated)
+                            - Input/output pair: input.svg<TAB>output.png
+                            Lines starting with # are comments
                             All export options apply to each file
 
 OTHER OPTIONS:
@@ -320,8 +324,14 @@ function parseArgs(argv) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Read and parse batch export file (one SVG path per line)
- * Returns array of SVG file paths
+ * Read and parse batch export file.
+ * Returns array of { input, output } objects.
+ *
+ * Batch file format supports two formats:
+ * 1. Input only (output auto-generated): input.svg
+ * 2. Input/output pair (tab or space separated): input.svg output.png
+ *
+ * Lines starting with # are comments and are ignored.
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file path
@@ -334,13 +344,61 @@ function readBatchFile(batchFilePath) {
   const lines = content
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'));
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
 
   if (lines.length === 0) {
-    throw new ValidationError('Batch file is empty or contains no valid SVG paths');
+    throw new ValidationError(`Batch file is empty: ${safeBatchPath}`);
   }
 
-  return lines;
+  // Parse each line into { input, output } pairs
+  const filePairs = lines.map((line, index) => {
+    // Split by tab first (more reliable for paths with spaces), then by space
+    // Try tab-separated first
+    let parts = line
+      .split('\t')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    // If only one part after tab split, try space-separated
+    // Look for pattern: something.svg something.png (SVG + PNG files)
+    if (parts.length === 1) {
+      const fileMatch = line.match(/^(.+\.svg)\s+(.+\.png)$/i);
+      if (fileMatch) {
+        parts = [fileMatch[1].trim(), fileMatch[2].trim()];
+      }
+    }
+
+    // SECURITY: Validate each path for shell metacharacters
+    parts.forEach((part) => {
+      if (SHELL_METACHARACTERS.test(part)) {
+        throw new ValidationError(
+          `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
+        );
+      }
+    });
+
+    if (parts.length === 0) {
+      throw new ValidationError(`Empty line at line ${index + 1} in batch file`);
+    }
+
+    const inputFile = parts[0];
+
+    // If output is specified, use it; otherwise auto-generate
+    let outputFile;
+    if (parts.length >= 2) {
+      // Explicit output path provided
+      outputFile = parts[1];
+    } else {
+      // Auto-generate output: <input>.png in same directory
+      const baseName = path.basename(inputFile, path.extname(inputFile));
+      const dirName = path.dirname(inputFile);
+      outputFile = path.join(dirName, `${baseName}.png`);
+    }
+
+    return { input: inputFile, output: outputFile };
+  });
+
+  return filePairs;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -552,17 +610,16 @@ async function main() {
 
   // BATCH MODE: Export multiple SVG files
   if (args.batch) {
-    const svgFiles = readBatchFile(args.batch);
+    const filePairs = readBatchFile(args.batch);
 
-    console.log(`Processing ${svgFiles.length} SVG files from ${args.batch}...\n`);
+    console.log(`Processing ${filePairs.length} SVG files from ${args.batch}...\n`);
 
     const results = [];
-    for (let i = 0; i < svgFiles.length; i++) {
-      const svgPath = svgFiles[i];
-      const inputBase = path.basename(svgPath, path.extname(svgPath));
-      const pngPath = `${inputBase}.png`;
+    for (let i = 0; i < filePairs.length; i++) {
+      const { input: svgPath, output: pngPath } = filePairs[i];
 
-      console.log(`[${i + 1}/${svgFiles.length}] Exporting ${svgPath}...`);
+      console.log(`[${i + 1}/${filePairs.length}] Exporting ${svgPath}...`);
+      console.log(`    Target: ${pngPath}`);
 
       try {
         const result = await exportPngWithInkscape(svgPath, pngPath, {
