@@ -113,7 +113,8 @@
   },
   "pnpm": {
     "overrides": {
-      "webidl-conversions": "7.0.0"
+      "webidl-conversions": "7.0.0",
+      "parse5": "7.1.2"
     }
   },
   "devDependencies": {
