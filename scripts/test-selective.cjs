@@ -659,7 +659,8 @@ async function runTests(patterns) {
   );
 
   try {
-    const { stdout, stderr } = await execFileAsync('npx', ['vitest', ...args], {
+    // Use pnpm exec instead of npx for cross-platform compatibility (npx is a .cmd on Windows)
+    const { stdout, stderr } = await execFileAsync('pnpm', ['exec', 'vitest', ...args], {
       cwd: path.join(__dirname, '..'),
       env: { ...process.env, FORCE_COLOR: '1' },
       maxBuffer: MAX_EXEC_BUFFER_BYTES,
