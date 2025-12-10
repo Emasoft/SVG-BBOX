@@ -24,8 +24,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer');
-const chromeLauncher = require('chrome-launcher');
+// NOTE: puppeteer and chrome-launcher are loaded lazily inside launchBrowserWithFallback()
+// to allow --help and --version to work even when Chrome binaries are not installed
 const {
   getVersion,
   printVersion: _printVersion,
@@ -67,6 +67,11 @@ const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
  * @returns {Promise<import('puppeteer').Browser>}
  */
 async function launchBrowserWithFallback(errorLogMessages) {
+  // Lazy load puppeteer and chrome-launcher to allow --help/--version to work
+  // even when Chrome binaries are not installed (e.g., in CI package tests)
+  const puppeteer = require('puppeteer');
+  const chromeLauncher = require('chrome-launcher');
+
   try {
     const browser = await puppeteer.launch({
       // @ts-ignore - 'new' is valid for newer puppeteer versions
