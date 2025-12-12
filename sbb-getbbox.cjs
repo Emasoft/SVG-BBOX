@@ -18,6 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const puppeteer = require('puppeteer');
 const { getVersion, printVersion: _printVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
@@ -99,7 +100,7 @@ const argParser = createArgParser({
     {
       name: 'json',
       alias: 'j',
-      description: 'Save results as JSON to specified file',
+      description: 'Save results as JSON to specified file (use - for stdout)',
       type: 'string'
     }
   ],
@@ -735,23 +736,35 @@ function printResults(allResults) {
 /**
  * Save results as JSON.
  * SECURE: Validates output path, ensures directory exists.
+ * Supports `-` as a special value to write to stdout.
  *
  * @param {Object[]} allResults - Array of {filename, path, results}
- * @param {string} outputPath - Output JSON file path
+ * @param {string} outputPath - Output JSON file path, or `-` for stdout
  */
 function saveJSON(allResults, outputPath) {
-  // SECURITY: Validate output path
-  const safePath = validateOutputPath(outputPath, {
-    requiredExtensions: ['.json']
-  });
-
   const json = {};
   for (const item of allResults) {
     json[item.path] = item.results;
   }
 
+  const jsonString = JSON.stringify(json, null, 2);
+
+  // WHY: Support `-` as stdout for piping to other tools
+  // This is a common Unix convention (e.g., `cat -`, `curl -o -`)
+  if (outputPath === '-') {
+    process.stdout.write(jsonString + '\n');
+    return;
+  }
+
+  // SECURITY: Validate output path with expanded allowed directories
+  // WHY: Allow cwd (where user ran command) and tmpdir (for scripts)
+  const safePath = validateOutputPath(outputPath, {
+    requiredExtensions: ['.json'],
+    allowedDirs: [process.cwd(), os.tmpdir()]
+  });
+
   // SECURITY: Use writeFileSafe (creates directory if needed)
-  writeFileSafe(safePath, JSON.stringify(json, null, 2), 'utf8');
+  writeFileSafe(safePath, jsonString, 'utf8');
   printSuccess(`JSON saved to: ${safePath}`);
 }
 
