@@ -18,7 +18,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const puppeteer = require('puppeteer');
 const { getVersion, printVersion: _printVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
@@ -26,23 +25,25 @@ const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs')
 // Import security utilities
 const {
   validateFilePath,
-  validateOutputPath,
   readSVGFileSafe,
   readJSONFileSafe: _readJSONFileSafe,
   sanitizeSVGContent,
   ensureDirectoryExists: _ensureDirectoryExists,
-  writeFileSafe,
   ValidationError,
   FileSystemError
 } = require('./lib/security-utils.cjs');
 
+// Import CLI utilities including shared JSON output function
+// WHY: writeJSONOutput centralizes JSON output handling (DRY principle)
+// DO NOT: Implement custom saveJSON - use writeJSONOutput instead
+// NOTE: printSuccess removed - writeJSONOutput handles success feedback internally
 const {
   runCLI,
   createArgParser,
-  printSuccess,
   printError,
   printInfo,
-  createProgress
+  createProgress,
+  writeJSONOutput
 } = require('./lib/cli-utils.cjs');
 
 // ============================================================================
@@ -735,37 +736,33 @@ function printResults(allResults) {
 
 /**
  * Save results as JSON.
- * SECURE: Validates output path, ensures directory exists.
- * Supports `-` as a special value to write to stdout.
+ *
+ * DELEGATES TO: writeJSONOutput (lib/cli-utils.cjs)
+ * WHY: Centralized JSON output handling ensures consistent behavior across all CLI tools
+ * DO NOT: Implement custom JSON output logic here - use writeJSONOutput
+ *
+ * FEATURES (via writeJSONOutput):
+ * - Supports `-` for stdout output (Unix convention)
+ * - Validates output path (security)
+ * - Handles EPIPE gracefully (broken pipe when piping to `head` etc.)
+ * - Allows writing to cwd and tmpdir
  *
  * @param {Object[]} allResults - Array of {filename, path, results}
  * @param {string} outputPath - Output JSON file path, or `-` for stdout
  */
 function saveJSON(allResults, outputPath) {
+  // Transform results array into path-keyed object
+  // WHY: This format is more useful for programmatic consumption
+  // Keys are file paths, values are bbox results
   const json = {};
   for (const item of allResults) {
     json[item.path] = item.results;
   }
 
-  const jsonString = JSON.stringify(json, null, 2);
-
-  // WHY: Support `-` as stdout for piping to other tools
-  // This is a common Unix convention (e.g., `cat -`, `curl -o -`)
-  if (outputPath === '-') {
-    process.stdout.write(jsonString + '\n');
-    return;
-  }
-
-  // SECURITY: Validate output path with expanded allowed directories
-  // WHY: Allow cwd (where user ran command) and tmpdir (for scripts)
-  const safePath = validateOutputPath(outputPath, {
-    requiredExtensions: ['.json'],
-    allowedDirs: [process.cwd(), os.tmpdir()]
-  });
-
-  // SECURITY: Use writeFileSafe (creates directory if needed)
-  writeFileSafe(safePath, jsonString, 'utf8');
-  printSuccess(`JSON saved to: ${safePath}`);
+  // DELEGATE: Use shared writeJSONOutput for all JSON output handling
+  // WHY: DRY principle - centralized logic for stdout, file validation, EPIPE handling
+  // DO NOT: Add custom output logic here - all enhancements go in writeJSONOutput
+  writeJSONOutput(json, outputPath);
 }
 
 // ============================================================================

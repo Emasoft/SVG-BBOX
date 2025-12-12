@@ -354,7 +354,27 @@ validate_version_sync() {
             log_warning "Version mismatch: package.json=$PKG_VERSION, SvgVisualBBox.min.js=$MINIFIED_VERSION"
             log_info "  → Auto-rebuilding minified library..."
 
-            if pnpm run build >/dev/null 2>&1; then
+            # IMPROVEMENT: Capture build output for debugging
+            # WHY: If build fails, user needs to see error messages
+            # DO NOT: Silently discard build errors - they're critical for debugging
+            local BUILD_OUTPUT
+            local BUILD_EXIT_CODE
+            BUILD_OUTPUT=$(pnpm run build 2>&1)
+            BUILD_EXIT_CODE=$?
+
+            # Show build output in verbose mode (helps debug build issues)
+            if [ "$VERBOSE" = true ]; then
+                log_verbose "Build output:"
+                echo "$BUILD_OUTPUT" | while IFS= read -r line; do
+                    log_verbose "  $line"
+                done
+            fi
+
+            if [ $BUILD_EXIT_CODE -eq 0 ]; then
+                # Brief delay to ensure filesystem has synced the file
+                # WHY: On some systems, file may not be immediately readable after write
+                sleep 0.5
+
                 # Re-check version after rebuild
                 MINIFIED_VERSION=$(head -1 SvgVisualBBox.min.js | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' | sed 's/v//')
                 if [ "$PKG_VERSION" = "$MINIFIED_VERSION" ]; then
@@ -363,17 +383,32 @@ validate_version_sync() {
                     if ! git diff --quiet SvgVisualBBox.min.js 2>/dev/null; then
                         log_info "  → Committing rebuilt minified library..."
                         git add SvgVisualBBox.min.js
-                        git commit -m "build: Regenerate minified library for v$PKG_VERSION" || true
+
+                        # IMPROVEMENT: Handle git commit failure properly
+                        # WHY: `|| true` silently swallows errors which can cause confusion
+                        # DO NOT: Use `|| true` for operations that should always succeed
+                        if ! git commit -m "build: Regenerate minified library for v$PKG_VERSION"; then
+                            log_error "  Failed to commit rebuilt minified library"
+                            log_error "  Check git status and resolve any issues"
+                            return 1
+                        fi
                         log_success "  Minified library committed"
                     fi
                 else
                     log_error "Build completed but version still mismatched"
                     log_error "Expected: $PKG_VERSION, Got: $MINIFIED_VERSION"
+                    log_error "This may indicate a bug in the build script"
                     return 1
                 fi
             else
-                log_error "Failed to rebuild minified library"
-                log_error "Run 'npm run build' manually and check for errors"
+                # IMPROVEMENT: Show actual build errors
+                # WHY: User needs to know WHY the build failed
+                log_error "Failed to rebuild minified library (exit code: $BUILD_EXIT_CODE)"
+                log_error "Build output:"
+                echo "$BUILD_OUTPUT" | tail -20 | while IFS= read -r line; do
+                    log_error "  $line"
+                done
+                log_error "Run 'pnpm run build' manually to see full errors"
                 return 1
             fi
         fi

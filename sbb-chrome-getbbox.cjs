@@ -9,10 +9,13 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const { getVersion } = require('./version.cjs');
-const { printError, printSuccess, printInfo, runCLI } = require('./lib/cli-utils.cjs');
-const { validateOutputPath, writeFileSafe } = require('./lib/security-utils.cjs');
+
+// Import CLI utilities including shared JSON output function
+// WHY: writeJSONOutput centralizes JSON output handling (DRY principle)
+// DO NOT: Implement custom saveJSON - use writeJSONOutput instead
+// NOTE: printSuccess removed - writeJSONOutput handles success feedback internally
+const { printError, printInfo, runCLI, writeJSONOutput } = require('./lib/cli-utils.cjs');
 
 /**
  * Get bbox using native .getBBox() method
@@ -175,28 +178,22 @@ function printResults(result) {
 
 /**
  * Save results as JSON.
- * Supports `-` as a special value to write to stdout.
+ *
+ * DELEGATES TO: writeJSONOutput (lib/cli-utils.cjs)
+ * WHY: Centralized JSON output handling ensures consistent behavior across all CLI tools
+ * DO NOT: Implement custom JSON output logic here - use writeJSONOutput
+ *
+ * @param {Object} result - Result object with path and results properties
+ * @param {string} outputPath - Output JSON file path, or `-` for stdout
  */
 function saveJSON(result, outputPath) {
+  // Transform result into path-keyed object (consistent with sbb-getbbox format)
   const json = {};
   json[result.path] = result.results;
 
-  const jsonString = JSON.stringify(json, null, 2);
-
-  // WHY: Support `-` as stdout for piping to other tools
-  if (outputPath === '-') {
-    process.stdout.write(jsonString + '\n');
-    return;
-  }
-
-  // SECURITY: Validate output path with expanded allowed directories
-  const safePath = validateOutputPath(outputPath, {
-    requiredExtensions: ['.json'],
-    allowedDirs: [process.cwd(), os.tmpdir()]
-  });
-
-  writeFileSafe(safePath, jsonString, 'utf8');
-  printSuccess(`JSON saved to: ${safePath}`);
+  // DELEGATE: Use shared writeJSONOutput for all JSON output handling
+  // WHY: DRY principle - centralized logic for stdout, file validation, EPIPE handling
+  writeJSONOutput(json, outputPath);
 }
 
 /**
