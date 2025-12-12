@@ -72,16 +72,15 @@ describe('sbb-inkscape-extract Integration Tests', () => {
   });
 
   afterAll(() => {
-    // Clean up temp directory
+    // Clean up temp directory only
+    // WHY: Only clean up test outputs, NOT the fixture file
+    // DO NOT delete multi-objects.svg here - it causes flaky tests when Vitest retries
+    // because beforeAll doesn't re-run on retry, leaving the fixture missing
     if (fs.existsSync(TEMP_DIR)) {
       fs.rmSync(TEMP_DIR, { recursive: true, force: true });
     }
-
-    // Clean up test fixture
-    const testFixture = path.join(FIXTURES_DIR, 'multi-objects.svg');
-    if (fs.existsSync(testFixture)) {
-      fs.unlinkSync(testFixture);
-    }
+    // NOTE: multi-objects.svg is left in fixtures dir - this is intentional
+    // It will be overwritten on next test run by beforeAll
   });
 
   describe('Basic Object Extraction', () => {
@@ -155,20 +154,25 @@ describe('sbb-inkscape-extract Integration Tests', () => {
         return;
       }
 
-      // Create batch file with relative paths
+      // Create batch file with relative paths from PROJECT ROOT
+      // WHY: Security validation only allows files within cwd
+      // So we run from project root and use relative paths to fixtures
       const batchFile = path.join(TEMP_DIR, 'batch-extract.txt');
-      const inputSvg = path.join(FIXTURES_DIR, 'multi-objects.svg');
+      const relativeInputSvg = 'tests/fixtures/multi-objects.svg';
+      const relativeOutputDir = 'tests/.tmp-inkscape-extract-tests';
       const batchContent = `# Batch extraction test
-${inputSvg}\trect1\tbatch_rect1.svg
-${inputSvg}\tcircle1\tbatch_circle1.svg
-${inputSvg} text1 batch_text1.svg`;
+${relativeInputSvg}\trect1\t${relativeOutputDir}/batch_rect1.svg
+${relativeInputSvg}\tcircle1\t${relativeOutputDir}/batch_circle1.svg
+${relativeInputSvg}\ttext1\t${relativeOutputDir}/batch_text1.svg`;
 
       fs.writeFileSync(batchFile, batchContent);
 
-      // Run batch extraction from TEMP_DIR so relative paths work
+      // Run batch extraction from PROJECT ROOT (not TEMP_DIR)
+      // WHY: Security validation restricts paths to cwd - project root includes both fixtures and temp dirs
+      const projectRoot = path.join(__dirname, '../..');
       const { stdout } = await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
         timeout: CLI_EXEC_TIMEOUT,
-        cwd: TEMP_DIR
+        cwd: projectRoot
       });
 
       // Check outputs exist
@@ -189,23 +193,27 @@ ${inputSvg} text1 batch_text1.svg`;
         return;
       }
 
-      // Create batch file with comments and relative paths
+      // Create batch file with comments and relative paths from PROJECT ROOT
+      // WHY: Security validation only allows files within cwd
       const batchFile = path.join(TEMP_DIR, 'batch-comments.txt');
-      const inputSvg = path.join(FIXTURES_DIR, 'multi-objects.svg');
+      const relativeInputSvg = 'tests/fixtures/multi-objects.svg';
+      const relativeOutputDir = 'tests/.tmp-inkscape-extract-tests';
       const batchContent = `# This is a comment
 
 # Extract rect
-${inputSvg}\trect1\tbatch_comment_rect.svg
+${relativeInputSvg}\trect1\t${relativeOutputDir}/batch_comment_rect.svg
 
 # Another comment
 `;
 
       fs.writeFileSync(batchFile, batchContent);
 
-      // Run batch extraction from TEMP_DIR so relative paths work
+      // Run batch extraction from PROJECT ROOT (not TEMP_DIR)
+      // WHY: Security validation restricts paths to cwd
+      const projectRoot = path.join(__dirname, '../..');
       await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
         timeout: CLI_EXEC_TIMEOUT,
-        cwd: TEMP_DIR
+        cwd: projectRoot
       });
 
       // Check output exists
@@ -240,18 +248,22 @@ ${inputSvg}\trect1\tbatch_comment_rect.svg
         return;
       }
 
-      // Create batch file with relative paths
+      // Create batch file with relative paths from PROJECT ROOT
+      // WHY: Security validation only allows files within cwd
       const batchFile = path.join(TEMP_DIR, 'batch-margin.txt');
-      const inputSvg = path.join(FIXTURES_DIR, 'multi-objects.svg');
-      const batchContent = `${inputSvg}\trect1\tbatch_margin_rect.svg
-${inputSvg}\tcircle1\tbatch_margin_circle.svg`;
+      const relativeInputSvg = 'tests/fixtures/multi-objects.svg';
+      const relativeOutputDir = 'tests/.tmp-inkscape-extract-tests';
+      const batchContent = `${relativeInputSvg}\trect1\t${relativeOutputDir}/batch_margin_rect.svg
+${relativeInputSvg}\tcircle1\t${relativeOutputDir}/batch_margin_circle.svg`;
 
       fs.writeFileSync(batchFile, batchContent);
 
-      // Run batch extraction with margin from TEMP_DIR
+      // Run batch extraction with margin from PROJECT ROOT (not TEMP_DIR)
+      // WHY: Security validation restricts paths to cwd
+      const projectRoot = path.join(__dirname, '../..');
       await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile, '--margin', '5'], {
         timeout: CLI_EXEC_TIMEOUT,
-        cwd: TEMP_DIR
+        cwd: projectRoot
       });
 
       // Check outputs exist
