@@ -111,6 +111,42 @@ git push origin :vX.Y.Z    # Delete remote tag (if pushed)
 - Check Node.js version in workflow (must be 24 for npm 11.6.0)
 - Review workflow logs: `gh run view --log`
 
+**gh release create fails with "target_commitish is invalid":**
+
+This error occurs when using `--target HEAD`:
+
+```
+HTTP 422: Validation Failed
+Release.target_commitish is invalid
+```
+
+**Root Cause:** The GitHub Releases API does NOT accept "HEAD" as a valid
+`target_commitish` value. "HEAD" is a local git reference with no meaning to
+GitHub's API.
+
+**Valid values for --target:**
+
+| Value Type | Example | Works? |
+|------------|---------|--------|
+| Branch name | `main`, `develop` | ✅ Yes |
+| Full commit SHA | `df967eb695543bd326bd42f22867877d673b1f48` | ✅ Yes |
+| Git reference | `HEAD`, `HEAD~1` | ❌ No |
+
+**Solution:** The release script uses the explicit commit SHA stored during
+`push_commits_to_github()` in the `PUSHED_COMMIT_SHA` variable:
+
+```bash
+# Correct approach - use explicit commit SHA
+gh release create "v$VERSION" --target "$PUSHED_COMMIT_SHA" ...
+
+# WRONG - HEAD is not resolved by gh CLI
+gh release create "v$VERSION" --target HEAD ...
+```
+
+**Why this is a gh CLI limitation:** The `gh` CLI passes `--target` values
+literally to the GitHub API without resolving git references first. It should
+resolve HEAD to the actual SHA before making the API call, but it doesn't.
+
 ### Version Tag Format Requirements
 
 **CRITICAL: Git tags MUST use the 'v' prefix (e.g., v1.0.12)**
