@@ -67,6 +67,7 @@ RELEASE_CREATED=false     # GitHub Release was created
 COMMITS_PUSHED=false      # Commits were pushed to remote
 VERSION_BUMPED=false      # package.json was modified
 CURRENT_TAG=""            # Store the tag name for cleanup
+PUSHED_COMMIT_SHA=""      # Store the pushed commit SHA for release creation
 VERBOSE=false             # Verbose mode for debugging
 
 # Colors for output
@@ -1275,8 +1276,9 @@ push_commits_to_github() {
         return 1
     fi
 
-    # Mark commits as pushed (for cleanup tracking)
+    # Mark commits as pushed and store SHA for release creation
     COMMITS_PUSHED=true
+    PUSHED_COMMIT_SHA="$HEAD_SHA"
 
     log_success "Commits pushed"
 
@@ -1329,10 +1331,13 @@ create_github_release() {
     fi
 
     # Create release using gh CLI
-    # Use --target HEAD to create the tag on remote (local tag is just a reference)
+    # Use --target with exact commit SHA to create the tag on remote
+    # (local tag is just a reference, gh needs explicit commit for --target)
     # This pushes the tag and creates the release atomically
+    local TARGET_SHA="${PUSHED_COMMIT_SHA:-$(git rev-parse HEAD)}"
+    log_info "Creating release for commit: ${TARGET_SHA:0:7}"
     if ! gh release create "v$VERSION" \
-        --target HEAD \
+        --target "$TARGET_SHA" \
         --title "v$VERSION" \
         --notes-file /tmp/release-notes.md; then
         log_error "Failed to create GitHub Release"
