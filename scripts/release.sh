@@ -1352,6 +1352,7 @@ wait_for_ci_workflow() {
         WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status' 2>/dev/null)
 
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
+            echo ""  # Newline after progress dots
             WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion' 2>/dev/null)
             RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId' 2>/dev/null)
 
@@ -1364,7 +1365,7 @@ wait_for_ci_workflow() {
 
                 # Show failed job details
                 if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
-                    log_error "Failed jobs:"
+                    log_error "Failed job logs:"
                     gh run view "$RUN_ID" --log-failed || true
                 fi
 
@@ -1372,11 +1373,13 @@ wait_for_ci_workflow() {
             fi
         fi
 
+        # Workflow still in progress
         echo -n "."
         sleep 5
         ELAPSED=$((ELAPSED + 5))
     done
 
+    echo ""  # Newline after progress dots
     log_error "Timeout waiting for CI workflow (exceeded 10 minutes)"
     log_error "Commit SHA: $COMMIT_SHA"
     log_warning "Check status manually: gh run watch"
@@ -1429,6 +1432,7 @@ wait_for_workflow() {
         WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status' 2>/dev/null)
 
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
+            echo ""  # Newline after progress dots
             WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion' 2>/dev/null)
             RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId' 2>/dev/null)
 
@@ -1441,7 +1445,7 @@ wait_for_workflow() {
 
                 # Show failed job details
                 if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
-                    log_error "Failed logs:"
+                    log_error "Failed job logs:"
                     gh run view "$RUN_ID" --log-failed || true
                 fi
 
@@ -1449,11 +1453,13 @@ wait_for_workflow() {
             fi
         fi
 
+        # Workflow still in progress
         echo -n "."
         sleep 5
         ELAPSED=$((ELAPSED + 5))
     done
 
+    echo ""  # Newline after progress dots
     log_error "Timeout waiting for Publish workflow (exceeded 10 minutes)"
     log_error "Version: v$VERSION"
     log_warning "Check status manually: gh run watch"
@@ -1824,7 +1830,7 @@ main() {
 
     # Check if version already published on npm (idempotency)
     log_info "Checking npm registry for existing version..."
-    EXISTING_NPM_VERSION=$(npm view ${PACKAGE_NAME} version 2>/dev/null || echo "")
+    EXISTING_NPM_VERSION=$(npm view "${PACKAGE_NAME}" version 2>/dev/null || echo "")
     if [ "$EXISTING_NPM_VERSION" = "$NEW_VERSION" ]; then
         log_warning "Version $NEW_VERSION is already published on npm"
         log_info "Skipping release (idempotent)"
@@ -1849,7 +1855,7 @@ main() {
 
     # Confirm with user (unless --yes flag)
     if [ "$SKIP_CONFIRMATION" = false ]; then
-        read -p "$(echo -e ${YELLOW}Do you want to release v$NEW_VERSION? [y/N]${NC} )" -n 1 -r
+        read -p "$(echo -e "${YELLOW}Do you want to release v${NEW_VERSION}? [y/N]${NC} ")" -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             log_warning "Release cancelled"
