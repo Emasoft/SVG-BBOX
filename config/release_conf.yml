@@ -1,7 +1,7 @@
 # ============================================================================
 # Release Configuration - release_conf.yml
 # ============================================================================
-# Auto-generated on 2025-12-13 23:14:04 UTC
+# Auto-generated on 2025-12-13 23:26:47 UTC
 # Customize as needed for your project.
 #
 # To regenerate with auto-detected values:
@@ -76,7 +76,7 @@ quality_checks:
     output_files: []
 
 # ----------------------------------------------------------------------------
-# CI/CD Workflow Settings
+# CI/CD Workflow Settings (auto-detected from .github/workflows/)
 # ----------------------------------------------------------------------------
 ci:
   workflow:
@@ -86,15 +86,20 @@ ci:
 
   publish:
     name: "Publish to npm"
+    node_version: "24"
     timeout_seconds: 900
     poll_interval_seconds: 10
 
 # ----------------------------------------------------------------------------
-# npm Publishing
+# npm Publishing (auto-detected: oidc)
 # ----------------------------------------------------------------------------
 npm:
   registry: "https://registry.npmjs.org"
   access: "public"
+  # Publishing method detected from CI workflows:
+  #   "oidc"  - OIDC Trusted Publishing (recommended, requires Node.js 24+)
+  #   "token" - NPM_TOKEN secret (traditional method)
+  publish_method: "oidc"
 
 # ----------------------------------------------------------------------------
 # Release Notes

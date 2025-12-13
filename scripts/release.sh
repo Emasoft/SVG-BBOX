@@ -242,6 +242,337 @@ detect_release_notes_generator() {
     fi
 }
 
+# ══════════════════════════════════════════════════════════════════
+# DEPENDENCY DETECTION AND INSTALLATION GUIDANCE
+# Checks for required tools and suggests installation methods
+# Compatible with bash 3.x (no associative arrays)
+# ══════════════════════════════════════════════════════════════════
+
+# List of required dependencies (space-separated)
+RELEASE_DEP_LIST="gh jq git-cliff yq"
+
+# Get dependency info by name (format: description|install_cmd|url)
+get_dep_info() {
+    local DEP="$1"
+    case "$DEP" in
+        "gh")        echo "GitHub CLI for releases|brew install gh|https://cli.github.com" ;;
+        "jq")        echo "JSON processor|brew install jq|https://jqlang.github.io/jq/" ;;
+        "git-cliff") echo "Changelog generator|cargo install git-cliff|https://git-cliff.org" ;;
+        "yq")        echo "YAML processor|brew install yq|https://github.com/mikefarah/yq" ;;
+        *)           echo "Unknown dependency||" ;;
+    esac
+}
+
+# Check a single dependency and return status
+check_dependency() {
+    local DEP="$1"
+    if command -v "$DEP" &>/dev/null; then
+        echo "installed"
+    else
+        echo "missing"
+    fi
+}
+
+# Get all missing dependencies
+get_missing_dependencies() {
+    local MISSING=""
+    for DEP in $RELEASE_DEP_LIST; do
+        if ! command -v "$DEP" &>/dev/null; then
+            MISSING="$MISSING $DEP"
+        fi
+    done
+    echo "$MISSING" | xargs  # Trim whitespace
+}
+
+# Print installation instructions for missing dependencies
+print_dependency_instructions() {
+    local MISSING
+    MISSING=$(get_missing_dependencies)
+
+    if [ -z "$MISSING" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo "Missing dependencies detected:"
+    echo ""
+
+    for DEP in $MISSING; do
+        local INFO
+        INFO=$(get_dep_info "$DEP")
+        local DESC
+        DESC=$(echo "$INFO" | cut -d'|' -f1)
+        local INSTALL
+        INSTALL=$(echo "$INFO" | cut -d'|' -f2)
+        local URL
+        URL=$(echo "$INFO" | cut -d'|' -f3)
+
+        echo "  $DEP - $DESC"
+        echo "    Install: $INSTALL"
+        echo "    More info: $URL"
+        echo ""
+    done
+
+    return 1
+}
+
+# Check if dependency should be added to package.json devDependencies
+# Returns the npm package name if applicable, empty otherwise
+get_npm_equivalent() {
+    local DEP="$1"
+    case "$DEP" in
+        # These have npm equivalents that can be added to devDependencies
+        "git-cliff") echo "" ;;  # No npm equivalent, requires cargo/binary
+        "yq") echo "" ;;         # No npm equivalent, requires binary
+        "jq") echo "" ;;         # No npm equivalent, requires binary
+        "gh") echo "" ;;         # No npm equivalent, requires binary
+        *) echo "" ;;
+    esac
+}
+
+# ══════════════════════════════════════════════════════════════════
+# CI WORKFLOW ANALYSIS
+# Detects publishing method and validates workflow configuration
+# ══════════════════════════════════════════════════════════════════
+
+# Find all GitHub workflow files
+find_workflow_files() {
+    if [ -d ".github/workflows" ]; then
+        find .github/workflows -name "*.yml" -o -name "*.yaml" 2>/dev/null
+    fi
+}
+
+# Detect npm publishing method from workflow files
+# Returns: "oidc", "token", "unknown"
+detect_npm_publish_method() {
+    local PUBLISH_WORKFLOW=""
+
+    # Look for publish workflow
+    for WF in $(find_workflow_files); do
+        if grep -q "npm publish" "$WF" 2>/dev/null; then
+            PUBLISH_WORKFLOW="$WF"
+            break
+        fi
+    done
+
+    if [ -z "$PUBLISH_WORKFLOW" ]; then
+        echo "unknown"
+        return
+    fi
+
+    # Check for OIDC indicators
+    local HAS_ID_TOKEN=false
+    local HAS_NPM_TOKEN=false
+    local NODE_VERSION=""
+
+    # Check for id-token: write permission (OIDC)
+    if grep -qE "id-token:\s*write" "$PUBLISH_WORKFLOW" 2>/dev/null; then
+        HAS_ID_TOKEN=true
+    fi
+
+    # Check for NPM_TOKEN secret usage (traditional)
+    if grep -qE "NPM_TOKEN|NODE_AUTH_TOKEN.*secrets\." "$PUBLISH_WORKFLOW" 2>/dev/null; then
+        HAS_NPM_TOKEN=true
+    fi
+
+    # Detect Node.js version
+    NODE_VERSION=$(grep -oE "node-version:\s*['\"]?([0-9]+)" "$PUBLISH_WORKFLOW" 2>/dev/null | head -1 | grep -oE "[0-9]+")
+
+    # Determine method
+    if [ "$HAS_ID_TOKEN" = true ] && [ "$HAS_NPM_TOKEN" = false ]; then
+        echo "oidc"
+    elif [ "$HAS_NPM_TOKEN" = true ]; then
+        echo "token"
+    elif [ "$HAS_ID_TOKEN" = true ]; then
+        # Has OIDC permission but might also have fallback token
+        echo "oidc"
+    else
+        echo "unknown"
+    fi
+}
+
+# Get detailed CI workflow info as JSON-like output
+analyze_ci_workflows() {
+    local RESULT=""
+
+    # Find publish workflow
+    local PUBLISH_WF=""
+    local CI_WF=""
+
+    for WF in $(find_workflow_files); do
+        local WF_NAME=$(basename "$WF")
+        if grep -q "npm publish" "$WF" 2>/dev/null; then
+            PUBLISH_WF="$WF"
+        fi
+        if grep -qE "^name:\s*CI" "$WF" 2>/dev/null || [[ "$WF_NAME" == "ci.yml" ]]; then
+            CI_WF="$WF"
+        fi
+    done
+
+    echo "publish_workflow=${PUBLISH_WF:-none}"
+    echo "ci_workflow=${CI_WF:-none}"
+    echo "publish_method=$(detect_npm_publish_method)"
+
+    # Extract Node.js version from publish workflow
+    if [ -n "$PUBLISH_WF" ]; then
+        local NODE_VER=$(grep -oE "node-version:\s*['\"]?([0-9]+)" "$PUBLISH_WF" 2>/dev/null | head -1 | grep -oE "[0-9]+")
+        echo "publish_node_version=${NODE_VER:-unknown}"
+    fi
+
+    # Extract tag pattern
+    if [ -n "$PUBLISH_WF" ]; then
+        local TAG_PATTERN=$(grep -A2 "tags:" "$PUBLISH_WF" 2>/dev/null | grep -oE "'[^']+'" | head -1 | tr -d "'")
+        echo "tag_pattern=${TAG_PATTERN:-unknown}"
+    fi
+}
+
+# ══════════════════════════════════════════════════════════════════
+# CI WORKFLOW ERROR DETECTION
+# Validates workflow configuration and reports issues
+# ══════════════════════════════════════════════════════════════════
+
+# Validate CI workflows and return list of issues
+validate_ci_workflows() {
+    local ISSUES=""
+    local ISSUE_COUNT=0
+
+    # Find publish workflow
+    local PUBLISH_WF=""
+    for WF in $(find_workflow_files); do
+        if grep -q "npm publish" "$WF" 2>/dev/null; then
+            PUBLISH_WF="$WF"
+            break
+        fi
+    done
+
+    if [ -z "$PUBLISH_WF" ]; then
+        echo "WARNING: No npm publish workflow found in .github/workflows/"
+        return
+    fi
+
+    local PUBLISH_METHOD=$(detect_npm_publish_method)
+
+    # Issue 1: OIDC requires Node.js 24+ (npm 11.5.1+)
+    if [ "$PUBLISH_METHOD" = "oidc" ]; then
+        local NODE_VER=$(grep -oE "node-version:\s*['\"]?([0-9]+)" "$PUBLISH_WF" 2>/dev/null | head -1 | grep -oE "[0-9]+")
+        if [ -n "$NODE_VER" ] && [ "$NODE_VER" -lt 24 ]; then
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo "ERROR[$ISSUE_COUNT]: OIDC trusted publishing requires Node.js 24+ (found: $NODE_VER)"
+            echo "  File: $PUBLISH_WF"
+            echo "  Fix: Change node-version to '24' for npm 11.5.1+ OIDC support"
+            echo ""
+        fi
+    fi
+
+    # Issue 2: Missing id-token permission for OIDC
+    if [ "$PUBLISH_METHOD" = "oidc" ]; then
+        if ! grep -qE "id-token:\s*write" "$PUBLISH_WF" 2>/dev/null; then
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo "ERROR[$ISSUE_COUNT]: Missing 'id-token: write' permission for OIDC"
+            echo "  File: $PUBLISH_WF"
+            echo "  Fix: Add 'permissions: { id-token: write, contents: read }'"
+            echo ""
+        fi
+    fi
+
+    # Issue 3: Token method but no NPM_TOKEN secret reference
+    if [ "$PUBLISH_METHOD" = "token" ]; then
+        if ! grep -qE "secrets\.NPM_TOKEN|secrets\.NODE_AUTH_TOKEN" "$PUBLISH_WF" 2>/dev/null; then
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo "WARNING[$ISSUE_COUNT]: Token publishing detected but NPM_TOKEN not referenced"
+            echo "  File: $PUBLISH_WF"
+            echo "  Fix: Ensure NPM_TOKEN secret is configured in repository settings"
+            echo ""
+        fi
+    fi
+
+    # Issue 4: Missing tag trigger for publish workflow
+    if ! grep -qE "tags:\s*$" "$PUBLISH_WF" 2>/dev/null && ! grep -qE "tags:" "$PUBLISH_WF" 2>/dev/null; then
+        ISSUE_COUNT=$((ISSUE_COUNT + 1))
+        echo "WARNING[$ISSUE_COUNT]: Publish workflow may not trigger on tags"
+        echo "  File: $PUBLISH_WF"
+        echo "  Fix: Add 'on: { push: { tags: [\"v*\"] } }' trigger"
+        echo ""
+    fi
+
+    # Issue 5: Tag pattern doesn't match expected format
+    local TAG_PATTERN=$(grep -A2 "tags:" "$PUBLISH_WF" 2>/dev/null | grep -oE "'[^']+'" | head -1 | tr -d "'")
+    if [ -n "$TAG_PATTERN" ] && [[ ! "$TAG_PATTERN" =~ ^v ]]; then
+        ISSUE_COUNT=$((ISSUE_COUNT + 1))
+        echo "WARNING[$ISSUE_COUNT]: Tag pattern '$TAG_PATTERN' doesn't start with 'v'"
+        echo "  File: $PUBLISH_WF"
+        echo "  Expected: 'v*' to match version tags like v1.0.0"
+        echo ""
+    fi
+
+    # Issue 6: Using --provenance flag with OIDC (redundant)
+    if [ "$PUBLISH_METHOD" = "oidc" ]; then
+        if grep -qE "npm publish.*--provenance" "$PUBLISH_WF" 2>/dev/null; then
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo "INFO[$ISSUE_COUNT]: --provenance flag is redundant with OIDC (automatic)"
+            echo "  File: $PUBLISH_WF"
+            echo "  Note: npm 11.5.1+ automatically adds provenance with OIDC"
+            echo ""
+        fi
+    fi
+
+    # Issue 7: registry-url with OIDC (usually not needed)
+    if [ "$PUBLISH_METHOD" = "oidc" ]; then
+        if grep -qE "registry-url:" "$PUBLISH_WF" 2>/dev/null; then
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo "INFO[$ISSUE_COUNT]: registry-url may not be needed with OIDC"
+            echo "  File: $PUBLISH_WF"
+            echo "  Note: npm OIDC handles registry authentication automatically"
+            echo ""
+        fi
+    fi
+
+    if [ $ISSUE_COUNT -eq 0 ]; then
+        echo "OK: No issues detected in CI workflows"
+    else
+        echo "Found $ISSUE_COUNT issue(s) in CI workflows"
+    fi
+}
+
+# Print CI workflow analysis summary
+print_ci_analysis() {
+    echo ""
+    echo "CI Workflow Analysis:"
+    echo "─────────────────────"
+
+    local ANALYSIS
+    while IFS= read -r LINE; do
+        local KEY=$(echo "$LINE" | cut -d'=' -f1)
+        local VALUE=$(echo "$LINE" | cut -d'=' -f2)
+        case "$KEY" in
+            publish_workflow)
+                echo "  Publish workflow: ${VALUE:-not found}"
+                ;;
+            ci_workflow)
+                echo "  CI workflow: ${VALUE:-not found}"
+                ;;
+            publish_method)
+                case "$VALUE" in
+                    oidc) echo "  Publishing method: OIDC Trusted Publishing (recommended)" ;;
+                    token) echo "  Publishing method: NPM_TOKEN secret (traditional)" ;;
+                    *) echo "  Publishing method: Unknown" ;;
+                esac
+                ;;
+            publish_node_version)
+                echo "  Node.js version: $VALUE"
+                ;;
+            tag_pattern)
+                echo "  Tag pattern: $VALUE"
+                ;;
+        esac
+    done <<< "$(analyze_ci_workflows)"
+
+    echo ""
+    echo "Workflow Validation:"
+    echo "────────────────────"
+    validate_ci_workflows
+}
+
 # Detect test commands from package.json scripts
 detect_test_command() {
     local PKG_MANAGER="$1"
@@ -299,6 +630,27 @@ generate_config() {
         grep -q '"build"' package.json && HAS_BUILD="true"
         grep -q '"test:selective"' package.json && HAS_SELECTIVE="true"
     fi
+
+    # Detect CI workflow settings
+    local PUBLISH_METHOD
+    PUBLISH_METHOD=$(detect_npm_publish_method)
+
+    local CI_WF_NAME="CI"
+    local PUBLISH_WF_NAME="Publish to npm"
+    local PUBLISH_NODE_VERSION="24"
+
+    # Extract workflow names from actual files
+    for WF in $(find_workflow_files 2>/dev/null); do
+        local WF_NAME=$(grep -E "^name:" "$WF" 2>/dev/null | head -1 | sed 's/name:\s*//' | tr -d '"' | tr -d "'")
+        if grep -q "npm publish" "$WF" 2>/dev/null; then
+            [ -n "$WF_NAME" ] && PUBLISH_WF_NAME="$WF_NAME"
+            # Extract Node version
+            local NODE_VER=$(grep -oE "node-version:\s*['\"]?([0-9]+)" "$WF" 2>/dev/null | head -1 | grep -oE "[0-9]+")
+            [ -n "$NODE_VER" ] && PUBLISH_NODE_VERSION="$NODE_VER"
+        elif grep -qE "pnpm test|npm test|vitest" "$WF" 2>/dev/null; then
+            [ -n "$WF_NAME" ] && CI_WF_NAME="$WF_NAME"
+        fi
+    done
 
     # Ensure output directory exists
     mkdir -p "$(dirname "$OUTPUT_FILE")"
@@ -383,25 +735,30 @@ quality_checks:
     output_files: []
 
 # ----------------------------------------------------------------------------
-# CI/CD Workflow Settings
+# CI/CD Workflow Settings (auto-detected from .github/workflows/)
 # ----------------------------------------------------------------------------
 ci:
   workflow:
-    name: "CI"
+    name: "${CI_WF_NAME}"
     timeout_seconds: 900              # 15 minutes
     poll_interval_seconds: 10
 
   publish:
-    name: "Publish to npm"
+    name: "${PUBLISH_WF_NAME}"
+    node_version: "${PUBLISH_NODE_VERSION}"
     timeout_seconds: 900
     poll_interval_seconds: 10
 
 # ----------------------------------------------------------------------------
-# npm Publishing
+# npm Publishing (auto-detected: ${PUBLISH_METHOD})
 # ----------------------------------------------------------------------------
 npm:
   registry: "https://registry.npmjs.org"
   access: "public"
+  # Publishing method detected from CI workflows:
+  #   "oidc"  - OIDC Trusted Publishing (recommended, requires Node.js 24+)
+  #   "token" - NPM_TOKEN secret (traditional method)
+  publish_method: "${PUBLISH_METHOD}"
 
 # ----------------------------------------------------------------------------
 # Release Notes
@@ -2212,6 +2569,7 @@ main() {
     SKIP_CONFIRMATION=false
     VERSION_ARG=""
     INIT_CONFIG_ONLY=false
+    CHECK_ONLY=false
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -2228,6 +2586,10 @@ main() {
                 INIT_CONFIG_ONLY=true
                 shift
                 ;;
+            --check)
+                CHECK_ONLY=true
+                shift
+                ;;
             --help|-h)
                 echo "Usage: $0 [options] [version|patch|minor|major]"
                 echo ""
@@ -2235,6 +2597,7 @@ main() {
                 echo "  --yes, -y         Skip confirmation prompt (for CI)"
                 echo "  --verbose, -v     Enable debug logging"
                 echo "  --init-config     Generate release_conf.yml from project settings"
+                echo "  --check           Analyze CI workflows and check for issues"
                 echo "  --help, -h        Show this help message"
                 echo ""
                 echo "Examples:"
@@ -2244,10 +2607,12 @@ main() {
                 echo "  $0 1.0.11            # Specific version"
                 echo "  $0 --yes patch       # Skip confirmation prompt"
                 echo "  $0 --init-config     # Generate config file"
+                echo "  $0 --check           # Analyze CI workflows"
                 echo ""
                 echo "Configuration:"
                 echo "  Config file: ${CONFIG_FILE:-'(not found)'}"
                 echo "  yq available: $YQ_AVAILABLE"
+                echo "  Publishing: $(detect_npm_publish_method)"
                 exit 0
                 ;;
             *)
@@ -2269,21 +2634,68 @@ main() {
         log_info "  Main branch: $(detect_main_branch)"
         log_info "  Version file: $(detect_version_file)"
         log_info "  GitHub: $(detect_github_info | tr ' ' '/')"
+        log_info "  npm publish method: $(detect_npm_publish_method)"
         log_info ""
         log_info "Edit the config file to customize release behavior."
         log_info "Re-run the release script to use your configuration."
         exit 0
     fi
 
+    # Handle --check: analyze CI workflows and dependencies
+    if [ "$CHECK_ONLY" = true ]; then
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "  Release Script Health Check"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+
+        # Check dependencies
+        echo "Dependency Status:"
+        echo "──────────────────"
+        local ALL_DEPS_OK=true
+        for DEP in gh jq git-cliff yq; do
+            if command -v "$DEP" &>/dev/null; then
+                local DEP_VERSION=$($DEP --version 2>/dev/null | head -1 || echo "installed")
+                echo -e "  ${GREEN}✓${NC} $DEP: $DEP_VERSION"
+            else
+                echo -e "  ${RED}✗${NC} $DEP: NOT INSTALLED"
+                ALL_DEPS_OK=false
+            fi
+        done
+
+        if [ "$ALL_DEPS_OK" = false ]; then
+            print_dependency_instructions
+        fi
+
+        # Print CI analysis
+        print_ci_analysis
+
+        # Summary
+        echo ""
+        echo "Configuration Status:"
+        echo "─────────────────────"
+        if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+            echo -e "  ${GREEN}✓${NC} Config file: $CONFIG_FILE"
+        else
+            echo -e "  ${YELLOW}!${NC} Config file: Not found (will auto-generate)"
+        fi
+
+        if [ "$YQ_AVAILABLE" = true ]; then
+            echo -e "  ${GREEN}✓${NC} YAML parser: yq (full support)"
+        else
+            echo -e "  ${YELLOW}!${NC} YAML parser: grep/sed fallback (limited)"
+        fi
+
+        exit 0
+    fi
+
     if [ -z "$VERSION_ARG" ]; then
-        log_error "Usage: $0 [--yes] [--verbose] [--init-config] [version|patch|minor|major]"
+        log_error "Usage: $0 [options] [version|patch|minor|major]"
+        log_info "Options: --yes, --verbose, --init-config, --check, --help"
         log_info "Examples:"
-        log_info "  $0 1.0.11            # Specific version"
         log_info "  $0 patch             # Bump patch (1.0.10 → 1.0.11)"
-        log_info "  $0 minor             # Bump minor (1.0.10 → 1.1.0)"
-        log_info "  $0 major             # Bump major (1.0.10 → 2.0.0)"
         log_info "  $0 --yes patch       # Skip confirmation prompt"
-        log_info "  $0 --verbose patch   # Enable debug logging"
+        log_info "  $0 --check           # Analyze CI workflows"
         log_info "  $0 --init-config     # Generate config file"
         exit 1
     fi
