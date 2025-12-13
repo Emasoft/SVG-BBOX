@@ -12,40 +12,40 @@
 # Project Information
 # ----------------------------------------------------------------------------
 project:
-  name: "svg-bbox"
-  description: "A set of tools to compute and to use a SVG boundin"
+  name: 'svg-bbox'
+  description: 'A set of tools to compute and to use a SVG boundin'
 
 # ----------------------------------------------------------------------------
 # Version Management
 # ----------------------------------------------------------------------------
 version:
-  file: "package.json"
-  field: "version"
-  tag_prefix: "v"                     # Git tag prefix (v1.0.0)
+  file: 'package.json'
+  field: 'version'
+  tag_prefix: 'v' # Git tag prefix (v1.0.0)
 
 # ----------------------------------------------------------------------------
 # Package Manager & Build Tools
 # ----------------------------------------------------------------------------
 tools:
-  package_manager: "pnpm"
-  node_version: "24"                  # Required for npm trusted publishing (npm 11.5.1+)
+  package_manager: 'pnpm'
+  node_version: '24' # Required for npm trusted publishing (npm 11.5.1+)
 
 # ----------------------------------------------------------------------------
 # Git & GitHub Configuration
 # ----------------------------------------------------------------------------
 git:
-  main_branch: "main"
-  remote: "origin"
+  main_branch: 'main'
+  remote: 'origin'
 
 github:
-  owner: "Emasoft"
-  repo: "SVG-BBOX"
+  owner: 'Emasoft'
+  repo: 'SVG-BBOX'
   # CRITICAL: GitHub API limitation - target_commitish only accepts:
   #   - Branch names (e.g., "main")
   #   - Full commit SHAs (e.g., "abc123...")
   # "HEAD" and other git refs are NOT valid!
   # See: https://github.com/cli/cli/issues/5855
-  release_target: "commit_sha"        # "commit_sha" (recommended) or "branch"
+  release_target: 'commit_sha' # "commit_sha" (recommended) or "branch"
 
 # ----------------------------------------------------------------------------
 # Quality Checks
@@ -53,26 +53,26 @@ github:
 quality_checks:
   lint:
     enabled: true
-    command: "pnpm run lint"
-    auto_fix_command: "pnpm run lint:fix"
+    command: 'pnpm run lint'
+    auto_fix_command: 'pnpm run lint:fix'
 
   typecheck:
     enabled: true
-    command: "pnpm run typecheck"
+    command: 'pnpm run typecheck'
 
   tests:
     enabled: true
-    mode: "selective"
-    full_command: "pnpm test"
-    selective_command: "node scripts/test-selective.cjs"
+    mode: 'selective'
+    full_command: 'pnpm test'
+    selective_command: 'node scripts/test-selective.cjs'
 
   e2e:
     enabled: true
-    command: "pnpm run test:e2e"
+    command: 'pnpm run test:e2e'
 
   build:
     enabled: true
-    command: "pnpm run build"
+    command: 'pnpm run build'
     output_files: []
 
 # ----------------------------------------------------------------------------
@@ -80,13 +80,13 @@ quality_checks:
 # ----------------------------------------------------------------------------
 ci:
   workflow:
-    name: "CI"
-    timeout_seconds: 900              # 15 minutes
+    name: 'CI'
+    timeout_seconds: 900 # 15 minutes
     poll_interval_seconds: 10
 
   publish:
-    name: "Publish to npm"
-    node_version: "24"
+    name: 'Publish to npm'
+    node_version: '24'
     timeout_seconds: 900
     poll_interval_seconds: 10
 
@@ -94,19 +94,19 @@ ci:
 # npm Publishing (auto-detected: oidc)
 # ----------------------------------------------------------------------------
 npm:
-  registry: "https://registry.npmjs.org"
-  access: "public"
+  registry: 'https://registry.npmjs.org'
+  access: 'public'
   # Publishing method detected from CI workflows:
   #   "oidc"  - OIDC Trusted Publishing (recommended, requires Node.js 24+)
   #   "token" - NPM_TOKEN secret (traditional method)
-  publish_method: "oidc"
+  publish_method: 'oidc'
 
 # ----------------------------------------------------------------------------
 # Release Notes
 # ----------------------------------------------------------------------------
 release_notes:
-  generator: "git-cliff"
-  config_file: "cliff.toml"
+  generator: 'git-cliff'
+  config_file: 'cliff.toml'
 
 # ----------------------------------------------------------------------------
 # Timeouts (seconds)
