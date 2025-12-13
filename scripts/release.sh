@@ -78,6 +78,440 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # ══════════════════════════════════════════════════════════════════
+# CONFIGURATION FILE SUPPORT
+# release_conf.yml provides project-specific settings
+# ══════════════════════════════════════════════════════════════════
+
+# Config file location (check multiple paths)
+CONFIG_FILE=""
+for config_path in "config/release_conf.yml" "release_conf.yml" ".release_conf.yml"; do
+    if [ -f "$config_path" ]; then
+        CONFIG_FILE="$config_path"
+        break
+    fi
+done
+
+# Check if yq is available for YAML parsing
+YQ_AVAILABLE=false
+if command -v yq &>/dev/null; then
+    YQ_AVAILABLE=true
+fi
+
+# ══════════════════════════════════════════════════════════════════
+# YAML CONFIGURATION PARSING
+# Uses yq if available, otherwise falls back to grep/sed
+# ══════════════════════════════════════════════════════════════════
+
+# Get a value from the config file
+# Usage: get_config "path.to.value" "default_value"
+get_config() {
+    local KEY="$1"
+    local DEFAULT="$2"
+
+    # If no config file, return default
+    if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+        echo "$DEFAULT"
+        return
+    fi
+
+    # Use yq if available (proper YAML parsing)
+    if [ "$YQ_AVAILABLE" = true ]; then
+        local VALUE
+        VALUE=$(yq -r ".$KEY // \"\"" "$CONFIG_FILE" 2>/dev/null)
+        if [ -n "$VALUE" ] && [ "$VALUE" != "null" ]; then
+            echo "$VALUE"
+        else
+            echo "$DEFAULT"
+        fi
+    else
+        # Fallback: simple grep-based extraction (limited to simple keys)
+        # Only works for top-level or simple nested keys
+        local SIMPLE_KEY
+        SIMPLE_KEY=$(echo "$KEY" | sed 's/.*\.//')
+        local VALUE
+        VALUE=$(grep -E "^\s*${SIMPLE_KEY}:" "$CONFIG_FILE" 2>/dev/null | head -1 | sed 's/.*:\s*"\?\([^"]*\)"\?.*/\1/' | sed 's/#.*//' | xargs)
+        if [ -n "$VALUE" ]; then
+            echo "$VALUE"
+        else
+            echo "$DEFAULT"
+        fi
+    fi
+}
+
+# Get a boolean config value
+# Usage: get_config_bool "path.to.value" "default"
+get_config_bool() {
+    local VALUE
+    VALUE=$(get_config "$1" "$2")
+    case "$VALUE" in
+        true|True|TRUE|yes|Yes|YES|1) echo "true" ;;
+        *) echo "false" ;;
+    esac
+}
+
+# Get an array from config (returns space-separated values)
+# Usage: get_config_array "path.to.array"
+get_config_array() {
+    local KEY="$1"
+
+    if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+        return
+    fi
+
+    if [ "$YQ_AVAILABLE" = true ]; then
+        yq -r ".$KEY[]? // empty" "$CONFIG_FILE" 2>/dev/null | tr '\n' ' '
+    fi
+}
+
+# ══════════════════════════════════════════════════════════════════
+# CONFIGURATION AUTO-GENERATION
+# Detects project settings from existing files
+# ══════════════════════════════════════════════════════════════════
+
+# Detect package manager from lock files
+detect_package_manager() {
+    if [ -f "pnpm-lock.yaml" ]; then
+        echo "pnpm"
+    elif [ -f "yarn.lock" ]; then
+        echo "yarn"
+    elif [ -f "bun.lockb" ]; then
+        echo "bun"
+    elif [ -f "package-lock.json" ]; then
+        echo "npm"
+    else
+        echo "npm"  # Default
+    fi
+}
+
+# Detect main branch from git
+detect_main_branch() {
+    # Try to get default branch from remote
+    local BRANCH
+    BRANCH=$(git remote show origin 2>/dev/null | grep "HEAD branch" | sed 's/.*: //')
+    if [ -n "$BRANCH" ]; then
+        echo "$BRANCH"
+    elif git rev-parse --verify main &>/dev/null; then
+        echo "main"
+    elif git rev-parse --verify master &>/dev/null; then
+        echo "master"
+    else
+        echo "main"  # Default
+    fi
+}
+
+# Detect GitHub owner/repo from git remote
+detect_github_info() {
+    local REMOTE_URL
+    REMOTE_URL=$(git config --get remote.origin.url 2>/dev/null || echo "")
+
+    # Parse owner and repo from various URL formats
+    # https://github.com/owner/repo.git
+    # git@github.com:owner/repo.git
+    local OWNER=""
+    local REPO=""
+
+    if [[ "$REMOTE_URL" =~ github\.com[:/]([^/]+)/([^/.]+)(\.git)?$ ]]; then
+        OWNER="${BASH_REMATCH[1]}"
+        REPO="${BASH_REMATCH[2]}"
+    fi
+
+    echo "$OWNER $REPO"
+}
+
+# Detect version file type
+detect_version_file() {
+    if [ -f "package.json" ]; then
+        echo "package.json"
+    elif [ -f "pyproject.toml" ]; then
+        echo "pyproject.toml"
+    elif [ -f "Cargo.toml" ]; then
+        echo "Cargo.toml"
+    elif [ -f "setup.py" ]; then
+        echo "setup.py"
+    else
+        echo "package.json"  # Default
+    fi
+}
+
+# Detect if git-cliff is configured
+detect_release_notes_generator() {
+    if [ -f "cliff.toml" ] && command -v git-cliff &>/dev/null; then
+        echo "git-cliff"
+    else
+        echo "auto"
+    fi
+}
+
+# Detect test commands from package.json scripts
+detect_test_command() {
+    local PKG_MANAGER="$1"
+    if [ -f "package.json" ]; then
+        if grep -q '"test:selective"' package.json; then
+            echo "${PKG_MANAGER} run test:selective"
+        elif grep -q '"test"' package.json; then
+            echo "${PKG_MANAGER} test"
+        fi
+    fi
+    echo "${PKG_MANAGER} test"
+}
+
+# Generate release_conf.yml from detected settings
+generate_config() {
+    local OUTPUT_FILE="${1:-config/release_conf.yml}"
+    local PKG_MANAGER
+    PKG_MANAGER=$(detect_package_manager)
+    local MAIN_BRANCH
+    MAIN_BRANCH=$(detect_main_branch)
+    local VERSION_FILE
+    VERSION_FILE=$(detect_version_file)
+    local RELEASE_NOTES_GEN
+    RELEASE_NOTES_GEN=$(detect_release_notes_generator)
+
+    # Get GitHub info
+    local GITHUB_INFO
+    GITHUB_INFO=$(detect_github_info)
+    local GITHUB_OWNER
+    GITHUB_OWNER=$(echo "$GITHUB_INFO" | cut -d' ' -f1)
+    local GITHUB_REPO
+    GITHUB_REPO=$(echo "$GITHUB_INFO" | cut -d' ' -f2)
+
+    # Get project name from package.json or directory name
+    local PROJECT_NAME=""
+    local PROJECT_DESC=""
+    if [ -f "package.json" ]; then
+        PROJECT_NAME=$(jq -r '.name // ""' package.json 2>/dev/null)
+        PROJECT_DESC=$(jq -r '.description // ""' package.json 2>/dev/null | head -c 50)
+    fi
+    if [ -z "$PROJECT_NAME" ]; then
+        PROJECT_NAME=$(basename "$(pwd)")
+    fi
+
+    # Detect available scripts
+    local HAS_LINT="false"
+    local HAS_TYPECHECK="false"
+    local HAS_E2E="false"
+    local HAS_BUILD="false"
+    local HAS_SELECTIVE="false"
+    if [ -f "package.json" ]; then
+        grep -q '"lint"' package.json && HAS_LINT="true"
+        grep -q '"typecheck"' package.json && HAS_TYPECHECK="true"
+        grep -q '"test:e2e"' package.json && HAS_E2E="true"
+        grep -q '"build"' package.json && HAS_BUILD="true"
+        grep -q '"test:selective"' package.json && HAS_SELECTIVE="true"
+    fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$OUTPUT_FILE")"
+
+    # Generate the config file
+    cat > "$OUTPUT_FILE" << YAML_EOF
+# ============================================================================
+# Release Configuration - release_conf.yml
+# ============================================================================
+# Auto-generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+# Customize as needed for your project.
+#
+# To regenerate with auto-detected values:
+#   ./scripts/release.sh --init-config
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Project Information
+# ----------------------------------------------------------------------------
+project:
+  name: "${PROJECT_NAME}"
+  description: "${PROJECT_DESC}"
+
+# ----------------------------------------------------------------------------
+# Version Management
+# ----------------------------------------------------------------------------
+version:
+  file: "${VERSION_FILE}"
+  field: "version"
+  tag_prefix: "v"                     # Git tag prefix (v1.0.0)
+
+# ----------------------------------------------------------------------------
+# Package Manager & Build Tools
+# ----------------------------------------------------------------------------
+tools:
+  package_manager: "${PKG_MANAGER}"
+  node_version: "24"                  # Required for npm trusted publishing (npm 11.5.1+)
+
+# ----------------------------------------------------------------------------
+# Git & GitHub Configuration
+# ----------------------------------------------------------------------------
+git:
+  main_branch: "${MAIN_BRANCH}"
+  remote: "origin"
+
+github:
+  owner: "${GITHUB_OWNER}"
+  repo: "${GITHUB_REPO}"
+  # CRITICAL: GitHub API limitation - target_commitish only accepts:
+  #   - Branch names (e.g., "main")
+  #   - Full commit SHAs (e.g., "abc123...")
+  # "HEAD" and other git refs are NOT valid!
+  # See: https://github.com/cli/cli/issues/5855
+  release_target: "commit_sha"        # "commit_sha" (recommended) or "branch"
+
+# ----------------------------------------------------------------------------
+# Quality Checks
+# ----------------------------------------------------------------------------
+quality_checks:
+  lint:
+    enabled: ${HAS_LINT}
+    command: "${PKG_MANAGER} run lint"
+    auto_fix_command: "${PKG_MANAGER} run lint:fix"
+
+  typecheck:
+    enabled: ${HAS_TYPECHECK}
+    command: "${PKG_MANAGER} run typecheck"
+
+  tests:
+    enabled: true
+    mode: "$([ "$HAS_SELECTIVE" = "true" ] && echo "selective" || echo "full")"
+    full_command: "${PKG_MANAGER} test"
+    selective_command: "node scripts/test-selective.cjs"
+
+  e2e:
+    enabled: ${HAS_E2E}
+    command: "${PKG_MANAGER} run test:e2e"
+
+  build:
+    enabled: ${HAS_BUILD}
+    command: "${PKG_MANAGER} run build"
+    output_files: []
+
+# ----------------------------------------------------------------------------
+# CI/CD Workflow Settings
+# ----------------------------------------------------------------------------
+ci:
+  workflow:
+    name: "CI"
+    timeout_seconds: 900              # 15 minutes
+    poll_interval_seconds: 10
+
+  publish:
+    name: "Publish to npm"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+# ----------------------------------------------------------------------------
+# npm Publishing
+# ----------------------------------------------------------------------------
+npm:
+  registry: "https://registry.npmjs.org"
+  access: "public"
+
+# ----------------------------------------------------------------------------
+# Release Notes
+# ----------------------------------------------------------------------------
+release_notes:
+  generator: "${RELEASE_NOTES_GEN}"
+  config_file: "cliff.toml"
+
+# ----------------------------------------------------------------------------
+# Timeouts (seconds)
+# ----------------------------------------------------------------------------
+timeouts:
+  git_operations: 30
+  npm_operations: 60
+  test_execution: 600
+  ci_workflow: 900
+  publish_workflow: 900
+  npm_propagation: 300
+
+# ----------------------------------------------------------------------------
+# Safety Settings
+# ----------------------------------------------------------------------------
+safety:
+  require_clean_worktree: true
+  require_main_branch: true
+  require_ci_pass: true
+  auto_rollback_on_failure: true
+  confirm_before_push: false
+YAML_EOF
+
+    echo "$OUTPUT_FILE"
+}
+
+# Load configuration values into variables
+load_config() {
+    # Only load if config file exists
+    if [ -z "$CONFIG_FILE" ]; then
+        return
+    fi
+
+    # Override defaults with config values
+    CFG_PACKAGE_MANAGER=$(get_config "tools.package_manager" "pnpm")
+    CFG_MAIN_BRANCH=$(get_config "git.main_branch" "main")
+    CFG_TAG_PREFIX=$(get_config "version.tag_prefix" "v")
+    CFG_RELEASE_TARGET=$(get_config "github.release_target" "commit_sha")
+
+    # Timeouts
+    CFG_CI_TIMEOUT=$(get_config "ci.workflow.timeout_seconds" "900")
+    CFG_PUBLISH_TIMEOUT=$(get_config "ci.publish.timeout_seconds" "900")
+    CFG_NPM_PROPAGATION_TIMEOUT=$(get_config "timeouts.npm_propagation" "300")
+
+    # Quality checks
+    CFG_LINT_ENABLED=$(get_config_bool "quality_checks.lint.enabled" "true")
+    CFG_TYPECHECK_ENABLED=$(get_config_bool "quality_checks.typecheck.enabled" "true")
+    CFG_TESTS_ENABLED=$(get_config_bool "quality_checks.tests.enabled" "true")
+    CFG_TESTS_MODE=$(get_config "quality_checks.tests.mode" "selective")
+    CFG_E2E_ENABLED=$(get_config_bool "quality_checks.e2e.enabled" "true")
+    CFG_BUILD_ENABLED=$(get_config_bool "quality_checks.build.enabled" "true")
+
+    # Commands
+    CFG_LINT_CMD=$(get_config "quality_checks.lint.command" "pnpm run lint")
+    CFG_LINT_FIX_CMD=$(get_config "quality_checks.lint.auto_fix_command" "pnpm run lint:fix")
+    CFG_TYPECHECK_CMD=$(get_config "quality_checks.typecheck.command" "pnpm run typecheck")
+    CFG_TEST_FULL_CMD=$(get_config "quality_checks.tests.full_command" "pnpm test")
+    CFG_TEST_SELECTIVE_CMD=$(get_config "quality_checks.tests.selective_command" "node scripts/test-selective.cjs")
+    CFG_E2E_CMD=$(get_config "quality_checks.e2e.command" "pnpm run test:e2e")
+    CFG_BUILD_CMD=$(get_config "quality_checks.build.command" "pnpm run build")
+
+    # Safety
+    CFG_REQUIRE_CLEAN=$(get_config_bool "safety.require_clean_worktree" "true")
+    CFG_REQUIRE_MAIN=$(get_config_bool "safety.require_main_branch" "true")
+    CFG_REQUIRE_CI=$(get_config_bool "safety.require_ci_pass" "true")
+
+    # Release notes
+    CFG_RELEASE_NOTES_GEN=$(get_config "release_notes.generator" "git-cliff")
+}
+
+# Initialize config with defaults (used if no config file)
+init_config_defaults() {
+    CFG_PACKAGE_MANAGER="pnpm"
+    CFG_MAIN_BRANCH="main"
+    CFG_TAG_PREFIX="v"
+    CFG_RELEASE_TARGET="commit_sha"
+    CFG_CI_TIMEOUT="900"
+    CFG_PUBLISH_TIMEOUT="900"
+    CFG_NPM_PROPAGATION_TIMEOUT="300"
+    CFG_LINT_ENABLED="true"
+    CFG_TYPECHECK_ENABLED="true"
+    CFG_TESTS_ENABLED="true"
+    CFG_TESTS_MODE="selective"
+    CFG_E2E_ENABLED="true"
+    CFG_BUILD_ENABLED="true"
+    CFG_LINT_CMD="pnpm run lint"
+    CFG_LINT_FIX_CMD="pnpm run lint:fix"
+    CFG_TYPECHECK_CMD="pnpm run typecheck"
+    CFG_TEST_FULL_CMD="pnpm test"
+    CFG_TEST_SELECTIVE_CMD="node scripts/test-selective.cjs"
+    CFG_E2E_CMD="pnpm run test:e2e"
+    CFG_BUILD_CMD="pnpm run build"
+    CFG_REQUIRE_CLEAN="true"
+    CFG_REQUIRE_MAIN="true"
+    CFG_REQUIRE_CI="true"
+    CFG_RELEASE_NOTES_GEN="git-cliff"
+}
+
+# Initialize configuration
+init_config_defaults
+load_config
+
+# ══════════════════════════════════════════════════════════════════
 # SIGNAL HANDLING AND CLEANUP
 # Trap SIGINT (Ctrl+C), SIGTERM (kill), and EXIT to ensure cleanup
 # ══════════════════════════════════════════════════════════════════
@@ -1331,13 +1765,33 @@ create_github_release() {
     fi
 
     # Create release using gh CLI
-    # Use --target with exact commit SHA to create the tag on remote
-    # (local tag is just a reference, gh needs explicit commit for --target)
-    # This pushes the tag and creates the release atomically
-    local TARGET_SHA="${PUSHED_COMMIT_SHA:-$(git rev-parse HEAD)}"
-    log_info "Creating release for commit: ${TARGET_SHA:0:7}"
+    # ══════════════════════════════════════════════════════════════════
+    # CRITICAL: GitHub API target_commitish limitation
+    # ══════════════════════════════════════════════════════════════════
+    # The GitHub Releases API does NOT accept "HEAD" or other git refs
+    # as the target_commitish value. Only these are valid:
+    #   - Branch names (e.g., "main", "master")
+    #   - Full commit SHAs (e.g., "abc123...")
+    #
+    # "HEAD" causes HTTP 422: "Release.target_commitish is invalid"
+    # This is a known platform limitation (NOT a gh CLI bug):
+    # See: https://github.com/cli/cli/issues/5855
+    #
+    # We use explicit commit SHA (recommended) or branch name based on config
+    # ══════════════════════════════════════════════════════════════════
+    local TARGET_VALUE
+    if [ "$CFG_RELEASE_TARGET" = "branch" ]; then
+        # Use main branch name (works but less precise)
+        TARGET_VALUE="${CFG_MAIN_BRANCH:-main}"
+        log_info "Creating release targeting branch: $TARGET_VALUE"
+    else
+        # Use explicit commit SHA (recommended - more precise)
+        TARGET_VALUE="${PUSHED_COMMIT_SHA:-$(git rev-parse HEAD)}"
+        log_info "Creating release for commit: ${TARGET_VALUE:0:7}"
+    fi
+
     if ! gh release create "v$VERSION" \
-        --target "$TARGET_SHA" \
+        --target "$TARGET_VALUE" \
         --title "v$VERSION" \
         --notes-file /tmp/release-notes.md; then
         log_error "Failed to create GitHub Release"
@@ -1367,7 +1821,7 @@ create_github_release() {
 # PHASE 1.1: Filter by commit SHA to avoid race conditions with other commits
 wait_for_ci_workflow() {
     local COMMIT_SHA=$1  # The commit SHA we just pushed
-    local MAX_WAIT=900   # 15 minutes (CI can take 10-13 minutes)
+    local MAX_WAIT="${CFG_CI_TIMEOUT:-900}"   # From config or default 15 minutes
     local ELAPSED=0
     local WORKFLOW_JSON MATCHING_RUN WORKFLOW_STATUS WORKFLOW_CONCLUSION RUN_ID
 
@@ -1435,7 +1889,7 @@ wait_for_ci_workflow() {
 # PHASE 1.2: Increased timeout to 10 minutes + filter by tag commit SHA
 wait_for_workflow() {
     local VERSION=$1
-    local MAX_WAIT=900  # PHASE 1.2: 15 minutes (publish can take 10+ minutes)
+    local MAX_WAIT="${CFG_PUBLISH_TIMEOUT:-900}"  # From config or default 15 minutes
     local ELAPSED=0
     local WORKFLOW_JSON MATCHING_RUN WORKFLOW_STATUS WORKFLOW_CONCLUSION RUN_ID
 
@@ -1747,6 +2201,7 @@ main() {
     # Parse arguments
     SKIP_CONFIRMATION=false
     VERSION_ARG=""
+    INIT_CONFIG_ONLY=false
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -1759,6 +2214,32 @@ main() {
                 log_verbose "Verbose mode enabled"
                 shift
                 ;;
+            --init-config)
+                INIT_CONFIG_ONLY=true
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: $0 [options] [version|patch|minor|major]"
+                echo ""
+                echo "Options:"
+                echo "  --yes, -y         Skip confirmation prompt (for CI)"
+                echo "  --verbose, -v     Enable debug logging"
+                echo "  --init-config     Generate release_conf.yml from project settings"
+                echo "  --help, -h        Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  $0 patch             # Bump patch (1.0.10 → 1.0.11)"
+                echo "  $0 minor             # Bump minor (1.0.10 → 1.1.0)"
+                echo "  $0 major             # Bump major (1.0.10 → 2.0.0)"
+                echo "  $0 1.0.11            # Specific version"
+                echo "  $0 --yes patch       # Skip confirmation prompt"
+                echo "  $0 --init-config     # Generate config file"
+                echo ""
+                echo "Configuration:"
+                echo "  Config file: ${CONFIG_FILE:-'(not found)'}"
+                echo "  yq available: $YQ_AVAILABLE"
+                exit 0
+                ;;
             *)
                 VERSION_ARG=$1
                 shift
@@ -1766,8 +2247,26 @@ main() {
         esac
     done
 
+    # Handle --init-config: generate config and exit
+    if [ "$INIT_CONFIG_ONLY" = true ]; then
+        log_info "Generating release configuration from project settings..."
+        local GENERATED_FILE
+        GENERATED_FILE=$(generate_config "config/release_conf.yml")
+        log_success "Configuration generated: $GENERATED_FILE"
+        log_info ""
+        log_info "Detected settings:"
+        log_info "  Package manager: $(detect_package_manager)"
+        log_info "  Main branch: $(detect_main_branch)"
+        log_info "  Version file: $(detect_version_file)"
+        log_info "  GitHub: $(detect_github_info | tr ' ' '/')"
+        log_info ""
+        log_info "Edit the config file to customize release behavior."
+        log_info "Re-run the release script to use your configuration."
+        exit 0
+    fi
+
     if [ -z "$VERSION_ARG" ]; then
-        log_error "Usage: $0 [--yes] [--verbose] [version|patch|minor|major]"
+        log_error "Usage: $0 [--yes] [--verbose] [--init-config] [version|patch|minor|major]"
         log_info "Examples:"
         log_info "  $0 1.0.11            # Specific version"
         log_info "  $0 patch             # Bump patch (1.0.10 → 1.0.11)"
@@ -1775,6 +2274,7 @@ main() {
         log_info "  $0 major             # Bump major (1.0.10 → 2.0.0)"
         log_info "  $0 --yes patch       # Skip confirmation prompt"
         log_info "  $0 --verbose patch   # Enable debug logging"
+        log_info "  $0 --init-config     # Generate config file"
         exit 1
     fi
 

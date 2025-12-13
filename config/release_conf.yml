@@ -1,0 +1,125 @@
+# ============================================================================
+# Release Configuration - release_conf.yml
+# ============================================================================
+# Auto-generated on 2025-12-13 23:14:04 UTC
+# Customize as needed for your project.
+#
+# To regenerate with auto-detected values:
+#   ./scripts/release.sh --init-config
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Project Information
+# ----------------------------------------------------------------------------
+project:
+  name: "svg-bbox"
+  description: "A set of tools to compute and to use a SVG boundin"
+
+# ----------------------------------------------------------------------------
+# Version Management
+# ----------------------------------------------------------------------------
+version:
+  file: "package.json"
+  field: "version"
+  tag_prefix: "v"                     # Git tag prefix (v1.0.0)
+
+# ----------------------------------------------------------------------------
+# Package Manager & Build Tools
+# ----------------------------------------------------------------------------
+tools:
+  package_manager: "pnpm"
+  node_version: "24"                  # Required for npm trusted publishing (npm 11.5.1+)
+
+# ----------------------------------------------------------------------------
+# Git & GitHub Configuration
+# ----------------------------------------------------------------------------
+git:
+  main_branch: "main"
+  remote: "origin"
+
+github:
+  owner: "Emasoft"
+  repo: "SVG-BBOX"
+  # CRITICAL: GitHub API limitation - target_commitish only accepts:
+  #   - Branch names (e.g., "main")
+  #   - Full commit SHAs (e.g., "abc123...")
+  # "HEAD" and other git refs are NOT valid!
+  # See: https://github.com/cli/cli/issues/5855
+  release_target: "commit_sha"        # "commit_sha" (recommended) or "branch"
+
+# ----------------------------------------------------------------------------
+# Quality Checks
+# ----------------------------------------------------------------------------
+quality_checks:
+  lint:
+    enabled: true
+    command: "pnpm run lint"
+    auto_fix_command: "pnpm run lint:fix"
+
+  typecheck:
+    enabled: true
+    command: "pnpm run typecheck"
+
+  tests:
+    enabled: true
+    mode: "selective"
+    full_command: "pnpm test"
+    selective_command: "node scripts/test-selective.cjs"
+
+  e2e:
+    enabled: true
+    command: "pnpm run test:e2e"
+
+  build:
+    enabled: true
+    command: "pnpm run build"
+    output_files: []
+
+# ----------------------------------------------------------------------------
+# CI/CD Workflow Settings
+# ----------------------------------------------------------------------------
+ci:
+  workflow:
+    name: "CI"
+    timeout_seconds: 900              # 15 minutes
+    poll_interval_seconds: 10
+
+  publish:
+    name: "Publish to npm"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+# ----------------------------------------------------------------------------
+# npm Publishing
+# ----------------------------------------------------------------------------
+npm:
+  registry: "https://registry.npmjs.org"
+  access: "public"
+
+# ----------------------------------------------------------------------------
+# Release Notes
+# ----------------------------------------------------------------------------
+release_notes:
+  generator: "git-cliff"
+  config_file: "cliff.toml"
+
+# ----------------------------------------------------------------------------
+# Timeouts (seconds)
+# ----------------------------------------------------------------------------
+timeouts:
+  git_operations: 30
+  npm_operations: 60
+  test_execution: 600
+  ci_workflow: 900
+  publish_workflow: 900
+  npm_propagation: 300
+
+# ----------------------------------------------------------------------------
+# Safety Settings
+# ----------------------------------------------------------------------------
+safety:
+  require_clean_worktree: true
+  require_main_branch: true
+  require_ci_pass: true
+  auto_rollback_on_failure: true
+  confirm_before_push: false
