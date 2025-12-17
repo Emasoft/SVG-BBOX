@@ -5,6 +5,8 @@ These models provide:
 - Automatic validation
 - Default values
 - Environment variable override support
+
+Models match the actual release_conf.yml structure used by the bash script.
 """
 
 from typing import Literal
@@ -18,32 +20,22 @@ class ProjectConfig(BaseModel):
 
     name: str = Field(description="Project name")
     description: str = Field(default="", description="Project description")
-    ecosystems: list[str] = Field(
-        default_factory=list,
-        description="List of ecosystems (nodejs, python, rust, etc.)",
-    )
-    primary_ecosystem: str | None = Field(
-        default=None,
-        description="Primary ecosystem for version source",
+    ecosystem: str = Field(
+        default="node",
+        description="Primary ecosystem (node, python, rust, etc.)",
     )
 
 
 class VersionConfig(BaseModel):
     """Version management configuration."""
 
-    source: Literal[
-        "package.json",
-        "pyproject.toml",
-        "Cargo.toml",
-        "version.txt",
-        "VERSION",
-    ] = Field(
+    file: str = Field(
         default="package.json",
         description="File containing the version",
     )
-    pattern: str = Field(
-        default=r"^\d+\.\d+\.\d+$",
-        description="Regex pattern for valid versions",
+    field: str = Field(
+        default="version",
+        description="Field name in version file",
     )
     tag_prefix: str = Field(
         default="v",
@@ -58,32 +50,16 @@ class VersionConfig(BaseModel):
         return v
 
 
-class ToolConfig(BaseModel):
-    """External tool configuration."""
+class ToolsConfig(BaseModel):
+    """Package manager and tool configuration."""
 
-    minifier: str | None = Field(
-        default=None,
-        description="Minifier command (e.g., 'terser')",
+    package_manager: str = Field(
+        default="pnpm",
+        description="Package manager (npm, pnpm, yarn, bun)",
     )
-    linter: str | None = Field(
-        default=None,
-        description="Linter command (e.g., 'eslint', 'ruff')",
-    )
-    formatter: str | None = Field(
-        default=None,
-        description="Formatter command (e.g., 'prettier', 'ruff format')",
-    )
-    type_checker: str | None = Field(
-        default=None,
-        description="Type checker command (e.g., 'tsc', 'mypy')",
-    )
-    test_runner: str | None = Field(
-        default=None,
-        description="Test runner command (e.g., 'vitest', 'pytest')",
-    )
-    changelog_generator: str = Field(
-        default="git-cliff",
-        description="Changelog generator command",
+    node_version: str = Field(
+        default="24",
+        description="Node.js version to use",
     )
 
 
@@ -94,96 +70,146 @@ class GitConfig(BaseModel):
         default="main",
         description="Main branch name",
     )
-    require_clean: bool = Field(
-        default=True,
-        description="Require clean working directory",
-    )
-    require_main_branch: bool = Field(
-        default=True,
-        description="Require being on main branch",
-    )
-    sign_tags: bool = Field(
-        default=False,
-        description="Sign git tags with GPG",
-    )
-    sign_commits: bool = Field(
-        default=False,
-        description="Sign commits with GPG",
+    remote: str = Field(
+        default="origin",
+        description="Git remote name",
     )
 
 
 class GitHubConfig(BaseModel):
-    """GitHub release configuration."""
+    """GitHub repository and release configuration."""
 
-    create_release: bool = Field(
-        default=True,
-        description="Create GitHub release",
+    owner: str = Field(description="GitHub repository owner")
+    repo: str = Field(description="GitHub repository name")
+    release_target: Literal["commit_sha", "branch"] = Field(
+        default="commit_sha",
+        description="Target for GitHub release (commit_sha or branch)",
     )
-    upload_assets: list[str] = Field(
+
+
+class LintCheckConfig(BaseModel):
+    """Lint check configuration."""
+
+    enabled: bool = Field(default=True, description="Enable lint check")
+    command: str = Field(
+        default="pnpm run lint",
+        description="Lint command",
+    )
+    auto_fix_command: str | None = Field(
+        default=None,
+        description="Command to auto-fix lint issues",
+    )
+
+
+class TypecheckConfig(BaseModel):
+    """Type check configuration."""
+
+    enabled: bool = Field(default=True, description="Enable type check")
+    command: str = Field(
+        default="pnpm run typecheck",
+        description="Type check command",
+    )
+
+
+class TestsCheckConfig(BaseModel):
+    """Test execution configuration."""
+
+    enabled: bool = Field(default=True, description="Enable tests")
+    mode: Literal["full", "selective"] = Field(
+        default="full",
+        description="Test mode (full or selective)",
+    )
+    full_command: str = Field(
+        default="pnpm test",
+        description="Full test command",
+    )
+    selective_command: str | None = Field(
+        default=None,
+        description="Selective test command",
+    )
+
+
+class E2ECheckConfig(BaseModel):
+    """E2E test configuration."""
+
+    enabled: bool = Field(default=False, description="Enable E2E tests")
+    command: str = Field(
+        default="pnpm run test:e2e",
+        description="E2E test command",
+    )
+
+
+class BuildCheckConfig(BaseModel):
+    """Build check configuration."""
+
+    enabled: bool = Field(default=True, description="Enable build check")
+    command: str = Field(
+        default="pnpm run build",
+        description="Build command",
+    )
+    output_files: list[str] = Field(
         default_factory=list,
-        description="Files to upload as release assets",
-    )
-    draft: bool = Field(
-        default=False,
-        description="Create release as draft",
-    )
-    prerelease: bool = Field(
-        default=False,
-        description="Mark release as prerelease",
+        description="Expected output files to verify",
     )
 
 
 class QualityChecksConfig(BaseModel):
     """Quality check configuration."""
 
-    lint: bool = Field(default=True, description="Run linter")
-    typecheck: bool = Field(default=True, description="Run type checker")
-    test: bool = Field(default=True, description="Run tests")
-    coverage_threshold: float = Field(
-        default=80.0,
-        ge=0.0,
-        le=100.0,
-        description="Minimum coverage percentage",
+    lint: LintCheckConfig = Field(default_factory=LintCheckConfig)
+    typecheck: TypecheckConfig = Field(default_factory=TypecheckConfig)
+    tests: TestsCheckConfig = Field(default_factory=TestsCheckConfig)
+    e2e: E2ECheckConfig = Field(default_factory=E2ECheckConfig)
+    build: BuildCheckConfig = Field(default_factory=BuildCheckConfig)
+
+
+class WorkflowConfig(BaseModel):
+    """CI workflow configuration."""
+
+    name: str = Field(default="CI", description="Workflow name")
+    timeout_seconds: int = Field(
+        default=900,
+        ge=60,
+        description="Workflow timeout in seconds",
     )
-    security_scan: bool = Field(
-        default=True,
-        description="Run security scan for secrets",
+    poll_interval_seconds: int = Field(
+        default=10,
+        ge=5,
+        description="Poll interval in seconds",
     )
 
 
 class CIConfig(BaseModel):
-    """CI workflow monitoring configuration."""
+    """CI/CD workflow monitoring configuration."""
 
-    wait_for_ci: bool = Field(
-        default=True,
-        description="Wait for CI workflows to complete",
+    platforms: str = Field(
+        default="github",
+        description="CI platforms (github, gitlab, etc.)",
     )
-    required_workflows: list[str] = Field(
-        default_factory=lambda: ["CI"],
-        description="Workflow names that must pass",
-    )
-    timeout_minutes: int = Field(
-        default=15,
-        ge=1,
-        le=60,
-        description="CI timeout in minutes",
+    workflow: WorkflowConfig = Field(default_factory=WorkflowConfig)
+    publish: WorkflowConfig = Field(
+        default_factory=lambda: WorkflowConfig(
+            name="Publish to npm",
+            timeout_seconds=900,
+            poll_interval_seconds=10,
+        )
     )
 
 
 class NPMConfig(BaseModel):
     """npm publishing configuration."""
 
-    access: Literal["public", "restricted"] = Field(
-        default="public",
-        description="Package access level",
-    )
     registry: str = Field(
         default="https://registry.npmjs.org",
         description="npm registry URL",
     )
-    trusted_publishing: bool = Field(
-        default=True,
-        description="Use OIDC trusted publishing",
+    access: Literal["public", "restricted"] = Field(
+        default="public",
+        description="Package access level",
+    )
+    publish_method: Literal["oidc", "token"] = Field(
+        default="oidc",
+        description="Publishing authentication method",
     )
 
 
@@ -194,50 +220,69 @@ class ReleaseNotesConfig(BaseModel):
         default="git-cliff",
         description="Release notes generator",
     )
-    template: str | None = Field(
-        default=None,
-        description="Custom template path",
-    )
-    include_contributors: bool = Field(
-        default=True,
-        description="Include contributor list",
+    config_file: str = Field(
+        default="cliff.toml",
+        description="Generator config file",
     )
 
 
 class TimeoutsConfig(BaseModel):
     """Timeout configuration in seconds."""
 
+    git_operations: int = Field(
+        default=30,
+        ge=10,
+        description="Git operation timeout",
+    )
+    npm_operations: int = Field(
+        default=60,
+        ge=10,
+        description="npm operation timeout",
+    )
+    test_execution: int = Field(
+        default=600,
+        ge=60,
+        description="Test execution timeout",
+    )
     ci_workflow: int = Field(
         default=900,
         ge=60,
-        description="CI workflow timeout (default 15 min)",
+        description="CI workflow timeout",
     )
     publish_workflow: int = Field(
+        default=900,
+        ge=60,
+        description="Publish workflow timeout",
+    )
+    npm_propagation: int = Field(
         default=300,
         ge=60,
-        description="Publish workflow timeout (default 5 min)",
-    )
-    npm_verification: int = Field(
-        default=60,
-        ge=10,
-        description="npm verification timeout (default 1 min)",
+        description="npm propagation timeout",
     )
 
 
 class SafetyConfig(BaseModel):
     """Safety and confirmation settings."""
 
-    dry_run: bool = Field(
+    require_clean_worktree: bool = Field(
+        default=True,
+        description="Require clean git working tree",
+    )
+    require_main_branch: bool = Field(
+        default=True,
+        description="Require being on main branch",
+    )
+    require_ci_pass: bool = Field(
+        default=True,
+        description="Require CI to pass before release",
+    )
+    auto_rollback_on_failure: bool = Field(
+        default=True,
+        description="Auto rollback on release failure",
+    )
+    confirm_before_push: bool = Field(
         default=False,
-        description="Show what would be done without making changes",
-    )
-    require_confirmation: bool = Field(
-        default=True,
-        description="Require user confirmation before release",
-    )
-    backup_before_release: bool = Field(
-        default=True,
-        description="Create backup before making changes",
+        description="Require confirmation before push",
     )
 
 
@@ -250,9 +295,9 @@ class ReleaseConfig(BaseSettings):
 
     project: ProjectConfig
     version: VersionConfig = Field(default_factory=VersionConfig)
-    tools: ToolConfig = Field(default_factory=ToolConfig)
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
     git: GitConfig = Field(default_factory=GitConfig)
-    github: GitHubConfig = Field(default_factory=GitHubConfig)
+    github: GitHubConfig
     quality_checks: QualityChecksConfig = Field(default_factory=QualityChecksConfig)
     ci: CIConfig = Field(default_factory=CIConfig)
     npm: NPMConfig = Field(default_factory=NPMConfig)

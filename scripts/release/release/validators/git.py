@@ -45,9 +45,9 @@ class GitCleanValidator(Validator):
             context: Release context
 
         Returns:
-            True if git.require_clean is enabled in config
+            True if safety.require_clean_worktree is enabled in config
         """
-        return context.config.git.require_clean
+        return context.config.safety.require_clean_worktree
 
     def validate(self, context: ReleaseContext) -> ValidationResult:
         """Validate that working directory is clean.
@@ -102,9 +102,9 @@ class GitBranchValidator(Validator):
             context: Release context
 
         Returns:
-            True if git.require_main_branch is enabled in config
+            True if safety.require_main_branch is enabled in config
         """
-        return context.config.git.require_main_branch
+        return context.config.safety.require_main_branch
 
     def validate(self, context: ReleaseContext) -> ValidationResult:
         """Validate that current branch is the main branch.

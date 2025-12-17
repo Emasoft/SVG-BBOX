@@ -330,10 +330,8 @@ def status(
         table.add_column("Value", style="green")
 
         table.add_row("Project", cfg.project.name)
-        table.add_row("Version Source", cfg.version.source)
-        table.add_row(
-            "Ecosystems", ", ".join(cfg.project.ecosystems) or "None detected"
-        )
+        table.add_row("Version File", cfg.version.file)
+        table.add_row("Ecosystem", cfg.project.ecosystem)
         table.add_row("Main Branch", cfg.git.main_branch)
 
         console.print(table)

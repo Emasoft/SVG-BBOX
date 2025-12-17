@@ -81,6 +81,7 @@ plugins = ["pydantic.mypy"]
 module = [
     "pydantic",
     "pydantic_settings",
+    "tomli",
 ]
 ignore_missing_imports = true
 

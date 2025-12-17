@@ -101,7 +101,7 @@ class VersionFormatValidator(Validator):
     category = "version"
 
     def validate(self, context: ReleaseContext) -> ValidationResult:
-        """Validate version format against configured pattern.
+        """Validate version format against semver pattern.
 
         Args:
             context: Release context with version and config
@@ -115,13 +115,14 @@ class VersionFormatValidator(Validator):
                 details="Version must be specified for validation",
             )
 
-        pattern = context.config.version.pattern
+        # Use standard semver pattern
+        pattern = r"^\d+\.\d+\.\d+$"
         version = context.version
 
         if not re.match(pattern, version):
             return ValidationResult.error(
                 message=f"Invalid version format: {version}",
-                details=f"Version must match pattern: {pattern}\n"
+                details=f"Version must match semver pattern: {pattern}\n"
                 f"Expected format: semantic version (e.g., 1.0.12)\n"
                 f"Got: {version}",
                 fix_command=f"Use a valid version format matching {pattern}",

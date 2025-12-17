@@ -11,7 +11,7 @@ from release.config.models import (
     ReleaseNotesConfig,
     SafetyConfig,
     TimeoutsConfig,
-    ToolConfig,
+    ToolsConfig,
     VersionConfig,
 )
 
@@ -19,7 +19,7 @@ __all__ = [
     "ReleaseConfig",
     "ProjectConfig",
     "VersionConfig",
-    "ToolConfig",
+    "ToolsConfig",
     "GitConfig",
     "GitHubConfig",
     "QualityChecksConfig",
