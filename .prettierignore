@@ -6,6 +6,10 @@
 node_modules/
 pnpm-lock.yaml
 
+# Python virtual environments
+.venv/
+scripts/release/.venv/
+
 # Test artifacts
 coverage/
 .nyc_output/
@@ -22,3 +26,6 @@ CHANGELOG.md
 
 # Local Claude configuration (user-specific)
 .claude/
+
+# Type checking cache
+.mypy_cache/

@@ -18,7 +18,9 @@ export default [
       'docs_dev/**',
       'scripts_dev/**',
       'libs_dev/**',
-      'examples_dev/**'
+      'examples_dev/**',
+      'scripts/release/.venv/**',
+      '**/.venv/**'
     ]
   },
 
