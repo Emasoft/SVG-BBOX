@@ -20,6 +20,7 @@ from release import __version__
 from release.config.defaults import write_default_config
 from release.config.loader import load_config
 from release.exceptions import ReleaseError
+from release.utils.shell import ShellError, run, run_silent
 
 # Import validators to trigger registration via decorators
 from release.validators import git as _git_validators  # noqa: F401
@@ -459,6 +460,11 @@ def rollback(
         "-f",
         help="Force rollback without confirmation",
     ),
+    revert_commit: bool = typer.Option(  # noqa: B008
+        False,
+        "--revert-commit",
+        help="Also revert the version bump commit (dangerous)",
+    ),
     config: Path = typer.Option(  # noqa: B008
         Path("config/release_conf.yml"),
         "--config",
@@ -468,29 +474,164 @@ def rollback(
 ) -> None:
     """Rollback a failed release.
 
-    Removes the git tag and reverts the version bump.
+    Removes the git tag (local and remote) and GitHub release.
+    Optionally reverts the version bump commit.
     Cannot unpublish from registries (npm, PyPI, etc.).
 
     Examples:
         release rollback 1.2.3
         release rollback v1.2.3 --force
+        release rollback 1.2.3 --revert-commit
     """
     try:
-        # Load configuration (unused until rollback implemented)
-        _cfg = load_config(config)
+        # Load configuration
+        cfg = load_config(config)
+
+        # Parse version input - strip 'v' prefix if present
+        clean_version = version.lstrip("v")
+
+        # Build tag name using config prefix
+        tag_name = f"{cfg.version.tag_prefix}{clean_version}"
 
         if not force:
-            confirm = typer.confirm(f"Rollback version {version}?")
+            console.print("\n[yellow]This will:[/yellow]")
+            console.print(f"  - Delete local tag: {tag_name}")
+            console.print(f"  - Delete remote tag: {tag_name}")
+            console.print(f"  - Delete GitHub release: {tag_name}")
+            if revert_commit:
+                console.print("  - [red]Revert version bump commit (DANGEROUS)[/red]")
+            console.print()
+
+            confirm = typer.confirm(f"Proceed with rollback of {tag_name}?")
             if not confirm:
+                console.print("[yellow]Rollback cancelled[/yellow]")
                 raise typer.Exit()
 
-        # TODO: Implement rollback
-        # 1. Delete local tag
-        # 2. Delete remote tag
-        # 3. Revert version in config file
-        # 4. Commit revert
+        project_root = Path.cwd()
+        results = []
+        errors = []
 
-        console.print("[green]Rollback not yet implemented[/green]")
+        # Check if tag exists locally
+        tag_exists_local = run_silent(
+            f"git tag -l {tag_name}",
+            cwd=project_root,
+        )
+        if tag_exists_local:
+            # Verify it actually returned the tag name
+            result = run(
+                f"git tag -l {tag_name}",
+                cwd=project_root,
+                check=False,
+            )
+            tag_exists_local = result.stdout.strip() == tag_name
+
+        # Check if tag exists on remote
+        tag_exists_remote = False
+        try:
+            result = run(
+                f"git ls-remote --tags {cfg.git.remote} {tag_name}",
+                cwd=project_root,
+                check=False,
+            )
+            tag_exists_remote = len(result.stdout.strip()) > 0
+        except ShellError:
+            pass
+
+        console.print("\n[bold]Rollback status:[/bold]\n")
+
+        # Step 1: Delete remote tag if exists
+        if tag_exists_remote:
+            try:
+                run(
+                    f"git push {cfg.git.remote} :refs/tags/{tag_name}",
+                    cwd=project_root,
+                )
+                results.append(f"[green]✓[/green] Deleted remote tag: {tag_name}")
+            except ShellError as e:
+                errors.append(f"[red]✗[/red] Failed to delete remote tag: {e}")
+        else:
+            results.append(f"[yellow]⊘[/yellow] Remote tag does not exist: {tag_name}")
+
+        # Step 2: Delete local tag
+        if tag_exists_local:
+            try:
+                run(
+                    f"git tag -d {tag_name}",
+                    cwd=project_root,
+                )
+                results.append(f"[green]✓[/green] Deleted local tag: {tag_name}")
+            except ShellError as e:
+                errors.append(f"[red]✗[/red] Failed to delete local tag: {e}")
+        else:
+            results.append(f"[yellow]⊘[/yellow] Local tag does not exist: {tag_name}")
+
+        # Step 3: Delete GitHub release if exists
+        try:
+            # First check if release exists
+            result = run(
+                f"gh release view {tag_name}",
+                cwd=project_root,
+                check=False,
+            )
+            if result.returncode == 0:
+                # Release exists, delete it
+                run(
+                    f"gh release delete {tag_name} -y --cleanup-tag",
+                    cwd=project_root,
+                    check=False,
+                )
+                results.append(f"[green]✓[/green] Deleted GitHub release: {tag_name}")
+            else:
+                results.append(
+                    f"[yellow]⊘[/yellow] GitHub release does not exist: {tag_name}"
+                )
+        except ShellError as e:
+            # Suppress error if release doesn't exist
+            if "release not found" in str(e).lower() or "not found" in str(e).lower():
+                results.append(
+                    f"[yellow]⊘[/yellow] GitHub release does not exist: {tag_name}"
+                )
+            else:
+                errors.append(f"[red]✗[/red] Failed to delete GitHub release: {e}")
+
+        # Step 4: Optionally revert version bump commit
+        if revert_commit:
+            try:
+                # Find commit with version bump
+                result = run(
+                    f'git log -1 --grep="chore(release): Bump version to {clean_version}" --format=%H',
+                    cwd=project_root,
+                    check=False,
+                )
+                commit_hash = result.stdout.strip()
+
+                if commit_hash:
+                    # Revert the commit
+                    run(
+                        f"git revert {commit_hash} --no-edit",
+                        cwd=project_root,
+                    )
+                    results.append(
+                        f"[green]✓[/green] Reverted version bump commit: {commit_hash[:7]}"
+                    )
+                else:
+                    results.append("[yellow]⊘[/yellow] Version bump commit not found")
+            except ShellError as e:
+                errors.append(f"[red]✗[/red] Failed to revert commit: {e}")
+
+        # Display results
+        for msg in results:
+            console.print(msg)
+
+        if errors:
+            console.print(f"\n[red]Encountered {len(errors)} error(s):[/red]")
+            for error in errors:
+                console.print(error)
+            raise typer.Exit(code=1)
+        else:
+            console.print(
+                f"\n[green]Rollback of {tag_name} completed successfully[/green]"
+            )
 
     except ReleaseError as e:
         console.print(f"[red]Error:[/red] {e}")

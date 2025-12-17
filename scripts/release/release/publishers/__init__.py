@@ -1,5 +1,22 @@
 """Publisher modules for package registry publishing."""
 
-from release.publishers.base import Publisher, PublisherRegistry, PublishResult
+# Import publishers to trigger registration
+from release.publishers import (
+    github,  # noqa: F401
+    npm,  # noqa: F401
+)
+from release.publishers.base import (
+    PublishContext,
+    Publisher,
+    PublisherRegistry,
+    PublishResult,
+    PublishStatus,
+)
 
-__all__ = ["Publisher", "PublishResult", "PublisherRegistry"]
+__all__ = [
+    "PublishContext",
+    "Publisher",
+    "PublisherRegistry",
+    "PublishResult",
+    "PublishStatus",
+]
