@@ -8,6 +8,7 @@ Provides commands for:
 - rollback: Undo a failed release
 """
 
+import json
 from pathlib import Path
 
 import typer
@@ -19,6 +20,16 @@ from release import __version__
 from release.config.defaults import write_default_config
 from release.config.loader import load_config
 from release.exceptions import ReleaseError
+
+# Import validators to trigger registration via decorators
+from release.validators import git as _git_validators  # noqa: F401
+from release.validators import version as _version_validators  # noqa: F401
+from release.validators.base import (
+    ReleaseContext,
+    ValidationResult,
+    ValidationSeverity,
+    ValidatorRegistry,
+)
 
 # Create Typer app
 app = typer.Typer(
@@ -37,6 +48,73 @@ def version_callback(value: bool) -> None:
     if value:
         console.print(f"release-tool version {__version__}")
         raise typer.Exit()
+
+
+def get_current_version(project_root: Path) -> str | None:
+    """Read current version from package.json.
+
+    Args:
+        project_root: Path to project root
+
+    Returns:
+        Current version string or None if not found
+    """
+    package_json = project_root / "package.json"
+    if package_json.exists():
+        try:
+            with open(package_json) as f:
+                data = json.load(f)
+                version = data.get("version")
+                if isinstance(version, str):
+                    return version
+                return None
+        except (json.JSONDecodeError, OSError):
+            pass
+    return None
+
+
+def display_validation_results(
+    results: list[ValidationResult],
+    title: str = "Validation Results",
+) -> bool:
+    """Display validation results in a formatted table.
+
+    Args:
+        results: List of validation results
+        title: Table title
+
+    Returns:
+        True if all validations passed (no errors)
+    """
+    table = Table(title=title)
+    table.add_column("Status", style="bold", width=8)
+    table.add_column("Check", style="cyan")
+    table.add_column("Message")
+
+    has_errors = False
+
+    for result in results:
+        if result.severity == ValidationSeverity.ERROR:
+            status = "[red]FAIL[/red]"
+            if not result.passed:
+                has_errors = True
+        elif result.severity == ValidationSeverity.WARNING:
+            status = "[yellow]WARN[/yellow]"
+        else:
+            status = "[green]PASS[/green]"
+
+        table.add_row(status, result.message.split(":")[0], result.message)
+
+    console.print(table)
+
+    # Show details for failures
+    for result in results:
+        if not result.passed and result.details:
+            console.print(f"\n[red]Details:[/red] {result.details}")
+            if result.fix_command:
+                console.print(f"[yellow]Fix:[/yellow] {result.fix_command}")
+
+    return not has_errors
 
 
 @app.callback()
@@ -107,25 +185,63 @@ def release(
         release patch --dry-run  # Preview without changes
     """
     try:
-        # Load configuration (unused until workflow implemented)
-        _cfg = load_config(config)
+        # Load configuration
+        cfg = load_config(config)
+        project_root = Path.cwd()
 
         if dry_run:
             console.print(
                 Panel("[yellow]DRY RUN MODE[/yellow] - No changes will be made")
             )
 
-        # TODO: Implement release workflow
-        # 1. Validate prerequisites
-        # 2. Bump version
-        # 3. Generate changelog
-        # 4. Commit and tag
-        # 5. Push to remote
-        # 6. Wait for CI
-        # 7. Create GitHub release
-        # 8. Verify publication
+        # Determine new version
+        from release.utils.version import bump_version, is_valid_version
 
-        console.print("[green]Release workflow not yet implemented[/green]")
+        current_version = get_current_version(project_root)
+        if current_version is None:
+            console.print("[red]Error:[/red] Could not read current version")
+            raise typer.Exit(code=1)
+
+        if version in ("major", "minor", "patch"):
+            new_version = bump_version(current_version, version)
+        elif is_valid_version(version):
+            new_version = version
+        else:
+            console.print(f"[red]Error:[/red] Invalid version: {version}")
+            raise typer.Exit(code=1)
+
+        console.print(f"Version: {current_version} -> {new_version}")
+
+        # Create release context
+        context = ReleaseContext(
+            project_root=project_root,
+            config=cfg,
+            version=new_version,
+            previous_version=current_version,
+            dry_run=dry_run,
+            verbose=True,
+        )
+
+        # Run validation
+        console.print("\n[bold]Running pre-release validation...[/bold]")
+        results = ValidatorRegistry.run_all(context)
+
+        if not display_validation_results(results, "Pre-release Validation"):
+            console.print(
+                "\n[red]Validation failed. Fix issues before releasing.[/red]"
+            )
+            raise typer.Exit(code=1)
+
+        # TODO: Implement release workflow
+        # 1. Bump version in files
+        # 2. Generate changelog
+        # 3. Commit and tag
+        # 4. Push to remote
+        # 5. Wait for CI
+        # 6. Create GitHub release
+        # 7. Verify publication
+
+        console.print("\n[yellow]Release workflow implementation pending[/yellow]")
 
     except ReleaseError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -158,15 +274,41 @@ def validate(
     - Security scan (no exposed secrets)
     """
     try:
-        # Load configuration (unused until validation implemented)
-        _cfg = load_config(config)
+        cfg = load_config(config)
+        project_root = Path.cwd()
+        current_version = get_current_version(project_root)
 
-        # TODO: Implement validation
-        # 1. Run all validators
-        # 2. Display results table
-        # 3. Exit with error if any failed
+        # Create release context
+        context = ReleaseContext(
+            project_root=project_root,
+            config=cfg,
+            version=current_version,
+            previous_version=None,
+            dry_run=True,
+            verbose=verbose,
+        )
 
-        console.print("[green]Validation not yet implemented[/green]")
+        # Show registered validators
+        if verbose:
+            registered = ValidatorRegistry.list_registered()
+            categories = ValidatorRegistry.list_categories()
+            console.print(f"[dim]Registered validators: {', '.join(registered)}[/dim]")
+            console.print(f"[dim]Categories: {', '.join(categories)}[/dim]\n")
+
+        # Run all validators
+        results = ValidatorRegistry.run_all(context)
+
+        if not results:
+            console.print("[yellow]No validators registered[/yellow]")
+            return
+
+        all_passed = display_validation_results(results)
+
+        if all_passed:
+            console.print("\n[green]All validations passed![/green]")
+        else:
+            console.print("\n[red]Some validations failed.[/red]")
+            raise typer.Exit(code=1)
 
     except ReleaseError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -185,6 +327,12 @@ def check(
         "-c",
         help="Path to configuration file",
     ),
+    verbose: bool = typer.Option(  # noqa: B008
+        False,
+        "--verbose",
+        "-v",
+        help="Show detailed output",
+    ),
 ) -> None:
     """Run specific quality checks.
 
@@ -198,11 +346,56 @@ def check(
     - quality: Lint, typecheck, test
     """
     try:
-        # Load configuration (unused until checks implemented)
-        _cfg = load_config(config)
+        cfg = load_config(config)
+        project_root = Path.cwd()
+        current_version = get_current_version(project_root)
 
-        # TODO: Implement specific checks
-        console.print(f"[green]Check '{what}' not yet implemented[/green]")
+        # Create release context
+        context = ReleaseContext(
+            project_root=project_root,
+            config=cfg,
+            version=current_version,
+            previous_version=None,
+            dry_run=True,
+            verbose=verbose,
+        )
+
+        # Map check names to categories
+        category_map = {
+            "all": None,  # Run all
+            "git": "git",
+            "version": "version",
+            "deps": "dependencies",
+            "security": "security",
+            "ci": "ci",
+            "quality": "quality",
+        }
+
+        if what not in category_map:
+            console.print(f"[red]Unknown check:[/red] {what}")
+            console.print(f"Available: {', '.join(category_map.keys())}")
+            raise typer.Exit(code=1)
+
+        # Run validators
+        category = category_map[what]
+        if category is None:
+            results = ValidatorRegistry.run_all(context)
+            title = "All Checks"
+        else:
+            results = ValidatorRegistry.run_category(category, context)
+            title = f"{what.title()} Checks"
+
+        if not results:
+            console.print(f"[yellow]No validators registered for '{what}'[/yellow]")
+            return
+
+        all_passed = display_validation_results(results, title)
+
+        if all_passed:
+            console.print(f"\n[green]{what.title()} checks passed![/green]")
+        else:
+            console.print(f"\n[red]Some {what} checks failed.[/red]")
+            raise typer.Exit(code=1)
 
     except ReleaseError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -323,6 +516,8 @@ def status(
     """
     try:
         cfg = load_config(config)
+        project_root = Path.cwd()
+        current_version = get_current_version(project_root)
 
         # Create status table
         table = Table(title="Release Status")
@@ -330,9 +525,11 @@ def status(
         table.add_column("Value", style="green")
 
         table.add_row("Project", cfg.project.name)
+        table.add_row("Current Version", current_version or "Unknown")
         table.add_row("Version File", cfg.version.file)
         table.add_row("Ecosystem", cfg.project.ecosystem)
         table.add_row("Main Branch", cfg.git.main_branch)
+        table.add_row("Tag Prefix", cfg.version.tag_prefix)
 
         console.print(table)
 

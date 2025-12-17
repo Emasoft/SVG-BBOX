@@ -211,7 +211,9 @@ class ValidatorRegistry:
         """
         # Validate required class attributes exist
         required_attrs = ["name", "description", "category"]
-        missing = [attr for attr in required_attrs if not hasattr(validator_class, attr)]
+        missing = [
+            attr for attr in required_attrs if not hasattr(validator_class, attr)
+        ]
         if missing:
             raise TypeError(
                 f"Validator class {validator_class.__name__} missing required "

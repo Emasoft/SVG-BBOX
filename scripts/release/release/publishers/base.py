@@ -225,7 +225,9 @@ class PublisherRegistry:
         """
         # Validate required class attributes exist
         required_attrs = ["name", "display_name", "registry_name"]
-        missing = [attr for attr in required_attrs if not hasattr(publisher_class, attr)]
+        missing = [
+            attr for attr in required_attrs if not hasattr(publisher_class, attr)
+        ]
         if missing:
             raise TypeError(
                 f"Publisher class {publisher_class.__name__} missing required "

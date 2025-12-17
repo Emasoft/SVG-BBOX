@@ -206,7 +206,11 @@ def delete_tag(
         if remote:
             try:
                 # Use list format for safe remote tag deletion
-                run(["git", "push", remote_name, f":refs/tags/{name}"], cwd=cwd, check=True)
+                run(
+                    ["git", "push", remote_name, f":refs/tags/{name}"],
+                    cwd=cwd,
+                    check=True,
+                )
             except Exception as e:
                 errors.append(f"Remote deletion failed: {e}")
 

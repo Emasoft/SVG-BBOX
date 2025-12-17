@@ -185,7 +185,9 @@ class EcosystemRegistry:
         """
         # Validate required class attributes exist
         required_attrs = ["name", "display_name", "config_files", "lock_files"]
-        missing = [attr for attr in required_attrs if not hasattr(ecosystem_class, attr)]
+        missing = [
+            attr for attr in required_attrs if not hasattr(ecosystem_class, attr)
+        ]
         if missing:
             raise TypeError(
                 f"Ecosystem class {ecosystem_class.__name__} missing required "

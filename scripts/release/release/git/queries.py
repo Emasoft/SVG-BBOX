@@ -53,7 +53,9 @@ def get_current_branch(cwd: Path | None = None) -> str:
         branch = result.stdout.strip()
         if not branch:
             # Fallback for detached HEAD state
-            result = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, check=True)
+            result = run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, check=True
+            )
             branch = result.stdout.strip()
         return branch
     except Exception as e:
@@ -132,7 +134,9 @@ def get_tags(cwd: Path | None = None) -> list[str]:
         GitError: If git command fails
     """
     try:
-        result = run(["git", "tag", "--list", "--sort=version:refname"], cwd=cwd, check=True)
+        result = run(
+            ["git", "tag", "--list", "--sort=version:refname"], cwd=cwd, check=True
+        )
         tags = [line.strip() for line in result.stdout.splitlines() if line.strip()]
         return tags
     except Exception as e:
@@ -304,7 +308,9 @@ def tag_exists(
     try:
         if remote:
             # Check if tag exists on remote without fetching - use list format
-            result = run(["git", "ls-remote", "--tags", remote_name], cwd=cwd, check=True)
+            result = run(
+                ["git", "ls-remote", "--tags", remote_name], cwd=cwd, check=True
+            )
             # Output format: <sha> refs/tags/<tag>
             return f"refs/tags/{tag}" in result.stdout
         else:
