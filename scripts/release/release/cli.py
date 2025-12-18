@@ -19,6 +19,7 @@ from rich.table import Table
 from release import __version__
 from release.config.defaults import write_default_config
 from release.config.loader import load_config
+from release.discovery import run_discovery, show_discovery_status
 from release.exceptions import ReleaseError
 from release.utils.shell import ShellError, run, run_silent
 
@@ -189,6 +190,17 @@ def release(
         # Load configuration
         cfg = load_config(config)
         project_root = Path.cwd()
+
+        # Run discovery to detect new publishers
+        console.print("[bold]Scanning project...[/bold]")
+        discovery = run_discovery(
+            project_root=project_root,
+            config_path=config,
+            auto_update=True,
+            install_deps=False,
+            dry_run=dry_run,
+            verbose=False,
+        )
 
         if dry_run:
             console.print(
@@ -636,6 +648,97 @@ def rollback(
     except ReleaseError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=e.exit_code) from None
+
+
+@app.command()
+def discover(
+    config: Path = typer.Option(  # noqa: B008
+        Path("config/release_conf.yml"),
+        "--config",
+        "-c",
+        help="Path to configuration file",
+    ),
+    auto_update: bool = typer.Option(  # noqa: B008
+        True,
+        "--auto-update/--no-auto-update",
+        help="Automatically add detected publishers to config",
+    ),
+    install_deps: bool = typer.Option(  # noqa: B008
+        False,
+        "--install-deps",
+        help="Attempt to install missing dependencies",
+    ),
+    verbose: bool = typer.Option(  # noqa: B008
+        False,
+        "--verbose",
+        "-v",
+        help="Show all publishers, not just new ones",
+    ),
+) -> None:
+    """Discover and configure available publishers.
+
+    Scans the project to detect which package managers and registries
+    can be used for publishing. Optionally updates the config file
+    with newly detected publishers.
+
+    Examples:
+        release discover
+        release discover --install-deps
+        release discover --no-auto-update
+        release discover --verbose
+    """
+    project_root = Path.cwd()
+
+    console.print("[bold]Scanning project for publishing targets...[/bold]\n")
+
+    discovery = run_discovery(
+        project_root=project_root,
+        config_path=config,
+        auto_update=auto_update,
+        install_deps=install_deps,
+        dry_run=False,
+        verbose=verbose,
+    )
+
+    # Show summary table
+    table = Table(title="Publisher Discovery")
+    table.add_column("Publisher", style="cyan")
+    table.add_column("Status", style="bold")
+    table.add_column("Details")
+    table.add_column("Dependencies")
+
+    for pub in discovery.publishers:
+        if pub.detected:
+            if pub.configured:
+                status = "[green]Configured[/green]"
+            else:
+                status = "[yellow]New[/yellow]"
+        else:
+            status = "[dim]Not detected[/dim]"
+
+        deps_status = ""
+        if pub.missing_dependencies:
+            deps_status = f"[red]Missing: {', '.join(pub.missing_dependencies)}[/red]"
+        elif pub.detected and pub.dependencies:
+            deps_status = "[green]OK[/green]"
+
+        table.add_row(
+            pub.display_name,
+            status,
+            pub.details or "-",
+            deps_status or "-",
+        )
+
+    console.print(table)
+
+    # Summary
+    new_count = len(discovery.new_publishers)
+    if new_count > 0:
+        console.print(f"\n[green]{new_count} new publisher(s) detected[/green]")
+        if auto_update:
+            console.print("[dim]Publishers added to config file[/dim]")
+    else:
+        console.print("\n[dim]No new publishers detected[/dim]")
 
 
 @app.command()
