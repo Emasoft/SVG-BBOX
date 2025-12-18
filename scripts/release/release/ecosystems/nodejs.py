@@ -1,9 +1,14 @@
 """Node.js ecosystem implementation for package management.
 
 Supports npm, pnpm, yarn, and bun package managers with automatic detection.
+Includes workspace/monorepo support and multi-config file detection.
 """
 
 import json
+from pathlib import Path
+from typing import Any
+
+import tomllib
 
 from release.ecosystems.base import Ecosystem, EcosystemRegistry
 from release.exceptions import EcosystemError
@@ -22,7 +27,7 @@ class NodeJSEcosystem(Ecosystem):
 
     name = "nodejs"
     display_name = "Node.js"
-    config_files = ["package.json"]
+    config_files = ["package.json", ".npmrc", ".yarnrc.yml", "bunfig.toml"]
     lock_files = ["pnpm-lock.yaml", "yarn.lock", "bun.lockb", "package-lock.json"]
 
     def detect(self) -> bool:
@@ -223,3 +228,116 @@ class NodeJSEcosystem(Ecosystem):
         except (json.JSONDecodeError, OSError):
             # Return empty list on JSON parse errors or file I/O errors
             return []
+
+    def get_bun_config(self) -> dict[str, Any] | None:
+        """Read Bun-specific configuration from bunfig.toml if present.
+
+        Parses bunfig.toml for registry settings, install options, and other
+        Bun-specific configuration.
+
+        Returns:
+            Parsed bunfig.toml as a dictionary, or None if file doesn't exist
+            or cannot be parsed.
+        """
+        bunfig_path = self.project_root / "bunfig.toml"
+
+        if not bunfig_path.exists():
+            return None
+
+        try:
+            with open(bunfig_path, "rb") as f:
+                config: dict[str, Any] = tomllib.load(f)
+                return config
+        except tomllib.TOMLDecodeError:
+            # Return None on TOML parse errors (invalid bunfig.toml)
+            return None
+        except OSError:
+            # Return None on file I/O errors
+            return None
+
+    def is_monorepo(self) -> bool:
+        """Detect if project is a monorepo/workspace.
+
+        Checks for the "workspaces" field in package.json which indicates
+        a multi-package workspace configuration used by npm, yarn, and pnpm.
+
+        Returns:
+            True if package.json contains a "workspaces" field
+        """
+        package_json = self.project_root / "package.json"
+
+        if not package_json.exists():
+            return False
+
+        try:
+            with open(package_json, encoding="utf-8") as f:
+                data = json.load(f)
+                # Workspaces can be an array or an object with "packages" key
+                workspaces = data.get("workspaces")
+                if workspaces is None:
+                    return False
+                # Array format: ["packages/*", "apps/*"]
+                if isinstance(workspaces, list):
+                    return len(workspaces) > 0
+                # Object format: {"packages": ["packages/*"]}
+                if isinstance(workspaces, dict):
+                    packages = workspaces.get("packages", [])
+                    return len(packages) > 0
+                return False
+        except (json.JSONDecodeError, OSError):
+            # Return False on JSON parse errors or file I/O errors
+            return False
+
+    def get_workspace_packages(self) -> list[Path]:
+        """Get list of workspace package paths in a monorepo.
+
+        Resolves workspace glob patterns from package.json to actual package
+        directories. Each returned path is a directory containing a package.json.
+
+        Returns:
+            List of absolute paths to workspace packages. Returns empty list if
+            not a monorepo or no packages found.
+        """
+        package_json = self.project_root / "package.json"
+
+        if not package_json.exists():
+            return []
+
+        try:
+            with open(package_json, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return []
+
+        # Extract workspace patterns
+        workspaces = data.get("workspaces")
+        if workspaces is None:
+            return []
+
+        # Normalize to list of patterns
+        patterns: list[str] = []
+        if isinstance(workspaces, list):
+            patterns = workspaces
+        elif isinstance(workspaces, dict):
+            patterns = workspaces.get("packages", [])
+
+        if not patterns:
+            return []
+
+        # Resolve patterns to actual package paths
+        package_paths: list[Path] = []
+        for pattern in patterns:
+            # Handle glob patterns (e.g., "packages/*", "apps/**")
+            if "*" in pattern:
+                # Use glob to find matching directories
+                for match in self.project_root.glob(pattern):
+                    if match.is_dir() and (match / "package.json").exists():
+                        package_paths.append(match.resolve())
+            else:
+                # Direct path reference
+                direct_path = self.project_root / pattern
+                if direct_path.is_dir() and (direct_path / "package.json").exists():
+                    package_paths.append(direct_path.resolve())
+
+        # Sort for consistent ordering
+        return sorted(package_paths)

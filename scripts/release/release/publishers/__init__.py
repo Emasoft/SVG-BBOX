@@ -2,8 +2,12 @@
 
 # Import publishers to trigger registration
 from release.publishers import (
+    crates,  # noqa: F401
+    docker,  # noqa: F401
     github,  # noqa: F401
+    homebrew,  # noqa: F401
     npm,  # noqa: F401
+    pypi,  # noqa: F401
 )
 from release.publishers.base import (
     PublishContext,
