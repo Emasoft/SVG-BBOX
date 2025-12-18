@@ -245,16 +245,30 @@ def release(
             )
             raise typer.Exit(code=1)
 
-        # TODO: Implement release workflow
-        # 1. Bump version in files
-        # 2. Generate changelog
-        # 3. Commit and tag
-        # 4. Push to remote
-        # 5. Wait for CI
-        # 6. Create GitHub release
-        # 7. Verify publication
+        # Confirmation prompt
+        if not yes and not dry_run:
+            console.print()
+            confirm = typer.confirm(f"Proceed with release {new_version}?")
+            if not confirm:
+                console.print("[yellow]Release cancelled[/yellow]")
+                raise typer.Exit()
 
-        console.print("\n[yellow]Release workflow implementation pending[/yellow]")
+        # Execute release workflow
+        from release.workflow import execute_release
+
+        success = execute_release(
+            project_root=project_root,
+            config=cfg,
+            version=new_version,
+            previous_version=current_version,
+            dry_run=dry_run,
+            skip_tests=skip_tests,
+            skip_ci=skip_ci,
+            verbose=True,
+        )
+
+        if not success:
+            raise typer.Exit(code=1)
 
     except ReleaseError as e:
         console.print(f"[red]Error:[/red] {e}")

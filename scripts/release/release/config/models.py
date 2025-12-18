@@ -74,6 +74,14 @@ class GitConfig(BaseModel):
         default="origin",
         description="Git remote name",
     )
+    sign_commits: bool = Field(
+        default=False,
+        description="GPG sign commits",
+    )
+    sign_tags: bool = Field(
+        default=False,
+        description="GPG sign tags",
+    )
 
 
 class GitHubConfig(BaseModel):
@@ -84,6 +92,14 @@ class GitHubConfig(BaseModel):
     release_target: Literal["commit_sha", "branch"] = Field(
         default="commit_sha",
         description="Target for GitHub release (commit_sha or branch)",
+    )
+    draft: bool = Field(
+        default=False,
+        description="Create release as draft",
+    )
+    prerelease: bool = Field(
+        default=False,
+        description="Mark release as prerelease",
     )
 
 
