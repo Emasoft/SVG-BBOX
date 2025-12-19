@@ -57,6 +57,7 @@ class ReleaseWorkflow:
     tag_name: str = ""
     commit_sha: str = ""
     release_notes: str = ""
+    push_timestamp: float = 0.0  # Unix timestamp when push completed
 
     def __post_init__(self) -> None:
         """Initialize computed fields."""
@@ -319,6 +320,9 @@ class ReleaseWorkflow:
                 cwd=self.project_root,
             )
 
+            # Record push timestamp for CI monitoring safeguard
+            self.push_timestamp = time.time()
+
             return WorkflowResult(
                 success=True,
                 message=f"Pushed to {remote} with tag {self.tag_name}",
@@ -334,9 +338,11 @@ class ReleaseWorkflow:
     def wait_for_ci(self) -> WorkflowResult:
         """Wait for CI workflows to complete.
 
-        This function filters by commit SHA to ensure we're tracking the correct
-        workflow run (the one triggered by our push), not a previous run that
-        may have failed.
+        Safeguards implemented to prevent false failures:
+        1. Filters by commit SHA - only tracks runs for our specific commit
+        2. Validates workflow freshness via createdAt timestamp
+        3. Minimum wait before failure - ensures workflow has time to start
+        4. Requires workflow to be found before declaring any result
         """
         if self.dry_run:
             return WorkflowResult(
@@ -344,7 +350,11 @@ class ReleaseWorkflow:
                 message="Would wait for CI",
             )
 
+        # Configuration
         timeout = self.config.timeouts.ci_workflow
+        min_wait_before_failure = 60  # Minimum seconds before declaring failure
+        poll_interval = 10
+
         # Get workflow name from config (ci.workflow.name)
         workflow_name = self.config.ci.workflow.name
         required_workflows = [workflow_name] if workflow_name else []
@@ -357,7 +367,7 @@ class ReleaseWorkflow:
 
         console.print(f"[dim]  Waiting for: {', '.join(required_workflows)}[/dim]")
 
-        # Get the commit SHA we're waiting for - this filters to only our run
+        # SAFEGUARD 1: Get the commit SHA we're waiting for
         target_sha: str | None = self.commit_sha if self.commit_sha else None
         if not target_sha:
             try:
@@ -373,6 +383,10 @@ class ReleaseWorkflow:
         if target_sha:
             console.print(f"[dim]  Commit: {target_sha[:7]}[/dim]")
 
+        # SAFEGUARD 2: Get push timestamp for freshness validation
+        push_time = self.push_timestamp if self.push_timestamp > 0 else time.time()
+        console.print(f"[dim]  Push time: {time.strftime('%H:%M:%S', time.localtime(push_time))}[/dim]")
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -382,27 +396,36 @@ class ReleaseWorkflow:
 
             start_time = time.time()
             workflow_found = False
+            found_run_id: int | None = None  # Track the specific run we're monitoring
 
             while time.time() - start_time < timeout:
+                elapsed = int(time.time() - start_time)
+
                 # Check workflow status using gh CLI
-                # Include headSha to filter by our specific commit
+                # Include createdAt for timestamp validation
                 try:
                     result = run(
-                        ["gh", "run", "list", "--limit", "10", "--json", "status,conclusion,name,headSha,databaseId"],
+                        [
+                            "gh", "run", "list", "--limit", "15",
+                            "--json", "status,conclusion,name,headSha,databaseId,createdAt"
+                        ],
                         cwd=self.project_root,
                         check=False,
                     )
 
                     if result.returncode == 0:
                         import json
+                        from datetime import datetime
+
                         runs = json.loads(result.stdout)
 
                         all_passed = True
                         any_failed = False
                         any_in_progress = False
+                        failure_details: list[str] = []
 
                         for wf_name in required_workflows:
-                            # Filter by workflow name AND commit SHA
+                            # SAFEGUARD 3: Filter by workflow name AND commit SHA
                             matching = [
                                 r for r in runs
                                 if wf_name.lower() in r.get("name", "").lower()
@@ -410,32 +433,83 @@ class ReleaseWorkflow:
                             ]
 
                             if matching:
-                                workflow_found = True
                                 latest = matching[0]
+                                run_id = latest.get("databaseId", 0)
+                                created_at_str = latest.get("createdAt", "")
+
+                                # SAFEGUARD 4: Validate workflow was created after our push
+                                # Parse ISO 8601 timestamp (e.g., "2025-12-19T13:04:15Z")
+                                is_fresh = True
+                                if created_at_str and push_time > 0:
+                                    try:
+                                        created_at = datetime.fromisoformat(
+                                            created_at_str.replace("Z", "+00:00")
+                                        )
+                                        created_timestamp = created_at.timestamp()
+                                        # Allow 60 second tolerance for clock drift
+                                        is_fresh = created_timestamp >= (push_time - 60)
+
+                                        if not is_fresh:
+                                            # This is a stale run from before our push
+                                            console.print(
+                                                f"[dim]  Skipping stale run {run_id} "
+                                                f"(created before push)[/dim]"
+                                            )
+                                            all_passed = False
+                                            continue
+                                    except (ValueError, TypeError):
+                                        # Can't parse timestamp, proceed with caution
+                                        pass
+
+                                # Mark workflow as found only if it's fresh
+                                if is_fresh:
+                                    workflow_found = True
+                                    found_run_id = run_id
+
                                 status = latest.get("status", "")
                                 conclusion = latest.get("conclusion", "")
-                                run_id = latest.get("databaseId", "")
 
                                 if status == "completed":
-                                    if conclusion != "success":
+                                    if conclusion == "success":
+                                        pass  # This workflow passed
+                                    else:
                                         any_failed = True
-                                        console.print(f"[red]  Failed: {wf_name} (run {run_id})[/red]")
-                                elif status in ("in_progress", "queued"):
+                                        failure_details.append(
+                                            f"{wf_name} (run {run_id}): {conclusion}"
+                                        )
+                                elif status in ("in_progress", "queued", "waiting"):
                                     any_in_progress = True
                                     all_passed = False
                             else:
                                 # Workflow for our commit hasn't started yet
                                 all_passed = False
 
+                        # SAFEGUARD 5: Don't declare failure too early
+                        # Wait at least min_wait_before_failure seconds AND
+                        # require the workflow to have been found first
                         if any_failed:
-                            return WorkflowResult(
-                                success=False,
-                                message="CI workflow failed",
-                                details="Check GitHub Actions for details",
-                            )
+                            if elapsed < min_wait_before_failure:
+                                # Too early to declare failure - could be stale data
+                                progress.update(
+                                    task,
+                                    description=f"Validating failure... ({elapsed}s)"
+                                )
+                            elif not workflow_found:
+                                # Never found a fresh workflow - don't trust failure
+                                progress.update(
+                                    task,
+                                    description=f"Waiting for fresh workflow... ({elapsed}s)"
+                                )
+                            else:
+                                # Confirmed failure after minimum wait
+                                console.print(f"[red]  Failed: {', '.join(failure_details)}[/red]")
+                                return WorkflowResult(
+                                    success=False,
+                                    message="CI workflow failed",
+                                    details=f"Run ID: {found_run_id}. Check GitHub Actions for details.",
+                                )
 
                         if all_passed and workflow_found:
-                            elapsed = int(time.time() - start_time)
                             return WorkflowResult(
                                 success=True,
                                 message=f"All CI workflows passed ({elapsed}s)",
@@ -446,18 +520,22 @@ class ReleaseWorkflow:
                             status_msg = "Waiting for workflow to start..."
                         elif any_in_progress:
                             status_msg = "Workflow in progress..."
+                        elif any_failed:
+                            status_msg = "Validating status..."
                         else:
                             status_msg = "Checking status..."
 
                         progress.update(
                             task,
-                            description=f"{status_msg} ({int(time.time() - start_time)}s)"
+                            description=f"{status_msg} ({elapsed}s)"
                         )
 
-                except (ShellError, json.JSONDecodeError):
-                    pass
+                except (ShellError, json.JSONDecodeError) as exc:
+                    # Log error but continue polling
+                    if self.verbose:
+                        console.print(f"[dim]  Poll error: {exc}[/dim]")
 
-                time.sleep(10)
+                time.sleep(poll_interval)
 
         return WorkflowResult(
             success=False,
