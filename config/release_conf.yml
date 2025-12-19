@@ -13,36 +13,36 @@
 # Project Information
 # ----------------------------------------------------------------------------
 project:
-  name: "svg-bbox"
-  description: "A set of tools to compute and to use a SVG boundin"
-  ecosystem: "node"
+  name: 'svg-bbox'
+  description: 'A set of tools to compute and to use a SVG boundin'
+  ecosystem: 'node'
 
 # ----------------------------------------------------------------------------
 # Version Management
 # ----------------------------------------------------------------------------
 version:
-  file: "package.json"
-  field: "version"
-  tag_prefix: "v"
+  file: 'package.json'
+  field: 'version'
+  tag_prefix: 'v'
 
 # ----------------------------------------------------------------------------
 # Package Manager & Build Tools
 # ----------------------------------------------------------------------------
 tools:
-  package_manager: "pnpm"
-  node_version: "24"
+  package_manager: 'pnpm'
+  node_version: '24'
 
 # ----------------------------------------------------------------------------
 # Git & Repository Configuration
 # ----------------------------------------------------------------------------
 git:
-  main_branch: "main"
-  remote: "origin"
+  main_branch: 'main'
+  remote: 'origin'
 
 github:
-  owner: "Emasoft"
-  repo: "SVG-BBOX"
-  release_target: "commit_sha"
+  owner: 'Emasoft'
+  repo: 'SVG-BBOX'
+  release_target: 'commit_sha'
 
 # ----------------------------------------------------------------------------
 # Quality Checks
@@ -50,40 +50,40 @@ github:
 quality_checks:
   lint:
     enabled: true
-    command: "pnpm run lint"
-    auto_fix_command: "pnpm run lint:fix"
+    command: 'pnpm run lint'
+    auto_fix_command: 'pnpm run lint:fix'
 
   typecheck:
     enabled: true
-    command: "pnpm run typecheck"
+    command: 'pnpm run typecheck'
 
   tests:
     enabled: true
-    mode: "selective"
-    full_command: "pnpm test"
-    selective_command: "node scripts/test-selective.cjs"
+    mode: 'selective'
+    full_command: 'pnpm test'
+    selective_command: 'node scripts/test-selective.cjs'
 
   e2e:
     enabled: true
-    command: "pnpm run test:e2e"
+    command: 'pnpm run test:e2e'
 
   build:
     enabled: true
-    command: "pnpm run build"
+    command: 'pnpm run build'
     output_files: []
 
 # ----------------------------------------------------------------------------
 # CI/CD Workflow Settings
 # ----------------------------------------------------------------------------
 ci:
-  platforms: "github"
+  platforms: 'github'
   workflow:
-    name: "CI"
+    name: 'CI'
     timeout_seconds: 900
     poll_interval_seconds: 10
 
   publish:
-    name: "Publish to npm"
+    name: 'Publish to npm'
     timeout_seconds: 900
     poll_interval_seconds: 10
 
@@ -91,16 +91,16 @@ ci:
 # npm Publishing
 # ----------------------------------------------------------------------------
 npm:
-  registry: "https://registry.npmjs.org"
-  access: "public"
-  publish_method: "oidc"
+  registry: 'https://registry.npmjs.org'
+  access: 'public'
+  publish_method: 'oidc'
 
 # ----------------------------------------------------------------------------
 # Release Notes
 # ----------------------------------------------------------------------------
 release_notes:
-  generator: "git-cliff"
-  config_file: "cliff.toml"
+  generator: 'git-cliff'
+  config_file: 'cliff.toml'
 
 # ----------------------------------------------------------------------------
 # Timeouts (seconds)
