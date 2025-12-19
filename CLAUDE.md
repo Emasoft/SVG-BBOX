@@ -13,7 +13,7 @@
 
 **Use the automated release script for all releases.**
 
-### Quick Start
+### Quick Start (Bash Script)
 
 ```bash
 # Release with version bump
@@ -24,6 +24,35 @@
 # Release specific version
 ./scripts/release.sh 1.0.11
 ```
+
+### Quick Start (Python Tool - Recommended)
+
+The Python release tool provides the same functionality with better error handling,
+comprehensive validation, and multi-ecosystem support.
+
+```bash
+# Activate the virtual environment
+source scripts/release/.venv/bin/activate
+
+# Release with version bump
+python -m release release patch --dry-run  # Preview changes first
+python -m release release patch --yes      # Execute release
+
+# Other useful commands
+python -m release validate --verbose  # Run all 18 validators
+python -m release status              # Show current version info
+python -m release discover --verbose  # Detect available publishers
+python -m release check security      # Run security checks only
+python -m release init-config         # Regenerate config file
+```
+
+**Python Tool Advantages:**
+- 188 automated tests ensuring reliability
+- 18 validators across 6 categories (git, version, security, quality, CI, dependencies)
+- Auto-discovery of npm, Homebrew, GitHub, PyPI, crates.io publishers
+- Rich terminal output with progress indicators
+- Proper error messages with fix suggestions
+- Multi-ecosystem support (Node.js, Python, Rust, Go)
 
 ### What the Release Script Does (Proper Sequence)
 
