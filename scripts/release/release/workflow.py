@@ -21,11 +21,11 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from release.config.models import ReleaseConfig
-from release.exceptions import GitError, PublishError, ReleaseError
+from release.exceptions import GitError, ReleaseError
 from release.git import operations as git_ops
 from release.git import queries as git_queries  # Used for get_latest_tag
 from release.publishers.base import PublishContext, PublisherRegistry, PublishStatus
-from release.utils.shell import run, ShellError
+from release.utils.shell import ShellError, run
 
 console = Console()
 
@@ -212,7 +212,7 @@ class ReleaseWorkflow:
                 data={"notes": self.release_notes},
             )
 
-        except ShellError as e:
+        except ShellError:
             # Use minimal changelog
             self.release_notes = f"Release {self.version}"
             return WorkflowResult(
@@ -332,7 +332,12 @@ class ReleaseWorkflow:
             )
 
     def wait_for_ci(self) -> WorkflowResult:
-        """Wait for CI workflows to complete."""
+        """Wait for CI workflows to complete.
+
+        This function filters by commit SHA to ensure we're tracking the correct
+        workflow run (the one triggered by our push), not a previous run that
+        may have failed.
+        """
         if self.dry_run:
             return WorkflowResult(
                 success=True,
@@ -352,6 +357,22 @@ class ReleaseWorkflow:
 
         console.print(f"[dim]  Waiting for: {', '.join(required_workflows)}[/dim]")
 
+        # Get the commit SHA we're waiting for - this filters to only our run
+        target_sha: str | None = self.commit_sha if self.commit_sha else None
+        if not target_sha:
+            try:
+                result = run(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=self.project_root,
+                    check=True,
+                )
+                target_sha = result.stdout.strip()
+            except ShellError:
+                target_sha = None
+
+        if target_sha:
+            console.print(f"[dim]  Commit: {target_sha[:7]}[/dim]")
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -360,11 +381,14 @@ class ReleaseWorkflow:
             task = progress.add_task("Waiting for CI...", total=None)
 
             start_time = time.time()
+            workflow_found = False
+
             while time.time() - start_time < timeout:
                 # Check workflow status using gh CLI
+                # Include headSha to filter by our specific commit
                 try:
                     result = run(
-                        ["gh", "run", "list", "--limit", "5", "--json", "status,conclusion,name"],
+                        ["gh", "run", "list", "--limit", "10", "--json", "status,conclusion,name,headSha,databaseId"],
                         cwd=self.project_root,
                         check=False,
                     )
@@ -375,19 +399,33 @@ class ReleaseWorkflow:
 
                         all_passed = True
                         any_failed = False
+                        any_in_progress = False
 
-                        for workflow_name in required_workflows:
-                            matching = [r for r in runs if workflow_name.lower() in r.get("name", "").lower()]
+                        for wf_name in required_workflows:
+                            # Filter by workflow name AND commit SHA
+                            matching = [
+                                r for r in runs
+                                if wf_name.lower() in r.get("name", "").lower()
+                                and (not target_sha or r.get("headSha", "").startswith(target_sha[:7]))
+                            ]
+
                             if matching:
+                                workflow_found = True
                                 latest = matching[0]
                                 status = latest.get("status", "")
                                 conclusion = latest.get("conclusion", "")
+                                run_id = latest.get("databaseId", "")
 
                                 if status == "completed":
                                     if conclusion != "success":
                                         any_failed = True
-                                else:
+                                        console.print(f"[red]  Failed: {wf_name} (run {run_id})[/red]")
+                                elif status in ("in_progress", "queued"):
+                                    any_in_progress = True
                                     all_passed = False
+                            else:
+                                # Workflow for our commit hasn't started yet
+                                all_passed = False
 
                         if any_failed:
                             return WorkflowResult(
@@ -396,16 +434,29 @@ class ReleaseWorkflow:
                                 details="Check GitHub Actions for details",
                             )
 
-                        if all_passed:
+                        if all_passed and workflow_found:
+                            elapsed = int(time.time() - start_time)
                             return WorkflowResult(
                                 success=True,
-                                message="All CI workflows passed",
+                                message=f"All CI workflows passed ({elapsed}s)",
                             )
+
+                        # Update status message
+                        if not workflow_found:
+                            status_msg = "Waiting for workflow to start..."
+                        elif any_in_progress:
+                            status_msg = "Workflow in progress..."
+                        else:
+                            status_msg = "Checking status..."
+
+                        progress.update(
+                            task,
+                            description=f"{status_msg} ({int(time.time() - start_time)}s)"
+                        )
 
                 except (ShellError, json.JSONDecodeError):
                     pass
 
-                progress.update(task, description=f"Waiting for CI... ({int(time.time() - start_time)}s)")
                 time.sleep(10)
 
         return WorkflowResult(
