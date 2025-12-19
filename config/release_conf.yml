@@ -67,6 +67,6 @@ safety:
   auto_rollback_on_failure: true
   confirm_before_push: false
 publishers:
-- npm
-- homebrew
-- github
+  - npm
+  - homebrew
+  - github
