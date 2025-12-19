@@ -320,6 +320,10 @@ class ReleaseConfig(BaseSettings):
     release_notes: ReleaseNotesConfig = Field(default_factory=ReleaseNotesConfig)
     timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
+    publishers: list[str] = Field(
+        default_factory=list,
+        description="List of discovered/configured publishers (npm, homebrew, github, pypi, crates, docker)",
+    )
 
     model_config = {
         "env_prefix": "RELEASE_",
