@@ -8,7 +8,7 @@ Validates GitHub Actions workflow configuration for releases:
 
 import re
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import yaml
 
@@ -137,7 +137,12 @@ def triggers_on_tags(workflow_data: dict[str, Any]) -> bool:
     Returns:
         True if workflow triggers on tag pushes (e.g., v*)
     """
-    on_config = workflow_data.get("on", {})
+    # YAML parses 'on' as boolean True, so check both "on" and True as keys
+    on_config = workflow_data.get("on")
+    if on_config is None:
+        # Cast to access with boolean key - YAML parses "on:" as True
+        raw_data = cast("dict[object, Any]", workflow_data)
+        on_config = raw_data.get(True, {})
 
     # Handle 'on: push' with tags filter
     if isinstance(on_config, dict):
