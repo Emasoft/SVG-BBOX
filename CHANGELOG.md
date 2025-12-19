@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-12-19
+
+### ★ New Features
+
+- **release**: Add Python release tool with comprehensive validation (188 tests)
+  - Multi-ecosystem support: Node.js, Python, Rust, Go
+  - 18 validators across 6 categories (git, version, security, quality, CI, dependencies)
+  - Auto-discovery of publishers (npm, PyPI, crates.io, Homebrew, Docker, GitHub)
+  - Rich CLI with commands: release, validate, check, status, discover, init-config, rollback
+- **release**: Add Go module proxy publisher support
+- **release**: Add auto-discovery of publishers on startup
+- **release**: Add multi-ecosystem and multi-publisher architecture
+
+### ✗ Bug Fixes
+
+- **release-tool**: Update Pydantic models to match actual config structure
+- **release**: Comprehensive detection function improvements
+- **release**: Fix YAML boolean key parsing (on: parsed as True)
+
+### ◆ Documentation
+
+- Add Python release tool documentation to CLAUDE.md
+- Update release workflow documentation with Python tool commands
+
+### Miscellaneous Tasks
+
+- Update minified bundle and release tooling
+- Update dependencies to latest versions
+
 ## [1.0.16] - 2025-12-03
 
 ### ✗ Bug Fixes
