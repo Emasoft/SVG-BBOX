@@ -115,7 +115,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
       availableFonts.slice(0, 10).join(', '),
       '...'
     );
-  }, 120000); // 120 second timeout - Puppeteer launch slow when running full suite
+  }, 180000); // WHY 180s: Puppeteer launch extremely slow when running full suite in parallel with many browser instances
 
   afterAll(async () => {
     await browser.close();

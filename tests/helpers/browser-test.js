@@ -100,12 +100,15 @@ export function loadFixture(fixturePath) {
  * @param {string} svgContent - SVG markup or fixture path
  * @param {object} [options]
  * @param {number} [options.fontTimeoutMs] - Timeout for font loading (defaults to FONT_TIMEOUT_MS from config)
+ * @param {number} [options.pageTimeoutMs] - Timeout for page.setContent navigation (defaults to 30000ms)
  * @returns {Promise<import('puppeteer').Page>}
  */
 export async function createPageWithSvg(svgContent, options = {}) {
   // WHY use FONT_TIMEOUT_MS from config: Centralized timeout management
   // Allows CI environment overrides without changing test code
-  const { fontTimeoutMs = FONT_TIMEOUT_MS } = options;
+  // WHY separate pageTimeoutMs: page.setContent timeout is for Puppeteer navigation,
+  // while fontTimeoutMs is for library's font detection. Font tests need both longer.
+  const { fontTimeoutMs = FONT_TIMEOUT_MS, pageTimeoutMs = 30000 } = options;
 
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -139,7 +142,11 @@ ${svg}
 </body>
 </html>`;
 
-  await page.setContent(html, { waitUntil: 'networkidle0' });
+  // WHY waitUntil networkidle0 + custom timeout: For most tests, waiting for all network
+  // activity to cease ensures fonts are loaded. But for tests with external/missing fonts,
+  // the default 30s timeout is insufficient. The pageTimeoutMs option allows callers to
+  // increase the timeout for font-heavy tests.
+  await page.setContent(html, { waitUntil: 'networkidle0', timeout: pageTimeoutMs });
 
   // Inject SvgVisualBBox library
   const libPath = path.resolve(PROJECT_ROOT, 'SvgVisualBBox.js');

@@ -53,10 +53,23 @@ if (nodeVersion === 18) {
   const TEST_HTML = path.join(TEMP_DIR, 'test_structure.html');
 
   describe('HTML Preview Structure Validation', () => {
+    // WHY generate in beforeAll: All tests in this describe block read from the same
+    // TEST_HTML file. If we generate it in the first test, parallel test execution
+    // causes race conditions where other tests try to read before the file exists.
+    // Moving generation to beforeAll ensures the file exists before any test runs.
     beforeAll(async () => {
       // Create temp directory
       await fs.mkdir(TEMP_DIR, { recursive: true });
-    });
+
+      // Generate HTML from sample SVG - all tests depend on this file
+      await execFilePromise('node', [
+        'sbb-extract.cjs',
+        'samples/test_text_to_path_advanced.svg',
+        '--list',
+        '--out-html',
+        TEST_HTML
+      ]);
+    }, 180000); // WHY 180s: execFilePromise spawns sbb-extract which uses Puppeteer internally
 
     afterAll(async () => {
       // Clean up temp directory
@@ -64,16 +77,7 @@ if (nodeVersion === 18) {
     });
 
     test('export-svg-objects generates HTML with parent transform wrappers', async () => {
-      // Generate HTML from sample SVG
-      const { stdout: _stdout } = await execFilePromise('node', [
-        'sbb-extract.cjs',
-        'samples/test_text_to_path_advanced.svg',
-        '--list',
-        '--out-html',
-        TEST_HTML
-      ]);
-
-      // Read generated HTML
+      // Read generated HTML (created in beforeAll)
       const html = await fs.readFile(TEST_HTML, 'utf8');
       const dom = new JSDOM(html);
       const doc = dom.window.document;
@@ -93,7 +97,7 @@ if (nodeVersion === 18) {
         expect(use.tagName).toBe('use');
         expect(use.hasAttribute('href')).toBe(true);
       });
-    }, 120000); // 2 minute timeout - this test runs a browser via puppeteer
+    }); // Test itself is fast now since file is pre-generated
 
     test('Hidden container SVG has NO viewBox attribute', async () => {
       const html = await fs.readFile(TEST_HTML, 'utf8');

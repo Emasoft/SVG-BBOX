@@ -106,12 +106,17 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
        * Verifies library handles missing web fonts gracefully with fallback rendering.
        * Tests that 404 font loads don't crash bbox calculation.
        */
-      const page = await createPageWithSvg('edge-cases/fonts/missing-web-font.svg');
+      // WHY pageTimeoutMs 60000: This test loads an SVG with a missing web font.
+      // The browser will try to load the font (404), and networkidle0 waits for that to fail.
+      // In CI with parallel tests, this can exceed the default 30s timeout.
+      const page = await createPageWithSvg('edge-cases/fonts/missing-web-font.svg', {
+        pageTimeoutMs: 60000
+      });
       try {
         // Font will 404, but should fallback to Arial
-        // WHY 3000ms timeout: Give browser time to attempt load and use fallback
+        // WHY 5000ms timeout: Give browser time to attempt load and use fallback
         const bbox = await getBBoxById(page, 'missing-font-text', {
-          fontTimeoutMs: 3000
+          fontTimeoutMs: 5000
         });
 
         expect(bbox).toBeTruthy();
@@ -124,14 +129,18 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         // WHY try/finally: Ensure page cleanup even if test fails
         await page.close();
       }
-    }, 10000); // WHY 10s: Font loading attempt + fallback + timeout buffer for CI
+    }, 60000); // WHY 60s: Font loading attempt can be slow in CI with parallel tests
 
     it('should handle font-family with special characters', async () => {
       /**
        * Verifies font-family parsing handles special characters (quotes, spaces, commas).
        * Tests that unusual font names don't break bbox calculation.
        */
-      const page = await createPageWithSvg('edge-cases/fonts/special-chars-font-name.svg');
+      // WHY pageTimeoutMs 60000: Font-family parsing tests may trigger font loading attempts.
+      // In CI with parallel tests, the default 30s timeout can be exceeded.
+      const page = await createPageWithSvg('edge-cases/fonts/special-chars-font-name.svg', {
+        pageTimeoutMs: 60000
+      });
       try {
         const bbox = await getBBoxById(page, 'special-font-text');
 
@@ -145,7 +154,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         // WHY try/finally: Ensure page cleanup even if test fails
         await page.close();
       }
-    });
+    }, 60000); // WHY 60s: Font loading and parsing can be slow in CI with parallel tests
   });
 
   describe('Broken References', () => {

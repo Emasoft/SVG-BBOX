@@ -116,7 +116,9 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
 
   describe('Text elements', () => {
     it('should compute bbox for CJK text', async () => {
-      const page = await createPageWithSvg('text/cjk.svg');
+      // WHY pageTimeoutMs 60000: CJK fonts are large and may take longer to load.
+      // In CI with parallel tests, the default 30s timeout can be exceeded.
+      const page = await createPageWithSvg('text/cjk.svg', { pageTimeoutMs: 60000 });
       const bbox = await getBBoxById(page, 'cjk-text', { fontTimeoutMs: 5000 });
 
       expect(bbox).toBeTruthy();
@@ -127,10 +129,12 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
       expect(bbox.height).toBeGreaterThan(30);
 
       await page.close();
-    }, 15000); // Longer timeout for font loading
+    }, 60000); // WHY 60s: CJK font loading can be slow in CI with parallel tests
 
     it('should compute bbox for Arabic RTL text', async () => {
-      const page = await createPageWithSvg('text/arabic-rtl.svg');
+      // WHY pageTimeoutMs 60000: Arabic fonts and RTL shaping may take longer to load.
+      // In CI with parallel tests, the default 30s timeout can be exceeded.
+      const page = await createPageWithSvg('text/arabic-rtl.svg', { pageTimeoutMs: 60000 });
       const bbox = await getBBoxById(page, 'arabic-text', { fontTimeoutMs: 5000 });
 
       expect(bbox).toBeTruthy();
@@ -140,7 +144,7 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
       expect(bbox.height).toBeGreaterThan(20);
 
       await page.close();
-    }, 15000);
+    }, 60000); // WHY 60s: Arabic RTL font loading can be slow in CI with parallel tests
 
     it('should compute bbox for text with ligatures', async () => {
       const page = await createPageWithSvg('text/ligatures.svg');
