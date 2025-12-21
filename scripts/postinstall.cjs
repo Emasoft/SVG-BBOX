@@ -47,6 +47,11 @@ function line(char = box.h) {
   return char.repeat(width - 2);
 }
 
+/**
+ * Format a row with box borders and content
+ * @param {string} content - The content to display in the row
+ * @returns {string} Formatted row with box borders
+ */
 function row(content) {
   // eslint-disable-next-line no-control-regex
   const stripped = content.replace(/\x1b\[[0-9;]*m/g, '');

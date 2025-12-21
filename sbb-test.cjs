@@ -55,6 +55,34 @@ const {
 // Centralized timeout configuration
 const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
+// ========================= JSDoc Type Definitions =========================
+
+/**
+ * @typedef {Object} BBoxResultSummary
+ * @property {string|null} [rootSvgId] - ID of the root SVG element
+ * @property {string} [note] - Optional note about the test execution
+ */
+
+/**
+ * @typedef {Object} RandomElementInfo
+ * @property {string} tagName - Tag name of the random element
+ * @property {string|null} id - ID of the element or null
+ * @property {number} index - Index in the candidates array
+ */
+
+/**
+ * @typedef {Object} BBoxTestResults
+ * @property {BBoxResultSummary} summary - Summary information
+ * @property {Object|null} rootVisibleAndFull - Root element visible and full bboxes
+ * @property {RandomElementInfo|null} randomElementInfo - Info about randomly selected element
+ * @property {Object|null} randomVisibleAndFull - Random element visible and full bboxes
+ * @property {Object|null} randomAggressive - Random element aggressive bbox
+ * @property {Object|null} unionRootAndRandom - Union of root and random element
+ * @property {Object|null} unionAll - Union of all drawable elements
+ * @property {Object|null} viewBoxExpansion - ViewBox expansion result
+ * @property {string[]} errors - Array of error messages
+ */
+
 /**
  * Launch Puppeteer with the best available browser:
  *  1. Try bundled Chromium (default Puppeteer behavior).
@@ -207,14 +235,15 @@ async function runTest() {
   // Display version header after flag checks
   printInfo(`sbb-test v${getVersion()} | svg-bbox toolkit\n`);
 
-  if (args.length < 1) {
+  const inputPath = args[0];
+  if (!inputPath) {
     throw new ValidationError(
       'Usage: node sbb-test.cjs path/to/file.svg\nUse --help for more information.'
     );
   }
 
   // SECURITY: Validate and sanitize input path
-  const safePath = validateFilePath(args[0], {
+  const safePath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
     mustExist: true
   });
@@ -229,13 +258,17 @@ async function runTest() {
   const outJsonPath = path.resolve(process.cwd(), `${baseName}-bbox-results.json`);
   const errLogPath = path.resolve(process.cwd(), `${baseName}-bbox-errors.log`);
 
+  /** @type {string[]} */
   const errorLogMessages = [];
 
+  /** @type {import('puppeteer').Browser|null} */
   let browser = null;
   try {
     browser = await launchBrowserWithFallback(errorLogMessages);
   } catch (err) {
-    errorLogMessages.push('[fatal] ' + err.stack);
+    // Type guard for unknown error
+    const errorStack = err instanceof Error ? err.stack : String(err);
+    errorLogMessages.push('[fatal] ' + errorStack);
     // SECURITY: Use writeFileSafe for error log
     const safeErrPath = validateOutputPath(errLogPath);
     writeFileSafe(safeErrPath, errorLogMessages.join('\n'), 'utf8');
@@ -273,6 +306,19 @@ async function runTest() {
     // 3. Now run tests in the browser context
     const results = await page.evaluate(async (svgString) => {
       /* eslint-disable no-undef */
+      /**
+       * @type {{
+       *   summary: { rootSvgId?: string|null, note?: string },
+       *   rootVisibleAndFull: Object|null,
+       *   randomElementInfo: { tagName: string, id: string|null, index: number }|null,
+       *   randomVisibleAndFull: Object|null,
+       *   randomAggressive: Object|null,
+       *   unionRootAndRandom: Object|null,
+       *   unionAll: Object|null,
+       *   viewBoxExpansion: Object|null,
+       *   errors: string[]
+       * }}
+       */
       const res = {
         summary: {},
         rootVisibleAndFull: null,
@@ -297,7 +343,8 @@ async function runTest() {
         try {
           parser = new DOMParser();
         } catch (e) {
-          throw new Error('DOMParser not available: ' + e.message);
+          const errMsg = e instanceof Error ? e.message : String(e);
+          throw new Error('DOMParser not available: ' + errMsg);
         }
 
         const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
@@ -329,7 +376,8 @@ async function runTest() {
             }
           );
         } catch (e) {
-          res.errors.push('[rootVisibleAndFull] ' + e.message);
+          const errMsg = e instanceof Error ? e.message : String(e);
+          res.errors.push('[rootVisibleAndFull] ' + errMsg);
         }
 
         // --- 2) pick a random element (excluding defs/metadata/etc.) -----
@@ -346,59 +394,69 @@ async function runTest() {
           return true;
         });
 
+        /** @type {Element|null} */
         let randomElement = null;
         if (allCandidates.length > 0) {
           const index = Math.floor(Math.random() * allCandidates.length);
-          randomElement = allCandidates[index];
+          const selectedElement = allCandidates[index];
+          // Type guard - ensure element exists before proceeding
+          if (!selectedElement) {
+            res.summary.note = 'Failed to select random element from candidates.';
+          } else {
+            randomElement = selectedElement;
 
-          res.randomElementInfo = {
-            tagName: randomElement.tagName,
-            id: randomElement.id || null,
-            index
-          };
+            res.randomElementInfo = {
+              tagName: randomElement.tagName,
+              id: randomElement.id || null,
+              index
+            };
 
-          // random element visible+full
-          try {
-            res.randomVisibleAndFull = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(
-              randomElement,
-              {
-                coarseFactor: 3,
-                fineFactor: 24,
-                useLayoutScale: true
-              }
-            );
-          } catch (e) {
-            res.errors.push('[randomVisibleAndFull] ' + e.message);
-          }
+            // random element visible+full
+            try {
+              res.randomVisibleAndFull = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(
+                randomElement,
+                {
+                  coarseFactor: 3,
+                  fineFactor: 24,
+                  useLayoutScale: true
+                }
+              );
+            } catch (e) {
+              const errMsg = e instanceof Error ? e.message : String(e);
+              res.errors.push('[randomVisibleAndFull] ' + errMsg);
+            }
 
-          // random element aggressive direct bbox
-          try {
-            res.randomAggressive = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-              randomElement,
-              {
-                mode: 'clipped', // test default mode
-                coarseFactor: 3,
-                fineFactor: 24,
-                useLayoutScale: true
-              }
-            );
-          } catch (e) {
-            res.errors.push('[randomAggressive] ' + e.message);
-          }
+            // random element aggressive direct bbox
+            try {
+              res.randomAggressive = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+                randomElement,
+                {
+                  mode: 'clipped', // test default mode
+                  coarseFactor: 3,
+                  fineFactor: 24,
+                  useLayoutScale: true
+                }
+              );
+            } catch (e) {
+              const errMsg = e instanceof Error ? e.message : String(e);
+              res.errors.push('[randomAggressive] ' + errMsg);
+            }
 
-          // --- 3) union of root + random element -------------------------
-          try {
-            res.unionRootAndRandom = await SvgVisualBBox.getSvgElementsUnionVisualBBox(
-              [importedSvg, randomElement],
-              {
-                mode: 'clipped',
-                coarseFactor: 3,
-                fineFactor: 24,
-                useLayoutScale: true
-              }
-            );
-          } catch (e) {
-            res.errors.push('[unionRootAndRandom] ' + e.message);
+            // --- 3) union of root + random element -------------------------
+            try {
+              res.unionRootAndRandom = await SvgVisualBBox.getSvgElementsUnionVisualBBox(
+                [importedSvg, randomElement],
+                {
+                  mode: 'clipped',
+                  coarseFactor: 3,
+                  fineFactor: 24,
+                  useLayoutScale: true
+                }
+              );
+            } catch (e) {
+              const errMsg = e instanceof Error ? e.message : String(e);
+              res.errors.push('[unionRootAndRandom] ' + errMsg);
+            }
           }
         } else {
           res.summary.note = 'No suitable random elements found (only defs/metadata).';
@@ -416,7 +474,8 @@ async function runTest() {
               useLayoutScale: true
             });
           } catch (e) {
-            res.errors.push('[unionAll] ' + e.message);
+            const errMsg = e instanceof Error ? e.message : String(e);
+            res.errors.push('[unionAll] ' + errMsg);
           }
         }
 
@@ -432,10 +491,12 @@ async function runTest() {
             }
           );
         } catch (e) {
-          res.errors.push('[viewBoxExpansion] ' + e.message);
+          const errMsg = e instanceof Error ? e.message : String(e);
+          res.errors.push('[viewBoxExpansion] ' + errMsg);
         }
       } catch (e) {
-        res.errors.push('[top-level evaluate] ' + (e.stack || e.message));
+        const errInfo = e instanceof Error ? e.stack || e.message : String(e);
+        res.errors.push('[top-level evaluate] ' + errInfo);
       }
 
       return res;
@@ -463,7 +524,9 @@ async function runTest() {
     printSuccess(`Results written to: ${safeJsonPath}`);
     printInfo(`Errors written to: ${safeErrPath}`);
   } catch (err) {
-    errorLogMessages.push('[fatal in runTest] ' + err.stack);
+    // Type guard for unknown error
+    const errorStack = err instanceof Error ? err.stack : String(err);
+    errorLogMessages.push('[fatal in runTest] ' + errorStack);
     // SECURITY: Write error log with path validation
     const safeErrPath = validateOutputPath(errLogPath);
     writeFileSafe(safeErrPath, errorLogMessages.join('\n'), 'utf8');
@@ -474,9 +537,10 @@ async function runTest() {
       try {
         await browser.close();
       } catch {
-        // Force kill if close fails
-        if (browser.process()) {
-          browser.process().kill('SIGKILL');
+        // Force kill if close fails - browser.process() may return null
+        const browserProcess = browser.process();
+        if (browserProcess) {
+          browserProcess.kill('SIGKILL');
         }
       }
     }

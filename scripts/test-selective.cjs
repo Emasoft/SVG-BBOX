@@ -74,7 +74,7 @@ const SYMBOLS = ENABLE_EMOJI
 /**
  * Debug logging helper - only logs when --debug flag is enabled
  * @param {string} message - The debug message to log
- * @param {any} data - Optional data to log (will be JSON-stringified)
+ * @param {any} [data] - Optional data to log (will be JSON-stringified)
  */
 function debug(message, data) {
   if (ENABLE_DEBUG) {
@@ -92,14 +92,16 @@ function debug(message, data) {
 
 /**
  * Read the last test run timestamp from .last-test-run file
- * @returns {Date|null} Last test run timestamp or null if file doesn't exist
+ * @returns {Date | null} Last test run timestamp or null if file doesn't exist
  */
 function getLastTestRunTimestamp() {
   try {
     const isoString = fs.readFileSync(TIMESTAMP_FILE, 'utf8').trim();
     return new Date(isoString);
   } catch (err) {
-    if (err.code === 'ENOENT') {
+    // Type guard for Node.js filesystem errors with error codes
+    const nodeErr = /** @type {{ code?: string }} */ (err);
+    if (nodeErr.code === 'ENOENT') {
       debug('No .last-test-run file found, will use all changed files');
       return null;
     }
@@ -118,8 +120,8 @@ function updateLastTestRunTimestamp() {
 
 /**
  * Get changed files using Python script with filesystem timestamps
- * @param {boolean} stagedOnly - If true, only get staged files
- * @returns {Promise<string[]>} Array of changed file paths
+ * @param {boolean} [stagedOnly=true] - If true, only get staged files
+ * @returns {Promise<string[] | null>} Array of changed file paths, or null to trigger git fallback
  */
 async function getChangedFilesViaPython(stagedOnly = true) {
   const lastRun = getLastTestRunTimestamp();
@@ -163,7 +165,8 @@ for f in files:
     debug(`Python script found ${files.length} changed files`);
     return files;
   } catch (err) {
-    console.warn(`${SYMBOLS.WARNING} Python script failed, falling back to git: ${err.message}`);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`${SYMBOLS.WARNING} Python script failed, falling back to git: ${errMsg}`);
     return null; // Fall back to git-based detection
   }
 }
@@ -171,6 +174,12 @@ for f in files:
 // ============================================================================
 // Dependency Mapping
 // ============================================================================
+
+/**
+ * @typedef {Object.<string, string[] | 'SPECIAL_PACKAGE_JSON'>} TestDependencyMap
+ * A mapping from source file paths to their required test file patterns.
+ * Special value 'SPECIAL_PACKAGE_JSON' triggers smart version-only detection.
+ */
 
 /**
  * Dependency Mapping: File → Test Files
@@ -202,6 +211,7 @@ const LIBRARY_DEPENDENT_TESTS = [
   // NOTE: sbb-compare.test.js is NOT included - sbb-compare doesn't use SvgVisualBBox.js
 ];
 
+/** @type {TestDependencyMap} */
 const TEST_DEPENDENCIES = {
   // TESTING RULE 1: Core library affects ONLY tests for tools that import it
   'SvgVisualBBox.js': LIBRARY_DEPENDENT_TESTS,
@@ -326,7 +336,8 @@ async function isPackageJsonVersionOnlyChange(baseRef) {
 
     return isVersionOnly;
   } catch (err) {
-    debug(`Failed to analyze package.json diff: ${err.message}`);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    debug(`Failed to analyze package.json diff: ${errMsg}`);
     return false; // Assume tests needed if analysis fails
   }
 }
@@ -367,7 +378,8 @@ function findFilesImporting(changedFile) {
       }
     } catch (err) {
       // Skip files that can't be read
-      debug(`  → Skipping ${sourceFile}: ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      debug(`  → Skipping ${sourceFile}: ${errMsg}`);
     }
   }
 
@@ -581,12 +593,14 @@ async function determineRequiredTests(changedFiles, baseRef) {
 
       // Add the tests for this file
       if (Array.isArray(tests)) {
-        tests.forEach((pattern) => {
-          if (pattern) {
-            debug(`     Adding test pattern: ${pattern}`);
-            testsToRun.add(pattern);
+        tests.forEach(
+          /** @param {string} pattern */ (pattern) => {
+            if (pattern) {
+              debug(`     Adding test pattern: ${pattern}`);
+              testsToRun.add(pattern);
+            }
           }
-        });
+        );
       }
     } else {
       // STEP 3: File NOT in TEST_DEPENDENCIES - use runtime dependency detection
@@ -626,14 +640,21 @@ async function determineRequiredTests(changedFiles, baseRef) {
         for (const importer of importers) {
           if (importer in TEST_DEPENDENCIES) {
             const importerTests = TEST_DEPENDENCIES[importer];
+            // Skip special markers and non-array values
+            if (!Array.isArray(importerTests)) {
+              debug(`     ${importer} has special handling, skipping`);
+              continue;
+            }
             debug(`     ${importer} has ${importerTests.length} test(s)`);
 
-            importerTests.forEach((pattern) => {
-              if (pattern) {
-                debug(`       Adding test: ${pattern}`);
-                testsToRun.add(pattern);
+            importerTests.forEach(
+              /** @param {string} pattern */ (pattern) => {
+                if (pattern) {
+                  debug(`       Adding test: ${pattern}`);
+                  testsToRun.add(pattern);
+                }
               }
-            });
+            );
           }
         }
       }
@@ -696,9 +717,14 @@ async function runTests(patterns) {
     if (stderr) process.stderr.write(stderr);
   } catch (error) {
     // Vitest failed (tests failed or error occurred)
-    debug('Vitest execution failed', { code: error.code, signal: error.signal });
-    if (error.stdout) process.stdout.write(error.stdout);
-    if (error.stderr) process.stderr.write(error.stderr);
+    // Type guard for exec error with code, signal, stdout, stderr properties
+    const execErr =
+      /** @type {{ code?: number | string, signal?: string, stdout?: string, stderr?: string }} */ (
+        error
+      );
+    debug('Vitest execution failed', { code: execErr.code, signal: execErr.signal });
+    if (execErr.stdout) process.stdout.write(execErr.stdout);
+    if (execErr.stderr) process.stderr.write(execErr.stderr);
     throw error;
   }
 }

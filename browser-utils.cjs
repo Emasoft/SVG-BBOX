@@ -100,27 +100,32 @@ async function openInChrome(filePath) {
   const platform = process.platform;
   let command, args;
 
+  // At this point detection.found is true, so path and name are guaranteed non-null
+  const browserPath = /** @type {string} */ (detection.path);
+  const browserName = /** @type {string} */ (detection.name);
+
   try {
     if (platform === 'darwin') {
       command = 'open';
-      args = ['-a', detection.name, filePath];
+      args = ['-a', browserName, filePath];
     } else if (platform === 'win32') {
       // Windows: Use 'start ""' to handle paths with spaces
       // The empty quotes are the window title (required before the path)
       command = 'cmd';
-      args = ['/c', 'start', '""', detection.path, filePath];
+      args = ['/c', 'start', '""', browserPath, filePath];
     } else {
       // Linux
-      command = detection.path;
+      command = browserPath;
       args = [filePath];
     }
 
     await execFilePromise(command, args);
     return { success: true, error: null };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       success: false,
-      error: `Failed to open ${detection.name}: ${error.message}`
+      error: `Failed to open ${browserName}: ${errorMessage}`
     };
   }
 }

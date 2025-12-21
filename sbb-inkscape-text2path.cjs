@@ -35,6 +35,62 @@ const {
 } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TYPE DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * @typedef {Object} CLIArgs
+ * @property {string | null} input - Input SVG file path
+ * @property {string | null} output - Output SVG file path
+ * @property {string | null} batch - Batch file path
+ * @property {boolean} overwrite - Whether to overwrite existing output files
+ * @property {boolean} skipComparison - Whether to skip comparison after conversion
+ * @property {boolean} json - Whether to output results as JSON
+ */
+
+/**
+ * @typedef {Object} ProcessOptions
+ * @property {boolean} overwrite - Whether to overwrite existing output files
+ * @property {boolean} skipComparison - Whether to skip comparison after conversion
+ */
+
+/**
+ * @typedef {Object} ComparisonData
+ * @property {number} diffPercentage - Percentage of different pixels
+ * @property {number} differentPixels - Number of different pixels
+ * @property {number} totalPixels - Total number of pixels compared
+ */
+
+/**
+ * @typedef {Object} ConversionResult
+ * @property {string} input - Input file path
+ * @property {string} output - Output file path
+ * @property {number} inputSize - Input file size in bytes
+ * @property {number} outputSize - Output file size in bytes
+ * @property {string} sizeIncrease - Size increase percentage as string
+ * @property {ComparisonData | null} comparison - Comparison result or null
+ */
+
+/**
+ * @typedef {Object} BatchErrorResult
+ * @property {string} input - Input file path
+ * @property {string} output - Output file path
+ * @property {string} error - Error message
+ */
+
+/**
+ * @typedef {Object} FilePair
+ * @property {string} input - Input file path
+ * @property {string} output - Output file path
+ */
+
+/**
+ * @typedef {Object} InkscapeOutput
+ * @property {string} stdout - Standard output from Inkscape
+ * @property {string} stderr - Standard error from Inkscape
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -125,6 +181,11 @@ EXIT CODES:
 `);
 }
 
+/**
+ * Print version information for the tool.
+ * @param {string} toolName - Name of the tool to display
+ * @returns {void}
+ */
 function printVersion(toolName) {
   const version = getVersion();
   console.log(`${toolName} v${version} | svg-bbox toolkit`);
@@ -225,7 +286,13 @@ async function findInkscape() {
 // ARGUMENT PARSING
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Parse command-line arguments.
+ * @param {string[]} argv - Command-line arguments array
+ * @returns {CLIArgs} Parsed arguments object
+ */
 function parseArgs(argv) {
+  /** @type {CLIArgs} */
   const args = {
     input: null,
     output: null,
@@ -237,6 +304,8 @@ function parseArgs(argv) {
 
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
+    // WHY: Guard against undefined array access (TypeScript strict mode)
+    if (!arg) continue;
 
     if (arg === '--help' || arg === '-h') {
       printHelp();
@@ -245,7 +314,8 @@ function parseArgs(argv) {
       printVersion('sbb-inkscape-text2path');
       process.exit(0);
     } else if (arg === '--batch' && i + 1 < argv.length) {
-      args.batch = argv[++i];
+      // WHY: Use ?? null to convert undefined to null for type safety
+      args.batch = argv[++i] ?? null;
     } else if (arg === '--overwrite') {
       args.overwrite = true;
     } else if (arg === '--skip-comparison') {
@@ -292,6 +362,10 @@ function parseArgs(argv) {
 /**
  * Run sbb-compare to check similarity between original and converted SVG.
  * Returns comparison result or null if comparer fails.
+ * @param {string} originalPath - Path to the original SVG file
+ * @param {string} convertedPath - Path to the converted SVG file
+ * @param {boolean} jsonMode - Whether to suppress non-JSON output
+ * @returns {Promise<ComparisonData | null>} Comparison result or null if failed
  */
 async function runComparison(originalPath, convertedPath, jsonMode) {
   const comparerPath = path.join(__dirname, 'sbb-compare.cjs');
@@ -317,7 +391,8 @@ async function runComparison(originalPath, convertedPath, jsonMode) {
     return result;
   } catch (err) {
     if (!jsonMode) {
-      printWarning(`Comparison failed: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      printWarning(`Comparison failed: ${message}`);
     }
     return null;
   }
@@ -327,6 +402,13 @@ async function runComparison(originalPath, convertedPath, jsonMode) {
 // CONVERSION
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Convert text elements to paths using Inkscape.
+ * @param {string} inkscapePath - Path to Inkscape executable
+ * @param {string} inputPath - Path to input SVG file
+ * @param {string} outputPath - Path for output SVG file
+ * @returns {Promise<InkscapeOutput>} Inkscape stdout and stderr
+ */
 async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
@@ -389,7 +471,10 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
       return { stdout, stderr };
     }
   } catch (err) {
-    throw new SVGBBoxError(`Inkscape conversion failed: ${err.message}`, err);
+    const message = err instanceof Error ? err.message : String(err);
+    // WHY: SVGBBoxError expects string | undefined, not Error | undefined
+    const cause = err instanceof Error ? err.message : undefined;
+    throw new SVGBBoxError(`Inkscape conversion failed: ${message}`, cause);
   }
 }
 
@@ -406,6 +491,8 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
  * 2. Input/output pair (tab or space separated): input.svg output.svg
  *
  * Lines starting with # are comments and are ignored.
+ * @param {string} batchFilePath - Path to the batch file
+ * @returns {FilePair[]} Array of input/output file pairs
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file
@@ -442,7 +529,7 @@ function readBatchFile(batchFilePath) {
       // Look for pattern: something.svg something.svg (two SVG files)
       // Match: (anything ending in .svg) + (whitespace) + (anything ending in .svg)
       const svgMatch = line.match(/^(.+\.svg)\s+(.+\.svg)$/i);
-      if (svgMatch) {
+      if (svgMatch && svgMatch[1] && svgMatch[2]) {
         parts = [svgMatch[1].trim(), svgMatch[2].trim()];
       }
     }
@@ -456,15 +543,17 @@ function readBatchFile(batchFilePath) {
       }
     });
 
-    if (parts.length === 0) {
+    if (parts.length === 0 || !parts[0]) {
       throw new ValidationError(`Empty line at line ${index + 1} in batch file`);
     }
 
+    // WHY: After checking parts[0] exists, we can safely use it
     const inputFile = parts[0];
 
     // If output is specified, use it; otherwise auto-generate
+    /** @type {string} */
     let outputFile;
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[1]) {
       // Explicit output path provided
       outputFile = parts[1];
     } else {
@@ -499,6 +588,12 @@ function readBatchFile(batchFilePath) {
 /**
  * Process a single file conversion.
  * Returns conversion result with optional comparison.
+ * @param {string} inkscapePath - Path to Inkscape executable
+ * @param {string} inputPath - Path to input SVG file
+ * @param {string} outputPath - Path for output SVG file
+ * @param {ProcessOptions} options - Processing options
+ * @param {CLIArgs} args - CLI arguments
+ * @returns {Promise<ConversionResult>} Conversion result with optional comparison
  */
 async function processSingleFile(inkscapePath, inputPath, outputPath, options, args) {
   // SECURITY: Validate input SVG file
@@ -530,6 +625,7 @@ async function processSingleFile(inkscapePath, inputPath, outputPath, options, a
   const inputStats = fs.statSync(safeInputPath);
   const outputStats = fs.statSync(safeOutputPath);
 
+  /** @type {ConversionResult} */
   const result = {
     input: safeInputPath,
     output: safeOutputPath,
@@ -544,9 +640,9 @@ async function processSingleFile(inkscapePath, inputPath, outputPath, options, a
     const comparisonResult = await runComparison(safeInputPath, safeOutputPath, args.json);
     if (comparisonResult) {
       result.comparison = {
-        diffPercentage: parseFloat(comparisonResult.diffPercentage),
-        differentPixels: comparisonResult.differentPixels,
-        totalPixels: comparisonResult.totalPixels
+        diffPercentage: Number(comparisonResult.diffPercentage),
+        differentPixels: Number(comparisonResult.differentPixels),
+        totalPixels: Number(comparisonResult.totalPixels)
       };
     }
   }
@@ -605,6 +701,7 @@ async function main() {
   if (args.batch) {
     // readBatchFile now returns array of { input, output } pairs
     const filePairs = readBatchFile(args.batch);
+    /** @type {Array<ConversionResult | BatchErrorResult>} */
     const results = [];
 
     if (!args.json) {
@@ -612,7 +709,11 @@ async function main() {
     }
 
     for (let i = 0; i < filePairs.length; i++) {
-      const { input: inputFile, output: outputFile } = filePairs[i];
+      const filePair = filePairs[i];
+      // WHY: Guard against undefined array access (TypeScript strict mode)
+      if (!filePair) continue;
+      const inputFile = filePair.input;
+      const outputFile = filePair.output;
 
       try {
         // WHY: Validate input file exists before attempting conversion
@@ -653,16 +754,18 @@ async function main() {
           }
         }
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        /** @type {BatchErrorResult} */
         const errorResult = {
           input: inputFile,
           output: outputFile,
-          error: err.message
+          error: message
         };
         results.push(errorResult);
 
         if (!args.json) {
           printError(`  ✗ Failed: ${inputFile}`);
-          printError(`    ${err.message}`);
+          printError(`    ${message}`);
         }
       }
     }
@@ -674,8 +777,9 @@ async function main() {
           {
             mode: 'batch',
             totalFiles: filePairs.length,
-            successful: results.filter((r) => !r.error).length,
-            failed: results.filter((r) => r.error).length,
+            // WHY: Use 'error' in r type guard for union type property access
+            successful: results.filter((r) => !('error' in r)).length,
+            failed: results.filter((r) => 'error' in r).length,
             results: results
           },
           null,
@@ -684,8 +788,9 @@ async function main() {
       );
     } else {
       console.log('');
-      const successful = results.filter((r) => !r.error).length;
-      const failed = results.filter((r) => r.error).length;
+      // WHY: Use 'error' in r type guard for union type property access
+      const successful = results.filter((r) => !('error' in r)).length;
+      const failed = results.filter((r) => 'error' in r).length;
 
       if (failed === 0) {
         printSuccess(
@@ -700,6 +805,11 @@ async function main() {
   }
 
   // SINGLE FILE MODE
+  // WHY: Type guard ensures args.input and args.output are non-null for processSingleFile
+  if (!args.input || !args.output) {
+    throw new ValidationError('Input and output file paths are required');
+  }
+
   if (!args.json) {
     printInfo('Converting text to paths...');
   }

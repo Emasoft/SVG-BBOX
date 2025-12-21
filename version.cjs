@@ -11,6 +11,13 @@ const fs = require('fs');
 const path = require('path');
 
 /**
+ * @typedef {Object} VersionInfo
+ * @property {string} name - Package name
+ * @property {string} version - Package version
+ * @property {string} description - Package description
+ */
+
+/**
  * Get the current version from package.json
  * @returns {string} Version string (e.g., "1.0.0")
  */
@@ -20,14 +27,15 @@ function getVersion() {
     const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
     return packageJson.version || '0.0.0';
   } catch (error) {
-    console.error('Error reading version from package.json:', error.message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error reading version from package.json:', message);
     return '0.0.0';
   }
 }
 
 /**
  * Get full version info including package name
- * @returns {object} Version info object
+ * @returns {VersionInfo} Version info object
  */
 function getVersionInfo() {
   try {
@@ -39,7 +47,8 @@ function getVersionInfo() {
       description: packageJson.description || ''
     };
   } catch (error) {
-    console.error('Error reading package.json:', error.message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error reading package.json:', message);
     return {
       name: 'svg-bbox',
       version: '0.0.0',

@@ -16,6 +16,103 @@
  * - Resource cleanup
  */
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * Visual bounding box with x, y, width, height coordinates.
+ * @typedef {Object} BBox
+ * @property {number} x - X coordinate of the bounding box origin
+ * @property {number} y - Y coordinate of the bounding box origin
+ * @property {number} width - Width of the bounding box
+ * @property {number} height - Height of the bounding box
+ */
+
+/**
+ * Bounding box result that may contain an error message.
+ * @typedef {Object} BBoxResult
+ * @property {number} [x] - X coordinate of the bounding box origin
+ * @property {number} [y] - Y coordinate of the bounding box origin
+ * @property {number} [width] - Width of the bounding box
+ * @property {number} [height] - Height of the bounding box
+ * @property {string} [error] - Error message if bbox computation failed
+ */
+
+/**
+ * Grid information for sprite sheet layout.
+ * @typedef {Object} SpriteGrid
+ * @property {number} rows - Number of rows in the grid
+ * @property {number} cols - Number of columns in the grid
+ * @property {number[]} xPositions - X positions of columns
+ * @property {number[]} yPositions - Y positions of rows
+ */
+
+/**
+ * Size statistics with uniformity metrics.
+ * @typedef {Object} SpriteStats
+ * @property {number} count - Total number of sprites detected
+ * @property {{width: number, height: number}} avgSize - Average sprite size
+ * @property {{widthCV: string, heightCV: string, areaCV: string}} uniformity - Coefficient of variation metrics
+ * @property {boolean} hasCommonPattern - Whether sprites follow common naming patterns
+ * @property {boolean} isGridArranged - Whether sprites are arranged in a grid
+ */
+
+/**
+ * Individual sprite information.
+ * @typedef {Object} SpriteEntry
+ * @property {string} id - Sprite element ID
+ * @property {string} tag - SVG tag name of the sprite element
+ */
+
+/**
+ * Sprite sheet detection result.
+ * @typedef {Object} SpriteInfo
+ * @property {boolean} isSprite - Whether the SVG is detected as a sprite sheet
+ * @property {SpriteEntry[]} sprites - Array of detected sprites
+ * @property {SpriteGrid|null} grid - Grid layout information if detected
+ * @property {SpriteStats} [stats] - Statistics about detected sprites
+ */
+
+/**
+ * Result of bbox computation for a file.
+ * @typedef {Object} BBoxFileResult
+ * @property {string} filename - Base name of the processed file
+ * @property {string} path - Full path to the processed file
+ * @property {Object<string, BBoxResult>} results - Map of element IDs to their bboxes
+ * @property {SpriteInfo} [spriteInfo] - Sprite sheet info if detected
+ */
+
+/**
+ * Entry from a list file specifying an SVG to process.
+ * @typedef {Object} ListEntry
+ * @property {string} path - Path to the SVG file
+ * @property {string[]} ids - Element IDs to compute bboxes for
+ * @property {boolean} ignoreViewBox - Whether to ignore viewBox clipping
+ */
+
+/**
+ * Progress indicator interface.
+ * @typedef {Object} ProgressIndicator
+ * @property {function(string): void} update - Update progress message
+ * @property {function(string): void} done - Complete progress with final message
+ */
+
+/**
+ * Parsed CLI arguments.
+ * @typedef {Object} ParsedArgs
+ * @property {string[]} positional - Positional arguments
+ * @property {Object<string, string|boolean|null>} flags - Flag values
+ */
+
+/**
+ * CLI options for bbox computation.
+ * @typedef {Object} CLIOptions
+ * @property {boolean} ignoreViewBox - Whether to ignore viewBox clipping
+ * @property {boolean} spriteMode - Whether to auto-detect sprite sheets
+ * @property {string|null} jsonOutput - Path to save JSON output, or null for console
+ */
+
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -118,7 +215,7 @@ const argParser = createArgParser({
  * Uses safer string manipulation with proper escaping.
  *
  * @param {string} svgMarkup - SVG markup string
- * @param {Object} bbox - Visual bbox {x, y, width, height}
+ * @param {BBox|null} bbox - Visual bbox {x, y, width, height}
  * @returns {string} Repaired SVG markup
  */
 function repairSvgAttributes(svgMarkup, bbox) {
@@ -128,7 +225,8 @@ function repairSvgAttributes(svgMarkup, bbox) {
     return svgMarkup;
   }
 
-  const attrs = svgMatch[1];
+  // WHY: svgMatch[1] may be undefined if the regex didn't capture anything
+  const attrs = svgMatch[1] || '';
   const hasViewBox = /viewBox\s*=/.test(attrs);
   const hasWidth = /\swidth\s*=/.test(attrs);
   const hasHeight = /\sheight\s*=/.test(attrs);
@@ -174,8 +272,8 @@ function repairSvgAttributes(svgMarkup, bbox) {
 /**
  * Detect if SVG is likely a sprite sheet and extract sprite information.
  *
- * @param {Object} page - Puppeteer page with loaded SVG
- * @returns {Promise<Object>} {isSprite: boolean, sprites: Array, grid: Object}
+ * @param {import('puppeteer').Page} page - Puppeteer page with loaded SVG
+ * @returns {Promise<SpriteInfo>} Sprite sheet detection result
  */
 async function detectSpriteSheet(page) {
   const result = await page.evaluate(() => {
@@ -205,6 +303,7 @@ async function detectSpriteSheet(page) {
     // Collect sprite candidates with their visual properties
     const sprites = [];
     for (const child of children) {
+      /** @type {string} */
       const id = child.id || `auto_${child.tagName}_${sprites.length}`;
       // Type guard: getBBox exists on SVGGraphicsElement
       /** @type {DOMRect | null} */
@@ -329,7 +428,7 @@ async function detectSpriteSheet(page) {
  * @param {string[]} objectIds - Array of object IDs (empty = whole content)
  * @param {boolean} ignoreViewBox - Compute full drawing bbox
  * @param {boolean} spriteMode - Auto-detect and process as sprite sheet
- * @returns {Promise<Object>} {filename: string, results: {id: bbox}, spriteInfo: Object}
+ * @returns {Promise<BBoxFileResult>} Computation result with bboxes
  */
 async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, spriteMode = false) {
   // SECURITY: Validate file path (prevents path traversal)
@@ -395,11 +494,12 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
     }, FONT_TIMEOUT_MS);
 
     // Detect sprite sheet if in sprite mode
+    /** @type {SpriteInfo|null} */
     let spriteInfo = null;
     if (spriteMode && objectIds.length === 0) {
       spriteInfo = await detectSpriteSheet(page);
 
-      if (spriteInfo.isSprite) {
+      if (spriteInfo.isSprite && spriteInfo.stats) {
         // Automatically use all detected sprites as object IDs
         objectIds = spriteInfo.sprites
           .map((s) => s.id)
@@ -425,6 +525,7 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
     const mode = ignoreViewBox ? 'unclipped' : 'clipped';
 
     // Compute bboxes
+    /** @type {Record<string, BBoxResult>} */
     const results = await page.evaluate(
       async (objectIds, mode) => {
         /* eslint-disable no-undef */
@@ -438,6 +539,7 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
           throw new Error('No <svg> element found');
         }
 
+        /** @type {Record<string, {x?: number, y?: number, width?: number, height?: number, error?: string}>} */
         const output = {};
         const options = { mode, coarseFactor: 3, fineFactor: 24, useLayoutScale: true };
 
@@ -458,11 +560,17 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
           if (children.length === 0) {
             output['WHOLE CONTENT'] = { error: 'No renderable content found' };
           } else if (children.length === 1) {
-            const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-              children[0],
-              options
-            );
-            output['WHOLE CONTENT'] = bbox || { error: 'No visible pixels' };
+            // WHY: Type guard - we know children[0] exists since length === 1
+            const firstChild = children[0];
+            if (!firstChild) {
+              output['WHOLE CONTENT'] = { error: 'No renderable content found' };
+            } else {
+              const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+                firstChild,
+                options
+              );
+              output['WHOLE CONTENT'] = bbox || { error: 'No visible pixels' };
+            }
           } else {
             const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox(children, options);
             output['WHOLE CONTENT'] = union || { error: 'No visible pixels' };
@@ -491,15 +599,14 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
       mode
     );
 
+    /** @type {BBoxFileResult} */
     const result = {
       filename: path.basename(safePath),
       path: safePath,
-      results
+      results,
+      // WHY: spriteInfo is only included when sprite detection was performed
+      ...(spriteInfo ? { spriteInfo } : {})
     };
-
-    if (spriteInfo) {
-      result.spriteInfo = spriteInfo;
-    }
 
     return result;
   } finally {
@@ -509,8 +616,10 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
         await browser.close();
       } catch {
         // Force kill if close fails
-        if (browser.process()) {
-          browser.process().kill('SIGKILL');
+        // WHY: Store process reference to avoid calling browser.process() twice
+        const browserProcess = browser.process();
+        if (browserProcess) {
+          browserProcess.kill('SIGKILL');
         }
       }
     }
@@ -528,7 +637,7 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
  * @param {string} dirPath - Directory path
  * @param {string|null} filterRegex - Regex pattern to filter filenames
  * @param {boolean} ignoreViewBox - Compute full drawing bbox
- * @returns {Promise<Object[]>} Array of {filename, path, results}
+ * @returns {Promise<BBoxFileResult[]>} Array of file results with bboxes
  */
 async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = false) {
   // SECURITY: Validate directory path
@@ -550,15 +659,21 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
       const regex = new RegExp(filterRegex);
       filtered = svgFiles.filter((f) => regex.test(f));
     } catch (err) {
-      throw new ValidationError(`Invalid regex pattern: ${err.message}`, { pattern: filterRegex });
+      // WHY: err is of type unknown in catch blocks, use type guard
+      const message = err instanceof Error ? err.message : String(err);
+      throw new ValidationError(`Invalid regex pattern: ${message}`, { pattern: filterRegex });
     }
   }
 
+  /** @type {BBoxFileResult[]} */
   const results = [];
-  const progress = createProgress(`Processing ${filtered.length} files`);
+  // WHY: Cast to ProgressIndicator since createProgress returns Object type
+  const progress = /** @type {ProgressIndicator} */ (
+    createProgress(`Processing ${filtered.length} files`)
+  );
 
   for (let i = 0; i < filtered.length; i++) {
-    const file = filtered[i];
+    const file = /** @type {string} */ (filtered[i]);
     const filePath = path.join(safeDir, file);
 
     progress.update(`${i + 1}/${filtered.length} - ${file}`);
@@ -573,11 +688,14 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
       const result = await computeBBox(filePath, [], ignoreViewBox);
       results.push(result);
     } catch (err) {
-      printError(`Failed to process ${file}: ${err.message}`);
+      // WHY: err is of type unknown in catch blocks, use type guard
+      const message = err instanceof Error ? err.message : String(err);
+      printError(`Failed to process ${file}: ${message}`);
+      // WHY: results must be a Record<string, BBoxResult>, so wrap error in a special key
       results.push({
         filename: file,
         path: filePath,
-        results: { error: err.message }
+        results: { 'WHOLE CONTENT': { error: message } }
       });
     }
   }
@@ -595,7 +713,7 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
  * SECURE: Validates file path, handles errors gracefully.
  *
  * @param {string} listPath - Path to list file
- * @returns {Array<{path: string, ids: string[], ignoreViewBox: boolean}>}
+ * @returns {ListEntry[]} Array of parsed entries
  */
 function parseListFile(listPath) {
   // SECURITY: Validate list file path
@@ -605,10 +723,15 @@ function parseListFile(listPath) {
 
   const content = fs.readFileSync(safePath, 'utf8');
   const lines = content.split('\n');
+  /** @type {ListEntry[]} */
   const entries = [];
 
   for (let lineNum = 0; lineNum < lines.length; lineNum++) {
     const line = lines[lineNum];
+    // WHY: line could be undefined if lineNum exceeds array bounds
+    if (line === undefined) {
+      continue;
+    }
     const trimmed = line.trim();
 
     // Skip empty lines and comments
@@ -622,6 +745,10 @@ function parseListFile(listPath) {
     }
 
     const svgPath = tokens[0];
+    // WHY: tokens[0] could be undefined if array is empty
+    if (!svgPath) {
+      continue;
+    }
 
     // SECURITY: Basic validation of path (full validation happens during processing)
     if (svgPath.includes('\0')) {
@@ -630,9 +757,10 @@ function parseListFile(listPath) {
     }
 
     const rest = tokens.slice(1);
+    /** @type {ListEntry} */
     const entry = {
       path: svgPath,
-      ids: [],
+      ids: /** @type {string[]} */ ([]),
       ignoreViewBox: false
     };
 
@@ -662,15 +790,23 @@ function parseListFile(listPath) {
  * SECURE: Handles errors for each entry independently.
  *
  * @param {string} listPath - Path to list file
- * @returns {Promise<Object[]>} Array of {filename, path, results}
+ * @returns {Promise<BBoxFileResult[]>} Array of file results with bboxes
  */
 async function processList(listPath) {
   const entries = parseListFile(listPath);
+  /** @type {BBoxFileResult[]} */
   const results = [];
-  const progress = createProgress(`Processing ${entries.length} entries`);
+  // WHY: Cast to ProgressIndicator since createProgress returns Object type
+  const progress = /** @type {ProgressIndicator} */ (
+    createProgress(`Processing ${entries.length} entries`)
+  );
 
   for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
+    const entry = /** @type {ListEntry} */ (entries[i]);
+    // WHY: entry could be undefined if index exceeds array bounds
+    if (!entry) {
+      continue;
+    }
     progress.update(`${i + 1}/${entries.length} - ${path.basename(entry.path)}`);
 
     try {
@@ -683,11 +819,14 @@ async function processList(listPath) {
       const result = await computeBBox(entry.path, entry.ids, entry.ignoreViewBox);
       results.push(result);
     } catch (err) {
-      printError(`Failed to process ${entry.path}: ${err.message}`);
+      // WHY: err is of type unknown in catch blocks, use type guard
+      const message = err instanceof Error ? err.message : String(err);
+      printError(`Failed to process ${entry.path}: ${message}`);
+      // WHY: results must be a Record<string, BBoxResult>, so wrap error in a special key
       results.push({
         filename: path.basename(entry.path),
         path: entry.path,
-        results: { error: err.message }
+        results: { 'WHOLE CONTENT': { error: message } }
       });
     }
   }
@@ -703,7 +842,7 @@ async function processList(listPath) {
 /**
  * Format bbox for console output.
  *
- * @param {Object} bbox - {x, y, width, height}
+ * @param {BBoxResult|null|undefined} bbox - Bbox result object with x, y, width, height or error
  * @returns {string}
  */
 function formatBBox(bbox) {
@@ -713,13 +852,18 @@ function formatBBox(bbox) {
   if (bbox.error) {
     return `ERROR: ${bbox.error}`;
   }
-  return `{x: ${bbox.x.toFixed(2)}, y: ${bbox.y.toFixed(2)}, width: ${bbox.width.toFixed(2)}, height: ${bbox.height.toFixed(2)}}`;
+  // WHY: x, y, width, height are optional in BBoxResult, use nullish coalescing
+  const x = bbox.x ?? 0;
+  const y = bbox.y ?? 0;
+  const width = bbox.width ?? 0;
+  const height = bbox.height ?? 0;
+  return `{x: ${x.toFixed(2)}, y: ${y.toFixed(2)}, width: ${width.toFixed(2)}, height: ${height.toFixed(2)}}`;
 }
 
 /**
  * Print results to console.
  *
- * @param {Object[]} allResults - Array of {filename, path, results}
+ * @param {BBoxFileResult[]} allResults - Array of file results with bboxes
  */
 function printResults(allResults) {
   for (const item of allResults) {
@@ -747,13 +891,14 @@ function printResults(allResults) {
  * - Handles EPIPE gracefully (broken pipe when piping to `head` etc.)
  * - Allows writing to cwd and tmpdir
  *
- * @param {Object[]} allResults - Array of {filename, path, results}
+ * @param {BBoxFileResult[]} allResults - Array of file results with bboxes
  * @param {string} outputPath - Output JSON file path, or `-` for stdout
  */
 function saveJSON(allResults, outputPath) {
   // Transform results array into path-keyed object
   // WHY: This format is more useful for programmatic consumption
   // Keys are file paths, values are bbox results
+  /** @type {Record<string, Record<string, BBoxResult>>} */
   const json = {};
   for (const item of allResults) {
     json[item.path] = item.results;
@@ -794,11 +939,16 @@ async function main() {
     jsonOutput: args.flags.json || null
   };
 
+  /** @type {BBoxFileResult[]} */
   let allResults = [];
 
   // Process based on mode
   if (mode === 'file') {
     const svgPath = args.positional[0];
+    // WHY: Type guard - we know svgPath exists since mode === 'file' implies positional.length > 0
+    if (!svgPath) {
+      throw new ValidationError('No SVG file specified');
+    }
     const objectIds = args.positional.slice(1);
 
     const result = await computeBBox(svgPath, objectIds, options.ignoreViewBox, options.spriteMode);

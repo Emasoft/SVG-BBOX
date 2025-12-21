@@ -41,6 +41,27 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+
+/**
+ * @typedef {Object} CLIOptions
+ * @property {string} mode - Rendering mode: 'visible' | 'full' | 'element'
+ * @property {string | null} elementId - Element ID for element mode
+ * @property {number} scale - Resolution multiplier
+ * @property {number | null} width - Override output width in pixels
+ * @property {number | null} height - Override output height in pixels
+ * @property {string} background - Background color
+ * @property {number} margin - Extra padding in SVG user units
+ * @property {boolean} autoOpen - Open PNG after rendering
+ * @property {string | null} batch - Batch file path
+ * @property {string} [input] - Input SVG file path (single file mode)
+ * @property {string} [output] - Output PNG file path (single file mode)
+ */
+
+/**
+ * @typedef {Object} FilePair
+ * @property {string} input - Input SVG file path
+ * @property {string} output - Output PNG file path
+ */
 const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
 const {
@@ -207,6 +228,11 @@ USE CASES:
 `);
 }
 
+/**
+ * Parse command-line arguments into options object
+ * @param {string[]} argv - Process arguments array (process.argv)
+ * @returns {CLIOptions} Parsed CLI options
+ */
 function parseArgs(argv) {
   const args = argv.slice(2);
 
@@ -216,7 +242,9 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
+  /** @type {string[]} */
   const positional = [];
+  /** @type {CLIOptions} */
   const options = {
     mode: 'visible',
     elementId: null,
@@ -231,8 +259,12 @@ function parseArgs(argv) {
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    // WHY: TypeScript null guard - array access can return undefined
+    if (!a) continue;
     if (a.startsWith('--')) {
       const [key, val] = a.split('=');
+      // WHY: TypeScript null guard - destructuring can yield undefined
+      if (!key) continue;
       const name = key.replace(/^--/, '');
       const next = typeof val === 'undefined' ? args[i + 1] : val;
 
@@ -252,15 +284,18 @@ function parseArgs(argv) {
           useNext();
           break;
         case 'scale':
-          options.scale = parseFloat(next);
+          // WHY: next ?? '' provides empty string fallback for TypeScript, parseFloat handles it
+          options.scale = parseFloat(next ?? '');
           useNext();
           break;
         case 'width':
-          options.width = parseInt(next, 10);
+          // WHY: next ?? '' provides empty string fallback for TypeScript, parseInt handles it
+          options.width = parseInt(next ?? '', 10);
           useNext();
           break;
         case 'height':
-          options.height = parseInt(next, 10);
+          // WHY: next ?? '' provides empty string fallback for TypeScript, parseInt handles it
+          options.height = parseInt(next ?? '', 10);
           useNext();
           break;
         case 'background':
@@ -268,7 +303,8 @@ function parseArgs(argv) {
           useNext();
           break;
         case 'margin':
-          options.margin = parseFloat(next);
+          // WHY: next ?? '' provides empty string fallback for TypeScript, parseFloat handles it
+          options.margin = parseFloat(next ?? '');
           if (!isFinite(options.margin) || options.margin < 0) {
             options.margin = 0;
           }
@@ -323,6 +359,8 @@ function parseArgs(argv) {
  * 2. Input/output pair (tab or space separated): input.svg<TAB>output.png
  *
  * Lines starting with # are comments and are ignored.
+ * @param {string} batchFilePath - Path to the batch file
+ * @returns {FilePair[]} Array of input/output file pairs
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file path
@@ -357,7 +395,9 @@ function readBatchFile(batchFilePath) {
     if (parts.length === 1) {
       // Match: (anything ending in .svg) + (whitespace) + (anything ending in .png)
       const fileMatch = line.match(/^(.+\.svg)\s+(.+\.png)$/i);
-      if (fileMatch) {
+      // WHY: Regex match returns [full, group1, group2] when successful
+      // Groups are guaranteed to exist when match succeeds with two capture groups
+      if (fileMatch && fileMatch[1] && fileMatch[2]) {
         parts = [fileMatch[1].trim(), fileMatch[2].trim()];
       }
     }
@@ -371,15 +411,17 @@ function readBatchFile(batchFilePath) {
       }
     });
 
-    if (parts.length === 0) {
+    if (parts.length === 0 || !parts[0]) {
       throw new _ValidationError(`Empty line at line ${index + 1} in batch file`);
     }
 
-    const inputFile = parts[0];
+    // WHY: Type assertion safe because we verified parts[0] exists above
+    const inputFile = /** @type {string} */ (parts[0]);
 
     // If output is specified, use it; otherwise auto-generate
+    /** @type {string} */
     let outputFile;
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[1]) {
       // Explicit output path provided
       outputFile = parts[1];
     } else {
@@ -419,6 +461,25 @@ const PUPPETEER_OPTIONS = {
   args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
 };
 
+/**
+ * @typedef {Object} RenderOptions
+ * @property {string} input - Input SVG file path
+ * @property {string} output - Output PNG file path
+ * @property {string} mode - Rendering mode: 'visible' | 'full' | 'element'
+ * @property {string | null} elementId - Element ID for element mode
+ * @property {number} scale - Resolution multiplier
+ * @property {number | null} width - Override output width in pixels
+ * @property {number | null} height - Override output height in pixels
+ * @property {string} background - Background color
+ * @property {number} margin - Extra padding in SVG user units
+ * @property {boolean} autoOpen - Open PNG after rendering
+ */
+
+/**
+ * Render an SVG file to PNG using Puppeteer/Chrome
+ * @param {RenderOptions} opts - Render options
+ * @returns {Promise<void>}
+ */
 async function renderSvgWithModes(opts) {
   const { input, output } = opts;
 
@@ -495,15 +556,19 @@ ${sanitizedSvg}
     const measure = await page.evaluate(
       async (optsInPage) => {
         /* eslint-disable no-undef */
-        const SvgVisualBBox = window.SvgVisualBBox;
-        if (!SvgVisualBBox) {
+        const SvgVisualBBoxLib = window.SvgVisualBBox;
+        if (!SvgVisualBBoxLib) {
           throw new Error('SvgVisualBBox not found on window. Did the script load?');
         }
+        // WHY: Store in const after null check for TypeScript narrowing
+        const SvgVisualBBox = SvgVisualBBoxLib;
 
-        const svg = document.querySelector('svg');
-        if (!svg) {
+        const svgElement = document.querySelector('svg');
+        if (!svgElement) {
           throw new Error('No <svg> element found in the document.');
         }
+        // WHY: Store in const after null check for TypeScript narrowing
+        const svg = svgElement;
 
         // Ensure fonts are loaded as best as we can (with timeout)
         await SvgVisualBBox.waitForDocumentFonts(document, optsInPage.fontTimeout || 8000);
@@ -781,12 +846,15 @@ ${sanitizedSvg}
           if (result.success) {
             printSuccess(`Opened in Chrome: ${absolutePath}`);
           } else {
-            printWarning(result.error);
+            // WHY: result.error can be null, provide fallback message
+            printWarning(result.error ?? 'Failed to open in Chrome');
             printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
           }
         })
         .catch((err) => {
-          printWarning(`Failed to auto-open: ${err.message}`);
+          // WHY: Type guard for unknown error in catch block
+          const errMsg = err instanceof Error ? err.message : String(err);
+          printWarning(`Failed to auto-open: ${errMsg}`);
           printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
         });
     }
@@ -797,8 +865,10 @@ ${sanitizedSvg}
         await browser.close();
       } catch {
         // Force kill if close fails
-        if (browser.process()) {
-          browser.process().kill('SIGKILL');
+        // WHY: browser.process() can return null if browser was not launched
+        const browserProcess = browser.process();
+        if (browserProcess) {
+          browserProcess.kill('SIGKILL');
         }
       }
     }
@@ -819,9 +889,13 @@ async function main() {
 
     console.log(`Processing ${filePairs.length} SVG files from ${opts.batch}...\n`);
 
+    /** @type {Array<{success: boolean, input: string, output?: string, error?: string}>} */
     const results = [];
     for (let i = 0; i < filePairs.length; i++) {
-      const { input: svgPath, output: pngPath } = filePairs[i];
+      const filePair = filePairs[i];
+      // WHY: Defensive check even though array bounds are valid
+      if (!filePair) continue;
+      const { input: svgPath, output: pngPath } = filePair;
 
       console.log(`[${i + 1}/${filePairs.length}] Rendering ${svgPath}...`);
       console.log(`    Target: ${pngPath}`);
@@ -853,13 +927,15 @@ async function main() {
           output: pngPath
         });
       } catch (error) {
+        // WHY: Type guard for unknown error in catch block
+        const errMsg = error instanceof Error ? error.message : String(error);
         results.push({
           success: false,
           input: svgPath,
-          error: error.message
+          error: errMsg
         });
 
-        _printError(`  ✗ Failed: ${error.message}`);
+        _printError(`  ✗ Failed: ${errMsg}`);
       }
     }
 
@@ -875,7 +951,22 @@ async function main() {
   }
 
   // SINGLE FILE MODE
-  await renderSvgWithModes(opts);
+  // WHY: Type guard - opts.input/output are set in parseArgs when not in batch mode
+  if (!opts.input || !opts.output) {
+    throw new Error('Input and output paths are required in single file mode');
+  }
+  await renderSvgWithModes({
+    input: opts.input,
+    output: opts.output,
+    mode: opts.mode,
+    elementId: opts.elementId,
+    scale: opts.scale,
+    width: opts.width,
+    height: opts.height,
+    background: opts.background,
+    margin: opts.margin,
+    autoOpen: opts.autoOpen
+  });
 }
 
 runCLI(main);

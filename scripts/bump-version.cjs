@@ -20,11 +20,11 @@ const { execSync } = require('child_process');
 /**
  * Parse semantic version string
  * @param {string} version - Version string (e.g., "1.2.3")
- * @returns {object} Parsed version {major, minor, patch}
+ * @returns {{major: number, minor: number, patch: number}} Parsed version object
  */
 function parseVersion(version) {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
-  if (!match) {
+  if (!match || !match[1] || !match[2] || !match[3]) {
     throw new Error(`Invalid version format: ${version}`);
   }
   return {
@@ -86,7 +86,8 @@ function updateChangelog(newVersion) {
     execSync(`git cliff --tag v${newVersion} --output ${changelogPath}`, { stdio: 'inherit' });
     console.log(`✓ Updated CHANGELOG.md with version ${newVersion} using git-cliff`);
   } catch (error) {
-    console.error(`⚠️  Failed to update CHANGELOG with git-cliff: ${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`⚠️  Failed to update CHANGELOG with git-cliff: ${message}`);
     console.log('  Skipping changelog update');
   }
 }
@@ -110,8 +111,9 @@ function createGitTag(newVersion, dryRun = false) {
       execSync(`git rev-parse ${tagName}`, { stdio: 'ignore' });
       console.log(`⚠️  Tag ${tagName} already exists, skipping`);
       return;
-    } catch {
-      // Tag doesn't exist, proceed
+    } catch (_unusedError) {
+      // Tag doesn't exist, proceed (error ignored: tag not found is expected)
+      void _unusedError;
     }
 
     // Create annotated tag - NO USER INPUT, SAFE
@@ -121,7 +123,8 @@ function createGitTag(newVersion, dryRun = false) {
     console.log(`✓ Created git tag: ${tagName}`);
     console.log('  Push with: git push origin main --tags');
   } catch (error) {
-    console.error(`✗ Failed to create git tag: ${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`✗ Failed to create git tag: ${message}`);
   }
 }
 
@@ -171,6 +174,11 @@ EXAMPLES:
   const dryRun = args.includes('--dry-run');
   const createTag = !args.includes('--no-tag');
 
+  if (!bumpType) {
+    console.error('\n✗ Error: No version bump type specified\n');
+    process.exit(1);
+  }
+
   try {
     const packagePath = path.join(__dirname, '..', 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
@@ -192,7 +200,8 @@ EXAMPLES:
       console.log('\n🔍 DRY RUN - No changes made\n');
     }
   } catch (error) {
-    console.error(`\n✗ Error: ${error.message}\n`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`\n✗ Error: ${message}\n`);
     process.exit(1);
   }
 }

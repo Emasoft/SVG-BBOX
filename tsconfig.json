@@ -1,36 +1,48 @@
 {
   "compilerOptions": {
+    // Enable JSDoc type checking for JavaScript files
     "checkJs": true,
     "allowJs": true,
     "noEmit": true,
-    "strict": false,
+
+    // Stricter JSDoc type checking - requires proper type annotations
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+
+    // Language and module settings
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "node",
     "lib": ["ES2022", "DOM"],
     "types": ["node", "vitest/globals"],
+
+    // Interop settings
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
+
+    // Path resolution
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*", "types/*"]
-    },
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": false,
-    "noFallthroughCasesInSwitch": false,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
-    "strictPropertyInitialization": false,
-    "noImplicitThis": false
+    }
   },
   "include": [
     "*.js",
     "*.cjs",
     "*.mjs",
+    "lib/**/*.cjs",
+    "scripts/*.cjs",
+    "config/*.cjs",
     "tests/**/*.js",
     "tests/**/*.cjs",
     "tests/**/*.mjs",
@@ -45,6 +57,8 @@
     "scripts_dev",
     "libs_dev",
     "examples_dev",
-    "*.min.js"
+    "examples",
+    "*.min.js",
+    "tests/**/*"
   ]
 }

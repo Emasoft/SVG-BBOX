@@ -175,7 +175,9 @@ async function main() {
     console.log('\n✅ Build validation passed! Package is ready to publish.');
     process.exit(0);
   } catch (error) {
-    console.error(`\n❌ ${error.message}\n`);
+    // Handle unknown error type - check if it's an Error instance before accessing message
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`\n❌ ${errorMessage}\n`);
     console.error('Cannot proceed with publishing until build issues are resolved.');
     process.exit(1);
   }

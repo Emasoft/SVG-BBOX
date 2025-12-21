@@ -201,6 +201,32 @@ const {
 
 // -------- CLI parsing --------
 
+/**
+ * @typedef {Object} ParsedOptions
+ * @property {string | null} input - Input SVG file path
+ * @property {string} mode - Operation mode (list, extract, exportAll, rename)
+ * @property {string | null} extractId - ID of element to extract
+ * @property {string | null} outSvg - Output SVG file path
+ * @property {string | null} outDir - Output directory for export-all
+ * @property {number} margin - Margin in pixels
+ * @property {boolean} includeContext - Include context elements
+ * @property {boolean} assignIds - Assign IDs to unnamed objects
+ * @property {string | null} outFixed - Output fixed SVG with assigned IDs
+ * @property {boolean} exportGroups - Export groups too
+ * @property {string | null} batch - Batch file path
+ * @property {boolean} json - Output in JSON format
+ * @property {string | null} outHtml - Output HTML preview path
+ * @property {string | null} renameJson - JSON mapping file path
+ * @property {string | null} renameOut - Output renamed SVG path
+ * @property {boolean} autoOpen - Open result in Chrome
+ * @property {boolean} ignoreResolution - Use full drawing bbox instead of width/height
+ */
+
+/**
+ * Parse command-line arguments for sbb-extract
+ * @param {string[]} argv - Command-line arguments array
+ * @returns {ParsedOptions} Parsed options object
+ */
 function parseArgs(argv) {
   const { createModeArgParser } = require('./lib/cli-utils.cjs');
 
@@ -243,7 +269,7 @@ function parseArgs(argv) {
             type: 'number',
             default: 0,
             description: 'Margin in pixels',
-            validator: (v) => v >= 0,
+            validator: /** @param {number} v */ (v) => v >= 0,
             validationError: 'Margin must be >= 0'
           },
           { name: 'include-context', type: 'boolean', description: 'Include context elements' }
@@ -262,7 +288,7 @@ function parseArgs(argv) {
             type: 'number',
             default: 0,
             description: 'Margin in pixels',
-            validator: (v) => v >= 0,
+            validator: /** @param {number} v */ (v) => v >= 0,
             validationError: 'Margin must be >= 0'
           },
           { name: 'export-groups', type: 'boolean', description: 'Export groups too' },
@@ -284,11 +310,12 @@ function parseArgs(argv) {
   const result = parser(argv);
 
   // Map parser output to the expected legacy format for backward compatibility
+  /** @type {ParsedOptions} */
   const options = {
     input: result.positional[0] || null,
     mode: result.mode,
     extractId: result.flags.extractId || null,
-    outSvg: null,
+    outSvg: /** @type {string | null} */ (null),
     outDir: result.flags.outDir || null,
     margin: result.flags.margin || 0,
     includeContext: result.flags['include-context'] || false,
@@ -299,7 +326,7 @@ function parseArgs(argv) {
     json: result.flags.json || false,
     outHtml: result.flags['out-html'] || null,
     renameJson: result.flags.renameJson || null,
-    renameOut: null,
+    renameOut: /** @type {string | null} */ (null),
     autoOpen: result.flags['auto-open'] || false,
     ignoreResolution: result.flags['ignore-resolution'] || false
   };
@@ -313,11 +340,11 @@ function parseArgs(argv) {
     options.renameOut = result.positional[1] || null;
   }
 
-  // Apply default values for list mode
-  if (result.mode === 'list' && options.assignIds && !options.outFixed) {
+  // Apply default values for list mode (only if input is not null)
+  if (result.mode === 'list' && options.input !== null && options.assignIds && !options.outFixed) {
     options.outFixed = options.input.replace(/\.svg$/i, '') + '.ids.svg';
   }
-  if (result.mode === 'list' && !options.outHtml) {
+  if (result.mode === 'list' && options.input !== null && !options.outHtml) {
     options.outHtml = options.input.replace(/\.svg$/i, '') + '.objects.html';
   }
 
@@ -334,6 +361,8 @@ function parseArgs(argv) {
  * - One SVG file path per line
  * - Lines starting with # are comments and are ignored
  * - Empty lines are ignored
+ * @param {string} batchFilePath - Path to the batch file containing SVG paths
+ * @returns {string[]} Array of SVG file paths
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file
@@ -366,6 +395,19 @@ function readBatchFile(batchFilePath) {
 
 // -------- shared browser/page setup --------
 
+/**
+ * @typedef {Object} WithPageOptions
+ * @property {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height for viewBox
+ */
+
+/**
+ * Execute a handler function with a Puppeteer page loaded with the given SVG
+ * @template T
+ * @param {string} inputPath - Path to the SVG file
+ * @param {(page: import('puppeteer').Page) => Promise<T>} handler - Handler function to execute with the page
+ * @param {WithPageOptions} [options] - Options for page setup
+ * @returns {Promise<T>} Result from the handler function
+ */
 async function withPageForSvg(inputPath, handler, options = {}) {
   const { ignoreResolution = false } = options;
 
@@ -485,11 +527,13 @@ ${sanitizedSvg}
           rootSvg.setAttribute('width', String(vb.width || 1000));
           rootSvg.setAttribute('height', String(vb.height || 1000));
         } else if (!hasW && hasH) {
-          const h = parseFloat(rootSvg.getAttribute('height'));
+          const heightAttr = rootSvg.getAttribute('height');
+          const h = heightAttr !== null ? parseFloat(heightAttr) : NaN;
           const w = isFinite(h) && h > 0 && aspect > 0 ? h * aspect : vb.width || 1000;
           rootSvg.setAttribute('width', String(w));
         } else if (hasW && !hasH) {
-          const w = parseFloat(rootSvg.getAttribute('width'));
+          const widthAttr = rootSvg.getAttribute('width');
+          const w = widthAttr !== null ? parseFloat(widthAttr) : NaN;
           const h = isFinite(w) && w > 0 && aspect > 0 ? w / aspect : vb.height || 1000;
           rootSvg.setAttribute('height', String(h));
         }
@@ -510,8 +554,9 @@ ${sanitizedSvg}
         await browser.close();
       } catch {
         // Force kill if close fails
-        if (browser.process()) {
-          browser.process().kill('SIGKILL');
+        const browserProcess = browser.process();
+        if (browserProcess) {
+          browserProcess.kill('SIGKILL');
         }
       }
     }
@@ -520,6 +565,60 @@ ${sanitizedSvg}
 
 // -------- LIST mode: data + HTML with filters & rename UI --------
 
+/**
+ * @typedef {Object} BBoxInfo
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ * @property {number} width - Width
+ * @property {number} height - Height
+ */
+
+/**
+ * @typedef {Object} ObjectInfo
+ * @property {string} tagName - SVG element tag name
+ * @property {string | null} id - Element ID
+ * @property {BBoxInfo | null} bbox - Bounding box info
+ * @property {string | null} bboxError - Error message if bbox calculation failed
+ * @property {string[]} groups - IDs of ancestor groups
+ */
+
+/**
+ * @typedef {Object} SpriteStats
+ * @property {number} count - Number of sprites
+ * @property {{ width: number, height: number }} avgSize - Average sprite size
+ * @property {{ widthCV: string, heightCV: string, areaCV: string }} uniformity - Uniformity coefficients
+ * @property {boolean} hasCommonPattern - Whether sprites have common ID patterns
+ * @property {boolean} isGridArranged - Whether sprites are arranged in a grid
+ */
+
+/**
+ * @typedef {Object} SpriteInfo
+ * @property {boolean} isSprite - Whether the SVG is a sprite sheet
+ * @property {Array<{ id: string, tag: string }>} sprites - Sprite elements
+ * @property {{ rows: number, cols: number } | null} grid - Grid dimensions if arranged in grid
+ * @property {SpriteStats | null} stats - Sprite statistics
+ */
+
+/**
+ * @typedef {Object} ListResult
+ * @property {ObjectInfo[]} info - Object information array
+ * @property {string | null} fixedSvgString - Fixed SVG string if IDs were assigned
+ * @property {string} rootSvgMarkup - Root SVG markup for HTML preview
+ * @property {Record<string, string>} parentTransforms - Parent transforms by element ID
+ * @property {SpriteInfo} spriteInfo - Sprite sheet detection info
+ */
+
+/**
+ * List and optionally assign IDs to objects in an SVG file
+ * @param {string} inputPath - Input SVG file path
+ * @param {boolean} assignIds - Whether to assign IDs to unnamed objects
+ * @param {string | null} outFixedPath - Output path for fixed SVG with assigned IDs
+ * @param {string | null} outHtmlPath - Output path for HTML preview
+ * @param {boolean} jsonMode - Whether to output JSON format
+ * @param {boolean} autoOpen - Whether to open result in Chrome
+ * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @returns {Promise<void>}
+ */
 async function listAndAssignIds(
   inputPath,
   assignIds,
@@ -532,7 +631,7 @@ async function listAndAssignIds(
   const result = await withPageForSvg(
     inputPath,
     async (page) => {
-      const evalResult = await page.evaluate(async (assignIds) => {
+      const evalResult = await page.evaluate(async (/** @type {boolean} */ assignIds) => {
         /* eslint-disable no-undef */
         const SvgVisualBBox = window.SvgVisualBBox;
         if (!SvgVisualBBox) {
@@ -547,6 +646,9 @@ async function listAndAssignIds(
         const serializer = new XMLSerializer();
 
         // Sprite sheet detection function (runs in browser context)
+        /**
+         * @param {SVGSVGElement} rootSvg - Root SVG element
+         */
         function detectSpriteSheet(rootSvg) {
           const children = Array.from(rootSvg.children).filter((el) => {
             const tag = el.tagName.toLowerCase();
@@ -564,10 +666,14 @@ async function listAndAssignIds(
             return { isSprite: false, sprites: [], grid: null, stats: null };
           }
 
+          /** @type {Array<{id: string, tag: string, x: number, y: number, width: number, height: number, hasId: boolean}>} */
           const sprites = [];
           for (const child of children) {
+            /** @type {string} */
             const id = child.id || `auto_${child.tagName}_${sprites.length}`;
-            const bbox = child.getBBox ? child.getBBox() : null;
+            // Cast to SVGGraphicsElement to access getBBox method (available on SVG graphic elements)
+            const svgChild = /** @type {SVGGraphicsElement} */ (child);
+            const bbox = typeof svgChild.getBBox === 'function' ? svgChild.getBBox() : null;
 
             if (bbox && bbox.width > 0 && bbox.height > 0) {
               sprites.push({
@@ -676,7 +782,12 @@ async function listAndAssignIds(
 
         const els = Array.from(rootSvg.querySelectorAll(selector));
 
+        /** @type {Set<string>} */
         const seenIds = new Set();
+        /**
+         * @param {string} base - Base ID to make unique
+         * @returns {string} Unique ID
+         */
         function ensureUniqueId(base) {
           let id = base;
           let counter = 1;
@@ -693,6 +804,7 @@ async function listAndAssignIds(
           }
         }
 
+        /** @type {Array<{tagName: string, id: string | null, bbox: {x: number, y: number, width: number, height: number} | null, bboxError: string | null, groups: string[]}>} */
         const info = [];
         let changed = false;
 
@@ -741,7 +853,13 @@ async function listAndAssignIds(
               }
             }
           } catch (err) {
-            bboxError = err.message || 'BBox measurement failed';
+            // Type guard: err is unknown, check if it has a message property
+            bboxError =
+              err instanceof Error
+                ? err.message
+                : typeof err === 'string'
+                  ? err
+                  : 'BBox measurement failed';
           }
 
           info.push({
@@ -960,8 +1078,13 @@ async function listAndAssignIds(
         // - "REAL-WORLD REGRESSION TEST: text8, text9, rect1851"
         //   → Tests exact production bug with all three broken elements
         //   → User confirmation: "yes, it worked!"
+        /** @type {Record<string, string>} */
         const parentTransforms = {};
         info.forEach((obj) => {
+          // Skip if obj.id is null (can't look up element without an ID)
+          if (obj.id === null) {
+            return;
+          }
           const el = rootSvg.getElementById(obj.id);
           if (!el) {
             return;
@@ -1002,6 +1125,11 @@ async function listAndAssignIds(
     result.info,
     result.parentTransforms
   );
+
+  // Ensure outHtmlPath is not null before proceeding
+  if (outHtmlPath === null) {
+    throw new ValidationError('Output HTML path is required for list mode');
+  }
 
   // SECURITY: Validate and write HTML file safely
   const safeHtmlPath = validateOutputPath(outHtmlPath, {
@@ -1052,20 +1180,21 @@ async function listAndAssignIds(
     }
 
     // Display sprite sheet detection info
-    if (result.spriteInfo && result.spriteInfo.isSprite) {
+    if (result.spriteInfo && result.spriteInfo.isSprite && result.spriteInfo.stats) {
+      const stats = result.spriteInfo.stats;
       console.log('');
       console.log('🎨 Sprite sheet detected!');
-      console.log(`   Sprites: ${result.spriteInfo.stats.count}`);
+      console.log(`   Sprites: ${stats.count}`);
       if (result.spriteInfo.grid) {
         console.log(
           `   Grid: ${result.spriteInfo.grid.rows} rows × ${result.spriteInfo.grid.cols} cols`
         );
       }
       console.log(
-        `   Avg size: ${result.spriteInfo.stats.avgSize.width.toFixed(1)} × ${result.spriteInfo.stats.avgSize.height.toFixed(1)}`
+        `   Avg size: ${stats.avgSize.width.toFixed(1)} × ${stats.avgSize.height.toFixed(1)}`
       );
       console.log(
-        `   Uniformity: width CV=${result.spriteInfo.stats.uniformity.widthCV}, height CV=${result.spriteInfo.stats.uniformity.heightCV}`
+        `   Uniformity: width CV=${stats.uniformity.widthCV}, height CV=${stats.uniformity.heightCV}`
       );
       console.log('   💡 Tip: Use --export-all to extract each sprite as a separate SVG file');
     }
@@ -1085,19 +1214,19 @@ async function listAndAssignIds(
 
     // Auto-open HTML in Chrome/Chromium if requested
     // CRITICAL: Must use Chrome/Chromium (other browsers have poor SVG support)
-    if (autoOpen) {
+    if (autoOpen && outHtmlPath !== null) {
       const absolutePath = path.resolve(outHtmlPath);
 
       openInChrome(absolutePath)
-        .then((result) => {
-          if (result.success) {
+        .then((/** @type {{ success: boolean, error: string | null }} */ openResult) => {
+          if (openResult.success) {
             console.log(`\n✓ Opened in Chrome: ${absolutePath}`);
           } else {
-            console.log(`\n⚠️  ${result.error}`);
+            console.log(`\n⚠️  ${openResult.error || 'Unknown error'}`);
             console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
           }
         })
-        .catch((err) => {
+        .catch((/** @type {Error} */ err) => {
           console.log(`\n⚠️  Failed to auto-open: ${err.message}`);
           console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
         });
@@ -1105,11 +1234,20 @@ async function listAndAssignIds(
   }
 }
 
+/**
+ * Build an HTML page listing all objects in an SVG
+ * @param {string} titleName - Title for the HTML page
+ * @param {string} rootSvgMarkup - Serialized SVG markup for the hidden container
+ * @param {ObjectInfo[]} objects - Array of object info objects
+ * @param {Record<string, string>} [parentTransforms] - Map of element IDs to parent transform strings
+ * @returns {string} Complete HTML page as a string
+ */
 function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {}) {
   const safeTitle = String(titleName || 'SVG');
+  /** @type {string[]} */
   const rows = [];
 
-  objects.forEach((obj, index) => {
+  objects.forEach((/** @type {ObjectInfo} */ obj, /** @type {number} */ index) => {
     const rowIndex = index + 1;
     const id = obj.id || '';
     const tagName = obj.tagName || '';
@@ -1719,6 +1857,17 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
 
 // -------- EXTRACT mode --------
 
+/**
+ * Extract a single object from an SVG file by ID
+ * @param {string} inputPath - Input SVG file path
+ * @param {string} elementId - ID of element to extract
+ * @param {string} outSvgPath - Output SVG file path
+ * @param {number} margin - Margin in pixels around the extracted element
+ * @param {boolean} includeContext - Include context elements in output
+ * @param {boolean} jsonMode - Output in JSON format
+ * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @returns {Promise<void>}
+ */
 async function extractSingleObject(
   inputPath,
   elementId,
@@ -1876,6 +2025,16 @@ async function extractSingleObject(
 
 // -------- EXPORT-ALL mode --------
 
+/**
+ * Export all named objects from an SVG file
+ * @param {string} inputPath - Input SVG file path
+ * @param {string} outDir - Output directory for exported SVGs
+ * @param {number} margin - Margin in pixels around each exported element
+ * @param {boolean} exportGroups - Whether to export group elements too
+ * @param {boolean} jsonMode - Output in JSON format
+ * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @returns {Promise<void>}
+ */
 async function exportAllObjects(
   inputPath,
   outDir,
@@ -1924,12 +2083,18 @@ async function exportAllObjects(
 
           const allCandidates = Array.from(rootSvg.querySelectorAll(selector));
 
+          /** @type {Set<string>} */
           const usedIds = new Set();
           for (const el of allCandidates) {
             if (el.id) {
               usedIds.add(el.id);
             }
           }
+          /**
+           * Ensure element has an ID, generating one if needed
+           * @param {Element} el - The element to ensure has an ID
+           * @returns {string} The element's ID
+           */
           function ensureId(el) {
             if (el.id) {
               return el.id;
@@ -1947,7 +2112,15 @@ async function exportAllObjects(
 
           const defsList = Array.from(rootSvg.querySelectorAll('defs'));
 
+          /**
+           * Create a root SVG element with the specified bounding box
+           * @param {{ x: number, y: number, width: number, height: number }} bbox - Bounding box dimensions
+           * @returns {Element | null} Cloned root SVG element or null if dimensions are invalid
+           */
           function makeRootSvgWithBBox(bbox) {
+            if (!rootSvg) {
+              return null;
+            }
             const clonedRoot = /** @type {Element} */ (rootSvg.cloneNode(false));
             if (!clonedRoot.getAttribute('xmlns')) {
               clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
@@ -1975,13 +2148,30 @@ async function exportAllObjects(
             return clonedRoot;
           }
 
+          /**
+           * Check if element's tag name matches
+           * @param {Element} el - Element to check
+           * @param {string} tagName - Tag name to compare
+           * @returns {boolean} True if tag names match
+           */
           function tagEquals(el, tagName) {
-            return el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase();
+            return !!(el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase());
           }
 
+          /** @type {Array<{id: string, fileName: string, bbox: {x: number, y: number, width: number, height: number}, svgString: string}>} */
           const exports = [];
 
+          /**
+           * Export a single element to the exports array
+           * @param {Element} el - Element to export
+           * @param {string} prefix - Prefix for the file name
+           * @returns {Promise<void>}
+           */
           async function exportElement(el, prefix) {
+            // Guard: SvgVisualBBox must be available
+            if (!SvgVisualBBox) {
+              return;
+            }
             const id = ensureId(el);
             const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
               mode: 'unclipped',
@@ -1998,16 +2188,19 @@ async function exportAllObjects(
               return;
             }
 
+            /** @type {Element[]} */
             const ancestors = [];
+            /** @type {Element | null} */
             let node = el;
             while (node && node !== rootSvg) {
               ancestors.unshift(node);
-              node = node.parentNode;
+              node = /** @type {Element | null} */ (node.parentNode);
             }
 
+            /** @type {Element} */
             let currentParent = rootForExport;
             for (const original of ancestors) {
-              const shallowClone = original.cloneNode(false);
+              const shallowClone = /** @type {Element} */ (original.cloneNode(false));
               if (original === el) {
                 const subtree = original.cloneNode(true);
                 currentParent.appendChild(subtree);
@@ -2122,6 +2315,15 @@ async function exportAllObjects(
 
 // -------- RENAME mode --------
 
+/**
+ * Rename element IDs in an SVG file based on a JSON mapping
+ * @param {string} inputPath - Input SVG file path
+ * @param {string} renameJsonPath - Path to JSON file containing ID mappings
+ * @param {string} renameOutPath - Output SVG file path
+ * @param {boolean} jsonMode - Output in JSON format
+ * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @returns {Promise<void>}
+ */
 async function renameIds(
   inputPath,
   renameJsonPath,
@@ -2134,22 +2336,38 @@ async function renameIds(
     requiredExtensions: ['.json'],
     mustExist: true
   });
+  /** @type {unknown} */
   const parsed = readJSONFileSafe(safeJsonPath);
 
+  /** @type {Array<{from: string, to: string}>} */
   let mappings = [];
   if (Array.isArray(parsed)) {
     mappings = parsed;
-  } else if (Array.isArray(parsed.mappings)) {
-    mappings = parsed.mappings;
+  } else if (
+    parsed &&
+    typeof parsed === 'object' &&
+    'mappings' in parsed &&
+    Array.isArray(/** @type {{ mappings?: unknown }} */ (parsed).mappings)
+  ) {
+    mappings = /** @type {{ mappings: Array<{from: string, to: string}> }} */ (parsed).mappings;
   } else if (parsed && typeof parsed === 'object') {
-    mappings = Object.entries(parsed).map(([from, to]) => ({ from, to }));
+    mappings = Object.entries(/** @type {Record<string, string>} */ (parsed)).map(([from, to]) => ({
+      from,
+      to
+    }));
   }
 
   // SECURITY: Validate mapping structure
   mappings = mappings
-    .filter((m) => m && typeof m.from === 'string' && typeof m.to === 'string')
-    .map((m) => ({ from: m.from.trim(), to: m.to.trim() }))
-    .filter((m) => m.from && m.to);
+    .filter(
+      (/** @type {{from?: unknown, to?: unknown}} */ m) =>
+        m && typeof m.from === 'string' && typeof m.to === 'string'
+    )
+    .map((/** @type {{from: string, to: string}} */ m) => ({
+      from: m.from.trim(),
+      to: m.to.trim()
+    }))
+    .filter((/** @type {{from: string, to: string}} */ m) => m.from && m.to);
 
   if (!mappings.length) {
     throw new ValidationError('No valid mappings found in JSON.');
@@ -2173,6 +2391,11 @@ async function renameIds(
           throw new Error('No <svg> found');
         }
 
+        /**
+         * Check if ID name is valid according to XML ID naming rules
+         * @param {string} id - ID to validate
+         * @returns {boolean} True if valid
+         */
         function isValidIdName(id) {
           return /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(id);
         }
@@ -2327,6 +2550,10 @@ async function main() {
 
   try {
     if (opts.mode === 'list') {
+      // Validate required arguments for list mode
+      if (!opts.input) {
+        throw new ValidationError('Input SVG file is required for list mode');
+      }
       await listAndAssignIds(
         opts.input,
         opts.assignIds,
@@ -2337,6 +2564,16 @@ async function main() {
         opts.ignoreResolution
       );
     } else if (opts.mode === 'extract') {
+      // Validate required arguments for extract mode
+      if (!opts.input) {
+        throw new ValidationError('Input SVG file is required for extract mode');
+      }
+      if (!opts.extractId) {
+        throw new ValidationError('Element ID is required for extract mode');
+      }
+      if (!opts.outSvg) {
+        throw new ValidationError('Output SVG path is required for extract mode');
+      }
       await extractSingleObject(
         opts.input,
         opts.extractId,
@@ -2362,8 +2599,15 @@ async function main() {
         const svgFiles = readBatchFile(opts.batch);
         const results = [];
 
+        // We've already validated opts.outDir is not null above
+        const batchOutDir = /** @type {string} */ (opts.outDir);
+
         for (let i = 0; i < svgFiles.length; i++) {
           const svgFile = svgFiles[i];
+          // Guard against undefined (shouldn't happen, but TypeScript wants to be sure)
+          if (!svgFile) {
+            continue;
+          }
 
           try {
             // Generate timestamp for this SVG's output folder
@@ -2382,7 +2626,7 @@ async function main() {
             const baseName = path.basename(svgFile, path.extname(svgFile));
 
             // Create output directory: <basename>_<timestamp>/
-            const outputDir = path.join(opts.outDir, `${baseName}_${timestamp}`);
+            const outputDir = path.join(batchOutDir, `${baseName}_${timestamp}`);
 
             if (!opts.json) {
               printInfo(`[${i + 1}/${svgFiles.length}] Processing: ${svgFile}`);
@@ -2409,14 +2653,16 @@ async function main() {
               printInfo(`    ✓ Completed\n`);
             }
           } catch (err) {
+            // Type guard: err is unknown
+            const errMessage = err instanceof Error ? err.message : String(err);
             results.push({
               input: path.resolve(svgFile),
-              error: err.message,
+              error: errMessage,
               success: false
             });
 
             if (!opts.json) {
-              printError(`    ✗ Failed: ${err.message}\n`);
+              printError(`    ✗ Failed: ${errMessage}\n`);
             }
           }
         }
@@ -2452,6 +2698,13 @@ async function main() {
         }
       } else {
         // Single file mode
+        // Validate required arguments for exportAll mode
+        if (!opts.input) {
+          throw new ValidationError('Input SVG file is required for export-all mode');
+        }
+        if (!opts.outDir) {
+          throw new ValidationError('Output directory is required for export-all mode');
+        }
         await exportAllObjects(
           opts.input,
           opts.outDir,
@@ -2462,6 +2715,16 @@ async function main() {
         );
       }
     } else if (opts.mode === 'rename') {
+      // Validate required arguments for rename mode
+      if (!opts.input) {
+        throw new ValidationError('Input SVG file is required for rename mode');
+      }
+      if (!opts.renameJson) {
+        throw new ValidationError('JSON mapping file is required for rename mode');
+      }
+      if (!opts.renameOut) {
+        throw new ValidationError('Output SVG path is required for rename mode');
+      }
       await renameIds(
         opts.input,
         opts.renameJson,
@@ -2473,7 +2736,10 @@ async function main() {
       throw new SVGBBoxError(`Unknown mode: ${opts.mode}`);
     }
   } catch (error) {
-    throw new SVGBBoxError(`Operation failed: ${error.message}`, error);
+    // Type guard: error is unknown
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const cause = error instanceof Error ? error.message : undefined;
+    throw new SVGBBoxError(`Operation failed: ${errorMessage}`, cause);
   }
 }
 

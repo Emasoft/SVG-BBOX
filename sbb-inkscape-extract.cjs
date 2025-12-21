@@ -28,6 +28,40 @@ const {
 const { runCLI, printSuccess, printError: _printError, printInfo } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TYPE DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Parsed command line arguments for sbb-inkscape-extract
+ * @typedef {Object} ExtractArgs
+ * @property {string|null} input - Input SVG file path
+ * @property {string|null} objectId - ID of the object to extract
+ * @property {string|null} output - Output SVG file path
+ * @property {number|null} margin - Margin around extracted object in pixels
+ * @property {string|null} batch - Batch file path for batch processing
+ */
+
+/**
+ * Result of a successful extraction operation
+ * @typedef {Object} ExtractionResult
+ * @property {string} inputPath - Path to the input SVG file
+ * @property {string} outputPath - Path to the output SVG file
+ * @property {string} objectId - ID of the extracted object
+ * @property {number} margin - Margin applied in pixels
+ * @property {string} stdout - Inkscape stdout output
+ * @property {string} stderr - Inkscape stderr output
+ * @property {string} [error] - Error message if extraction failed
+ */
+
+/**
+ * Entry from a batch file
+ * @typedef {Object} BatchEntry
+ * @property {string} input - Input SVG file path
+ * @property {string} objectId - ID of the object to extract
+ * @property {string} output - Output SVG file path
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -97,6 +131,11 @@ OUTPUT:
 `);
 }
 
+/**
+ * Print version information for the tool
+ * @param {string} toolName - Name of the tool to display
+ * @returns {void}
+ */
 function printVersion(toolName) {
   const version = getVersion();
   console.log(`${toolName} v${version} | svg-bbox toolkit`);
@@ -106,7 +145,13 @@ function printVersion(toolName) {
 // ARGUMENT PARSING
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Parse command line arguments
+ * @param {string[]} argv - Process argv array
+ * @returns {ExtractArgs} Parsed arguments object
+ */
 function parseArgs(argv) {
+  /** @type {ExtractArgs} */
   const args = {
     input: null,
     objectId: null,
@@ -117,6 +162,7 @@ function parseArgs(argv) {
 
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
+    if (arg === undefined) continue;
 
     if (arg === '--help' || arg === '-h') {
       printHelp();
@@ -125,17 +171,19 @@ function parseArgs(argv) {
       printVersion('sbb-inkscape-extract');
       process.exit(0);
     } else if (arg === '--batch' && i + 1 < argv.length) {
-      args.batch = argv[++i];
+      args.batch = argv[++i] ?? null;
     } else if (arg === '--id' && i + 1 < argv.length) {
-      args.objectId = argv[++i];
+      args.objectId = argv[++i] ?? null;
     } else if (arg === '--output' && i + 1 < argv.length) {
-      args.output = argv[++i];
+      args.output = argv[++i] ?? null;
     } else if (arg === '--margin' && i + 1 < argv.length) {
-      args.margin = parseInt(argv[++i], 10);
-      if (isNaN(args.margin) || args.margin < 0) {
+      const marginArg = argv[++i] ?? '';
+      const parsedMargin = parseInt(marginArg, 10);
+      if (isNaN(parsedMargin) || parsedMargin < 0) {
         console.error('Error: --margin must be a non-negative number');
         process.exit(2);
       }
+      args.margin = parsedMargin;
     } else if (!arg.startsWith('-')) {
       if (!args.input) {
         args.input = arg;
@@ -184,6 +232,15 @@ function parseArgs(argv) {
 // INKSCAPE EXTRACTION
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Extract a single object from an SVG file using Inkscape
+ * @param {string} inputPath - Path to the input SVG file
+ * @param {string} objectId - ID of the object to extract
+ * @param {string} outputPath - Path for the output SVG file
+ * @param {number|null} margin - Margin around extracted object in pixels (optional)
+ * @returns {Promise<ExtractionResult>} Result of the extraction operation
+ * @throws {SVGBBoxError} If Inkscape is not installed or extraction fails
+ */
 async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin) {
   // SECURITY: Validate input file path
   const safeInputPath = validateFilePath(inputPath, {
@@ -268,15 +325,18 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
       stderr: stderr.trim()
     };
   } catch (error) {
-    if (error.code === 'ENOENT') {
+    // Type guard for ExecFileException from child_process
+    const execError = /** @type {{ code?: string; killed?: boolean; message?: string }} */ (error);
+    if (execError.code === 'ENOENT') {
       throw new SVGBBoxError(
         'Inkscape not found. Please install Inkscape and ensure it is in your PATH.\n' +
           'Download from: https://inkscape.org/release/'
       );
-    } else if (error.killed) {
+    } else if (execError.killed) {
       throw new SVGBBoxError('Inkscape process timed out (30s limit)');
     } else {
-      throw new SVGBBoxError(`Inkscape extraction failed: ${error.message}`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new SVGBBoxError(`Inkscape extraction failed: ${errorMessage}`);
     }
   }
 }
@@ -293,6 +353,10 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
  * - Each line: input.svg object_id output.svg
  * - Tab or space separated
  * - Lines starting with # are comments
+ *
+ * @param {string} batchFilePath - Path to the batch file
+ * @returns {BatchEntry[]} Array of batch entries to process
+ * @throws {SVGBBoxError} If batch file is invalid or empty
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file
@@ -327,7 +391,7 @@ function readBatchFile(batchFilePath) {
       // Look for pattern: input.svg object_id output.svg (three parts)
       // Match: (anything ending in .svg) + (whitespace) + (non-whitespace ID) + (whitespace) + (anything ending in .svg)
       const svgMatch = line.match(/^(.+\.svg)\s+(\S+)\s+(.+\.svg)$/i);
-      if (svgMatch) {
+      if (svgMatch && svgMatch[1] && svgMatch[2] && svgMatch[3]) {
         parts = [svgMatch[1].trim(), svgMatch[2].trim(), svgMatch[3].trim()];
       }
     }
@@ -349,9 +413,17 @@ function readBatchFile(batchFilePath) {
       );
     }
 
+    // WHY: Type guard ensures parts[0], parts[1], parts[2] are defined strings (length check above guarantees this)
     const inputFile = parts[0];
     const objectId = parts[1];
     const outputFile = parts[2];
+
+    // WHY: TypeScript requires explicit validation that array elements are defined strings
+    if (!inputFile || !objectId || !outputFile) {
+      throw new SVGBBoxError(
+        `Invalid format at line ${index + 1} in batch file: missing required fields`
+      );
+    }
 
     return { input: inputFile, objectId, output: outputFile };
   });
@@ -369,6 +441,10 @@ function readBatchFile(batchFilePath) {
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Main entry point for the extraction tool
+ * @returns {Promise<void>}
+ */
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -377,12 +453,16 @@ async function main() {
   // BATCH MODE
   if (args.batch) {
     const entries = readBatchFile(args.batch);
+    /** @type {ExtractionResult[]} */
     const results = [];
 
     printInfo(`Processing ${entries.length} extraction(s) in batch mode...\n`);
 
     for (let i = 0; i < entries.length; i++) {
-      const { input: inputFile, objectId, output: outputFile } = entries[i];
+      // WHY: TypeScript requires null guard for array element access
+      const entry = entries[i];
+      if (!entry) continue;
+      const { input: inputFile, objectId, output: outputFile } = entry;
 
       try {
         // WHY: Validate input file exists before attempting extraction
@@ -404,16 +484,22 @@ async function main() {
 
         console.log(`  ✓ ${path.basename(result.outputPath)}`);
       } catch (err) {
+        // Type guard for error handling
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        /** @type {ExtractionResult} */
         const errorResult = {
           inputPath: inputFile,
           objectId,
           outputPath: outputFile,
-          error: err.message
+          margin: 0,
+          stdout: '',
+          stderr: '',
+          error: errorMessage
         };
         results.push(errorResult);
 
         console.error(`  ✗ Failed: ${inputFile}`);
-        console.error(`    ${err.message}`);
+        console.error(`    ${errorMessage}`);
       }
     }
 
@@ -432,6 +518,14 @@ async function main() {
   }
 
   // SINGLE FILE MODE
+  // WHY: TypeScript requires explicit null checks despite validation above
+  // The parseArgs function validates these are non-null in single file mode
+  if (!args.input || !args.objectId || !args.output) {
+    throw new SVGBBoxError(
+      'Input file, object ID, and output path are required in single file mode'
+    );
+  }
+
   console.log(`Extracting object "${args.objectId}" from ${args.input}...`);
 
   const result = await extractObjectWithInkscape(

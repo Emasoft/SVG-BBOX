@@ -25,7 +25,45 @@ const { validateFilePath } = require('./lib/security-utils.cjs');
 const execFilePromise = promisify(execFile);
 
 /**
+ * @typedef {Object} BBox
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ * @property {number} width - Width
+ * @property {number} height - Height
+ */
+
+/**
+ * @typedef {Object} BBoxResult
+ * @property {BBox} [bbox] - Bounding box if found
+ * @property {string} [error] - Error message if failed
+ * @property {number} [objectCount] - Number of objects (for whole content)
+ * @property {{id: string}} [element] - Element info
+ */
+
+/**
+ * @typedef {Object} InkscapeResult
+ * @property {string} filename - SVG filename
+ * @property {string} path - Full path to SVG
+ * @property {Record<string, BBoxResult>} results - Results keyed by element ID
+ */
+
+/**
+ * @typedef {Object} InkscapeOptions
+ * @property {string} inputFile - Input SVG file path
+ * @property {string[]} elementIds - Element IDs to get bbox for
+ */
+
+/**
+ * @typedef {Object} CLIOptions
+ * @property {string | null} json - JSON output path or null
+ * @property {string} input - Input SVG file path
+ * @property {string[]} elementIds - Element IDs to query
+ */
+
+/**
  * Get bbox using Inkscape query commands
+ * @param {InkscapeOptions} options - Options with inputFile and elementIds
+ * @returns {Promise<InkscapeResult>} Result with filename, path, and results
  */
 async function getBBoxWithInkscape(options) {
   const { inputFile, elementIds } = options;
@@ -36,6 +74,7 @@ async function getBBoxWithInkscape(options) {
     mustExist: true
   });
 
+  /** @type {Record<string, BBoxResult>} */
   const results = {};
 
   // If no element IDs specified, get whole document bbox
@@ -45,27 +84,32 @@ async function getBBoxWithInkscape(options) {
       const { stdout } = await execFilePromise('inkscape', ['--query-all', safePath]);
 
       const lines = stdout.trim().split('\n');
-      if (lines.length === 0) {
+      if (lines.length === 0 || !lines[0]) {
         results['WHOLE CONTENT'] = { error: 'No objects found' };
       } else {
         // Parse first object as representative
         const firstLine = lines[0];
         const parts = firstLine.split(',');
         if (parts.length >= 5) {
-          const [, x, y, width, height] = parts;
+          // Extract coordinates - parts[0] is the ID, parts[1-4] are x,y,width,height
+          const xStr = parts[1] ?? '0';
+          const yStr = parts[2] ?? '0';
+          const widthStr = parts[3] ?? '0';
+          const heightStr = parts[4] ?? '0';
           results['WHOLE CONTENT'] = {
             bbox: {
-              x: parseFloat(x),
-              y: parseFloat(y),
-              width: parseFloat(width),
-              height: parseFloat(height)
+              x: parseFloat(xStr),
+              y: parseFloat(yStr),
+              width: parseFloat(widthStr),
+              height: parseFloat(heightStr)
             },
             objectCount: lines.length
           };
         }
       }
     } catch (err) {
-      results['WHOLE CONTENT'] = { error: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      results['WHOLE CONTENT'] = { error: message };
     }
   } else {
     // Get bbox for each element ID
@@ -82,7 +126,12 @@ async function getBBoxWithInkscape(options) {
 
         const lines = stdout.trim().split('\n');
         if (lines.length >= 4) {
-          const [x, y, width, height] = lines.map(parseFloat);
+          const parsed = lines.map(parseFloat);
+          // Extract coordinates with fallback to 0 for type safety
+          const x = parsed[0] ?? 0;
+          const y = parsed[1] ?? 0;
+          const width = parsed[2] ?? 0;
+          const height = parsed[3] ?? 0;
           results[id] = {
             bbox: { x, y, width, height },
             element: { id }
@@ -91,7 +140,8 @@ async function getBBoxWithInkscape(options) {
           results[id] = { error: 'Element not found or query failed' };
         }
       } catch (err) {
-        results[id] = { error: err.message };
+        const message = err instanceof Error ? err.message : String(err);
+        results[id] = { error: message };
       }
     }
   }
@@ -105,6 +155,8 @@ async function getBBoxWithInkscape(options) {
 
 /**
  * Format bbox for console output
+ * @param {BBoxResult | null} bbox - Bounding box result to format
+ * @returns {string} Formatted string representation
  */
 function formatBBox(bbox) {
   if (!bbox) {
@@ -114,6 +166,9 @@ function formatBBox(bbox) {
     return `ERROR: ${bbox.error}`;
   }
   const b = bbox.bbox;
+  if (!b) {
+    return 'null';
+  }
   let result = `{x: ${b.x.toFixed(2)}, y: ${b.y.toFixed(2)}, width: ${b.width.toFixed(2)}, height: ${b.height.toFixed(2)}}`;
   if (bbox.objectCount) {
     result += ` (${bbox.objectCount} objects total)`;
@@ -123,6 +178,8 @@ function formatBBox(bbox) {
 
 /**
  * Print results to console
+ * @param {InkscapeResult} result - Result from getBBoxWithInkscape
+ * @returns {void}
  */
 function printResults(result) {
   console.log(`\nSVG: ${result.path}`);
@@ -131,7 +188,9 @@ function printResults(result) {
   keys.forEach((key, idx) => {
     const isLast = idx === keys.length - 1;
     const prefix = isLast ? '└─' : '├─';
-    console.log(`${prefix} ${key}: ${formatBBox(result.results[key])}`);
+    // Use nullish coalescing to handle potential undefined (for type safety)
+    const bboxResult = result.results[key] ?? null;
+    console.log(`${prefix} ${key}: ${formatBBox(bboxResult)}`);
   });
 }
 
@@ -142,11 +201,13 @@ function printResults(result) {
  * WHY: Centralized JSON output handling ensures consistent behavior across all CLI tools
  * DO NOT: Implement custom JSON output logic here - use writeJSONOutput
  *
- * @param {Object} result - Result object with path and results properties
+ * @param {InkscapeResult} result - Result object with path and results properties
  * @param {string} outputPath - Output JSON file path, or `-` for stdout
+ * @returns {void}
  */
 function saveJSON(result, outputPath) {
   // Transform result into path-keyed object (consistent with sbb-getbbox format)
+  /** @type {Record<string, Record<string, BBoxResult>>} */
   const json = {};
   json[result.path] = result.results;
 
@@ -235,6 +296,8 @@ async function checkInkscapeAvailable() {
 
 /**
  * Parse command line arguments
+ * @param {string[]} argv - Command line arguments (process.argv)
+ * @returns {CLIOptions} Parsed options
  */
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -251,15 +314,25 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
+  /** @type {string[]} */
   const positional = [];
+  /** @type {CLIOptions} */
   const options = {
-    json: null
+    json: null,
+    input: '',
+    elementIds: []
   };
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    // Skip undefined entries (for type safety)
+    if (!a) {
+      continue;
+    }
     if (a.startsWith('--')) {
-      const [key, val] = a.split('=');
+      const parts = a.split('=');
+      const key = parts[0] ?? '';
+      const val = parts[1];
       const name = key.replace(/^--/, '');
       const next = typeof val === 'undefined' ? args[i + 1] : val;
 
@@ -271,7 +344,7 @@ function parseArgs(argv) {
 
       switch (name) {
         case 'json':
-          options.json = next || null;
+          options.json = next ?? null;
           useNext();
           break;
         default:
@@ -290,7 +363,13 @@ function parseArgs(argv) {
     process.exit(1);
   }
 
-  options.input = positional[0];
+  // Assign input (guaranteed to exist after length check above)
+  const inputFile = positional[0];
+  if (!inputFile) {
+    printError('Missing required argument: input.svg');
+    process.exit(1);
+  }
+  options.input = inputFile;
   options.elementIds = positional.slice(1);
 
   // Check input file exists

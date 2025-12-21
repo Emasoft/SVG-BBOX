@@ -18,7 +18,60 @@ const { getVersion } = require('./version.cjs');
 const { printError, printInfo, runCLI, writeJSONOutput } = require('./lib/cli-utils.cjs');
 
 /**
+ * @typedef {Object} BBoxRect
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ * @property {number} width - Width
+ * @property {number} height - Height
+ */
+
+/**
+ * @typedef {Object} BBoxResultSuccess
+ * @property {BBoxRect} bbox - Bounding box with margin applied
+ * @property {BBoxRect} originalBbox - Original bounding box without margin
+ * @property {string | null} [svgViewBox] - SVG viewBox attribute (for WHOLE CONTENT)
+ * @property {{tagName: string, id: string}} [element] - Element info (for specific elements)
+ */
+
+/**
+ * @typedef {Object} BBoxResultError
+ * @property {string} error - Error message
+ */
+
+/**
+ * @typedef {BBoxResultSuccess | BBoxResultError} BBoxResult
+ */
+
+/**
+ * @typedef {Object.<string, BBoxResult>} BBoxResults
+ */
+
+/**
+ * @typedef {Object} GetBBoxResult
+ * @property {string} filename - Base filename
+ * @property {string} path - Full file path
+ * @property {BBoxResults} results - Results keyed by element ID or 'WHOLE CONTENT'
+ */
+
+/**
+ * @typedef {Object} GetBBoxOptions
+ * @property {string} inputFile - Input SVG file path
+ * @property {string[]} elementIds - Element IDs to get bbox for
+ * @property {number} margin - Margin to apply around bbox
+ */
+
+/**
+ * @typedef {Object} CLIOptions
+ * @property {number} margin - Margin around bbox
+ * @property {string | null} json - JSON output path or null
+ * @property {string} input - Input SVG file path
+ * @property {string[]} elementIds - Element IDs to get bbox for
+ */
+
+/**
  * Get bbox using native .getBBox() method
+ * @param {GetBBoxOptions} options - Options for getting bounding box
+ * @returns {Promise<GetBBoxResult>} Result with bounding box information
  */
 async function getBBoxWithChrome(options) {
   const { inputFile, elementIds, margin } = options;
@@ -51,6 +104,10 @@ async function getBBoxWithChrome(options) {
 
     // Get bbox for all requested elements
     const results = await page.evaluate(
+      /**
+       * @param {string[]} elementIds - Element IDs to get bbox for
+       * @param {number} marginValue - Margin to apply
+       */
       (elementIds, marginValue) => {
         /* eslint-disable no-undef */
         const svg = document.querySelector('svg');
@@ -58,6 +115,7 @@ async function getBBoxWithChrome(options) {
           return { error: 'No SVG element found' };
         }
 
+        /** @type {Object.<string, unknown>} */
         const output = {};
 
         // If no element IDs specified, compute whole content bbox
@@ -85,7 +143,8 @@ async function getBBoxWithChrome(options) {
               svgViewBox: svg.getAttribute('viewBox')
             };
           } catch (err) {
-            output['WHOLE CONTENT'] = { error: err.message };
+            const message = err instanceof Error ? err.message : String(err);
+            output['WHOLE CONTENT'] = { error: message };
           }
         } else {
           // Get bbox for each element ID
@@ -125,7 +184,8 @@ async function getBBoxWithChrome(options) {
                 }
               };
             } catch (err) {
-              output[id] = { error: err.message };
+              const message = err instanceof Error ? err.message : String(err);
+              output[id] = { error: message };
             }
           }
         }
@@ -140,7 +200,7 @@ async function getBBoxWithChrome(options) {
     return {
       filename: path.basename(inputFile),
       path: inputFile,
-      results
+      results: /** @type {BBoxResults} */ (results)
     };
   } finally {
     await browser.close();
@@ -149,14 +209,18 @@ async function getBBoxWithChrome(options) {
 
 /**
  * Format bbox for console output
+ * @param {BBoxResult | null | undefined} bbox - Bounding box result to format
+ * @returns {string} Formatted bbox string
  */
 function formatBBox(bbox) {
   if (!bbox) {
     return 'null';
   }
-  if (bbox.error) {
+  // Type narrowing: check if it's an error result
+  if ('error' in bbox) {
     return `ERROR: ${bbox.error}`;
   }
+  // Now TypeScript knows bbox is BBoxResultSuccess
   const orig = bbox.originalBbox;
   const withMargin = bbox.bbox;
   return `{x: ${orig.x.toFixed(2)}, y: ${orig.y.toFixed(2)}, width: ${orig.width.toFixed(2)}, height: ${orig.height.toFixed(2)}} (with margin: ${withMargin.width.toFixed(2)} × ${withMargin.height.toFixed(2)})`;
@@ -164,6 +228,7 @@ function formatBBox(bbox) {
 
 /**
  * Print results to console
+ * @param {GetBBoxResult} result - Result object with path and results
  */
 function printResults(result) {
   console.log(`\nSVG: ${result.path}`);
@@ -183,11 +248,12 @@ function printResults(result) {
  * WHY: Centralized JSON output handling ensures consistent behavior across all CLI tools
  * DO NOT: Implement custom JSON output logic here - use writeJSONOutput
  *
- * @param {Object} result - Result object with path and results properties
+ * @param {GetBBoxResult} result - Result object with path and results properties
  * @param {string} outputPath - Output JSON file path, or `-` for stdout
  */
 function saveJSON(result, outputPath) {
   // Transform result into path-keyed object (consistent with sbb-getbbox format)
+  /** @type {Object.<string, BBoxResults>} */
   const json = {};
   json[result.path] = result.results;
 
@@ -267,6 +333,8 @@ USE CASES:
 
 /**
  * Parse command line arguments
+ * @param {string[]} argv - Command line arguments (process.argv)
+ * @returns {CLIOptions} Parsed options
  */
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -283,21 +351,31 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
+  /** @type {string[]} */
   const positional = [];
+  /** @type {CLIOptions} */
   const options = {
     margin: 5,
-    json: null
+    json: null,
+    input: '',
+    elementIds: []
   };
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    if (a === undefined) continue;
     if (a.startsWith('--')) {
-      const [key, val] = a.split('=');
+      const parts = a.split('=');
+      const key = parts[0] || '';
+      const val = parts[1];
       const name = key.replace(/^--/, '');
-      const next = typeof val === 'undefined' ? args[i + 1] : val;
+      const next = val !== undefined ? val : args[i + 1] || '';
 
+      /**
+       * Advance to next arg if value was not inline (--key value vs --key=value)
+       */
       function useNext() {
-        if (typeof val === 'undefined') {
+        if (val === undefined) {
           i++;
         }
       }
@@ -325,12 +403,13 @@ function parseArgs(argv) {
   }
 
   // Validate required arguments
-  if (positional.length < 1) {
+  if (positional.length < 1 || positional[0] === undefined) {
     printError('Missing required argument: input.svg');
     console.log('\nUsage: sbb-chrome-getbbox <input.svg> [element-ids...] [options]');
     process.exit(1);
   }
 
+  // TypeScript now knows positional[0] is defined after the check above
   options.input = positional[0];
   options.elementIds = positional.slice(1);
 

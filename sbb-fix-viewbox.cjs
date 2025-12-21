@@ -156,6 +156,11 @@ USE CASES:
 `);
 }
 
+/**
+ * Parse command-line arguments.
+ * @param {string[]} argv - The process.argv array
+ * @returns {{ input: string | null, output: string | null, autoOpen: boolean, force: boolean, overwrite: boolean, batch: string | null }}
+ */
 function parseArgs(argv) {
   const args = argv.slice(2);
 
@@ -172,7 +177,9 @@ function parseArgs(argv) {
   let batch = null;
 
   for (let i = 0; i < args.length; i++) {
+    // WHY: TypeScript doesn't know args[i] is safe within bounds of for loop
     const arg = args[i];
+    if (!arg) continue; // Type guard for TypeScript
 
     if (arg === '--auto-open') {
       autoOpen = true;
@@ -181,7 +188,8 @@ function parseArgs(argv) {
     } else if (arg === '--overwrite') {
       overwrite = true;
     } else if (arg === '--batch' && i + 1 < args.length) {
-      batch = args[++i];
+      // WHY: args[++i] is string | undefined, convert to string | null for return type consistency
+      batch = args[++i] ?? null;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -213,7 +221,8 @@ function parseArgs(argv) {
   if (input) {
     if (overwrite) {
       output = input;
-    } else if (positional[1]) {
+    } else if (positional[1] !== undefined) {
+      // WHY: positional[1] is string | undefined, convert to string | null for consistency
       output = positional[1];
     } else {
       output = input.replace(/\.svg$/i, '') + '_fixed.svg';
@@ -232,6 +241,8 @@ function parseArgs(argv) {
  * 2. Input/output pair (tab or space separated): input.svg output.svg
  *
  * Lines starting with # are comments and are ignored.
+ * @param {string} batchFilePath - Path to the batch file
+ * @returns {Array<{ input: string, output: string }>}
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file
@@ -268,7 +279,9 @@ function readBatchFile(batchFilePath) {
       // Look for pattern: something.svg something.svg (two SVG files)
       // Match: (anything ending in .svg) + (whitespace) + (anything ending in .svg)
       const svgMatch = line.match(/^(.+\.svg)\s+(.+\.svg)$/i);
-      if (svgMatch) {
+      // WHY: svgMatch[1] and svgMatch[2] are guaranteed to exist when svgMatch is non-null
+      // because the regex has exactly 2 capturing groups, but TypeScript doesn't know that
+      if (svgMatch && svgMatch[1] && svgMatch[2]) {
         parts = [svgMatch[1].trim(), svgMatch[2].trim()];
       }
     }
@@ -286,13 +299,17 @@ function readBatchFile(batchFilePath) {
       throw new _ValidationError(`Empty line at line ${index + 1} in batch file`);
     }
 
-    const inputFile = parts[0];
+    // WHY: After parts.length check, parts[0] is guaranteed to exist, but TypeScript
+    // doesn't infer this from the length check. Cast to string for type safety.
+    const inputFile = /** @type {string} */ (parts[0]);
 
     // If output is specified, use it; otherwise auto-generate
+    /** @type {string} */
     let outputFile;
     if (parts.length >= 2) {
-      // Explicit output path provided
-      outputFile = parts[1];
+      // WHY: After parts.length >= 2 check, parts[1] is guaranteed to exist, but TypeScript
+      // doesn't infer this from the length check. Cast to string for type safety.
+      outputFile = /** @type {string} */ (parts[1]);
     } else {
       // Auto-generate output: <input>_fixed.svg in same directory
       // WHY: Check for collisions when auto-generating output filenames
@@ -328,6 +345,14 @@ const PUPPETEER_OPTIONS = {
   args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
 };
 
+/**
+ * Fix an SVG file by computing and setting viewBox, width, and height attributes.
+ * @param {string} inputPath - Path to the input SVG file
+ * @param {string} outputPath - Path where the fixed SVG will be saved
+ * @param {boolean} [autoOpen=false] - Whether to auto-open the fixed SVG in Chrome
+ * @param {boolean} [force=false] - Whether to force regeneration of all attributes
+ * @returns {Promise<void>}
+ */
 async function fixSvgFile(inputPath, outputPath, autoOpen = false, force = false) {
   // SECURITY: Validate and sanitize input path
   const safePath = validateFilePath(inputPath, {
@@ -511,12 +536,15 @@ ${sanitizedSvg}
           if (result.success) {
             printSuccess(`Opened in Chrome: ${absolutePath}`);
           } else {
-            printWarning(result.error);
+            // WHY: result.error is string | null, provide fallback for null case
+            printWarning(result.error ?? 'Failed to open in Chrome');
             printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
           }
         })
         .catch((err) => {
-          printWarning(`Failed to auto-open: ${err.message}`);
+          // WHY: err is of type 'unknown' in catch blocks - must use type guard
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          printWarning(`Failed to auto-open: ${errorMessage}`);
           printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
         });
     }
@@ -527,8 +555,10 @@ ${sanitizedSvg}
         await browser.close();
       } catch {
         // Force kill if close fails
-        if (browser.process()) {
-          browser.process().kill('SIGKILL');
+        // WHY: browser.process() can return null if the browser has already exited
+        const browserProcess = browser.process();
+        if (browserProcess) {
+          browserProcess.kill('SIGKILL');
         }
       }
     }
@@ -559,7 +589,10 @@ async function main() {
     printInfo(`Processing ${filePairs.length} file(s) in batch mode...\n`);
 
     for (let i = 0; i < filePairs.length; i++) {
-      const { input: inputFile, output: outputFile } = filePairs[i];
+      // WHY: TypeScript doesn't know filePairs[i] is safe within bounds of for loop
+      const filePair = filePairs[i];
+      if (!filePair) continue; // Type guard for TypeScript
+      const { input: inputFile, output: outputFile } = filePair;
 
       try {
         // WHY: Validate input file exists before attempting fix
@@ -581,15 +614,17 @@ async function main() {
 
         console.log(`  ✓ ${path.basename(outputFile)}`);
       } catch (err) {
+        // WHY: err is of type 'unknown' in catch blocks - must use type guard
+        const errorMessage = err instanceof Error ? err.message : String(err);
         results.push({
           input: inputFile,
           output: outputFile,
           success: false,
-          error: err.message
+          error: errorMessage
         });
 
         printError(`  ✗ Failed: ${inputFile}`);
-        printError(`    ${err.message}`);
+        printError(`    ${errorMessage}`);
       }
     }
 
@@ -608,6 +643,11 @@ async function main() {
   }
 
   // SINGLE FILE MODE
+  // WHY: TypeScript doesn't know input/output are guaranteed non-null in single file mode
+  // (parseArgs validates that either batch is set OR positional[0] exists)
+  if (!input || !output) {
+    throw new Error('Internal error: input and output should be set in single file mode');
+  }
   await fixSvgFile(input, output, autoOpen, force);
 }
 

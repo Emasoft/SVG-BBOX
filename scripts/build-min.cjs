@@ -48,12 +48,13 @@ async function build() {
     }
   });
 
-  if (result.error) {
-    console.error('❌ Minification failed:', result.error);
+  // Terser returns undefined code on failure (no error property on MinifyOutput type)
+  if (!result.code) {
+    console.error('❌ Minification failed: terser returned no code');
     process.exit(1);
   }
 
-  // Write minified file
+  // Write minified file (result.code is guaranteed to be string after check above)
   fs.writeFileSync(OUTPUT_FILE, result.code, 'utf-8');
 
   // Get file sizes

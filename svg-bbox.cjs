@@ -208,6 +208,11 @@ function promptToolSelection() {
     }
 
     const selectedTool = TOOLS[selection - 1];
+    // Guard clause to satisfy TypeScript - bounds already checked above but TS doesn't track array access
+    if (!selectedTool) {
+      printError('Tool not found. This should never happen.');
+      process.exit(1);
+    }
     console.log(`\n${c.green}Showing help for: ${c.bold}${selectedTool.name}${c.reset}\n`);
 
     // Execute the tool with --help flag

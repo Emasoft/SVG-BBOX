@@ -13,11 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 # Centralized configuration - Single source of truth for versions and settings
-# Simplified env vars - use semantic names (LTS vs LATEST)
+# Only support latest Node.js version for faster CI/CD
 env:
-  PNPM_VERSION: '9'
-  NODE_VERSION_LTS: '18' # Node 18 LTS - Primary support target
-  NODE_VERSION_LATEST: '22' # Node 22 Latest - Future support target
+  PNPM_VERSION: '10'
+  NODE_VERSION: '24' # Only support Node.js 24 (latest)
   GIT_FETCH_DEPTH: '10' # Increased from 1 to support selective testing
 
 jobs:
@@ -30,7 +29,7 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # Prevent hangs - lint should complete in 2-3 min
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -44,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_LTS }}
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -56,7 +55,7 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # Prevent hangs - typecheck should complete in 2-3 min
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -70,7 +69,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_LTS }}
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -82,74 +81,42 @@ jobs:
   # =============================================================================
   # STAGE 2: Tests (only run if lint + typecheck pass)
   # =============================================================================
-  # Matrix reduced from 9 jobs to 4 jobs (saves ~60 min per run):
-  # - Removed Node 20 (not a deployment target per package.json engines)
-  # - Test only 2 OSes per Node version instead of all 3
-  # - Primary: ubuntu (most common), Secondary: windows/macos (catch OS-specific issues)
+  # Simplified to single job: Node 24 on Ubuntu only
+  # Cross-platform issues are rare and can be caught in local development
 
   test:
-    name: Test (Node ${{ matrix.node-version }} on ${{ matrix.os }})
-    needs: [lint, typecheck] # Wait for fast checks to pass before running tests
-    runs-on: ${{ matrix.os }}
-    # Windows is 2-3x slower than Linux, so use longer timeout
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 30 }}
-
-    strategy:
-      fail-fast: true # Stop on first failure (saves CI time)
-      matrix:
-        # Reduced from 9 combinations (3 OS × 3 Node) to 4 combinations
-        include:
-          # Node 18 LTS - Primary support (most important to test)
-          - os: ubuntu-latest
-            node-version: '18'
-          - os: windows-latest # Test one non-Linux OS for Node 18
-            node-version: '18'
-
-          # Node 22 Latest - Future support
-          - os: ubuntu-latest
-            node-version: '22'
-          - os: macos-latest # Test different OS for Node 22
-            node-version: '22'
+    name: Test
+    needs: [lint, typecheck]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: ${{ env.GIT_FETCH_DEPTH }} # Need history for selective testing
+          fetch-depth: ${{ env.GIT_FETCH_DEPTH }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Cache browser binaries (saves ~60 sec per job after first run)
-      # Windows uses different paths than Unix (~/.cache doesn't exist on Windows)
-      - name: Cache browser binaries (Unix)
-        if: runner.os != 'Windows'
+      - name: Cache browser binaries
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/ms-playwright
             ~/.cache/puppeteer
-          key: browsers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Cache browser binaries (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~\AppData\Local\ms-playwright
-            ~\AppData\Local\puppeteer
-          key: browsers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: browsers-Linux-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install browser dependencies
         run: pnpm run install-browsers
@@ -159,35 +126,23 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "Running selective tests for PR..."
-            # Fetch base branch to ensure origin/${{ github.base_ref }} exists
             git fetch --depth=${{ env.GIT_FETCH_DEPTH }} origin ${{ github.base_ref }}
             node scripts/test-selective.cjs origin/${{ github.base_ref }}
           else
             echo "Running selective tests for push to main/develop..."
-            # Compare against previous commit to determine which tests to run
-            # This avoids running ALL tests when only docs/fixtures changed
             node scripts/test-selective.cjs HEAD~1
           fi
 
   # =============================================================================
-  # E2E Tests (browser tests - only ubuntu, Node version independent)
+  # E2E Tests (browser tests)
   # =============================================================================
-  # Matrix reduced from 9 jobs to 2 jobs:
-  # - Browser behavior is OS-independent (Playwright/Puppeteer use own binaries)
-  # - Only test ubuntu (most common CI environment)
-  # - Only test Node 18 LTS and 22 Latest (browser tests don't vary by Node version)
+  # Single job: Node 24 on Ubuntu
 
   e2e:
-    name: E2E Tests (Node ${{ matrix.node-version }})
-    needs: [lint, typecheck] # Wait for fast checks to pass before running E2E
-    runs-on: ubuntu-latest # Browser tests don't need cross-OS testing
-    timeout-minutes: 30 # Prevent hangs - E2E with browser setup should complete in 15-20 min
-
-    strategy:
-      fail-fast: true # Stop on first failure
-      matrix:
-        # Only test 2 Node versions on ubuntu (browser tests don't vary by Node version)
-        node-version: ['18', '22']
+    name: E2E Tests
+    needs: [lint, typecheck]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -198,17 +153,15 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Cache Playwright browsers (saves ~60 sec per job after first run)
-      # Key must match test job's Linux cache for cache reuse
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -230,21 +183,19 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-node-${{ matrix.node-version }}
+          name: playwright-report
           path: playwright-report/
           retention-days: 7
 
   # =============================================================================
   # Coverage (only run if tests pass)
   # =============================================================================
-  # Runs after tests to avoid duplicate test execution.
-  # Only runs on Node LTS (coverage doesn't need to run on all Node versions).
 
   coverage:
     name: Coverage
-    needs: [test] # Only run if tests pass (avoid duplicate work)
+    needs: [test]
     runs-on: ubuntu-latest
-    timeout-minutes: 30 # Prevent hangs - coverage should complete in 10-15 min
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -258,14 +209,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # Coverage requires Node 19+ for node:inspector/promises module
-          node-version: ${{ env.NODE_VERSION_LATEST }}
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Reuse browser binary cache from test job (key must match test job's Linux cache)
       - name: Cache browser binaries
         uses: actions/cache@v4
         with:

@@ -6,6 +6,65 @@
  * with SvgVisualBBox and Inkscape extraction methods.
  */
 
+/**
+ * @typedef {Object} BBox
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ * @property {number} width - Width
+ * @property {number} height - Height
+ */
+
+/**
+ * @typedef {Object} ExtractOptions
+ * @property {string} inputFile - Path to input SVG file
+ * @property {string} elementId - ID of element to extract
+ * @property {string} outputSvg - Path for output SVG file
+ * @property {string|null} outputPng - Path for output PNG file (optional)
+ * @property {number} margin - Margin around bbox in SVG units
+ * @property {string} background - Background color for PNG
+ * @property {number} scale - Resolution multiplier for PNG
+ * @property {number|null} width - Exact PNG width in pixels (optional)
+ * @property {number|null} height - Exact PNG height in pixels (optional)
+ */
+
+/**
+ * @typedef {Object} RenderOptions
+ * @property {number|null} width - Exact PNG width in pixels (optional)
+ * @property {number|null} height - Exact PNG height in pixels (optional)
+ * @property {number} scale - Resolution multiplier
+ * @property {string} background - Background color
+ * @property {BBox} viewBox - ViewBox dimensions
+ */
+
+/**
+ * @typedef {Object} ParsedOptions
+ * @property {string|null} id - Element ID to extract
+ * @property {string|null} output - Output SVG file path
+ * @property {string|null} png - Output PNG file path (optional)
+ * @property {number} margin - Margin around bbox
+ * @property {number} scale - Resolution multiplier
+ * @property {number|null} width - Exact PNG width
+ * @property {number|null} height - Exact PNG height
+ * @property {string} background - Background color
+ * @property {string|null} batch - Batch file path (optional)
+ * @property {string} [input] - Input SVG file path (set in single mode)
+ */
+
+/**
+ * @typedef {Object} BatchEntry
+ * @property {string} input - Input SVG file path
+ * @property {string} objectId - Element ID to extract
+ * @property {string} output - Output SVG file path
+ */
+
+/**
+ * @typedef {Object} BatchResult
+ * @property {string} inputPath - Input file path
+ * @property {string} objectId - Element ID
+ * @property {string} outputPath - Output file path
+ * @property {string} [error] - Error message if failed
+ */
+
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
@@ -16,6 +75,8 @@ const { SHELL_METACHARACTERS, SVGBBoxError } = require('./lib/security-utils.cjs
 
 /**
  * Extract SVG element using native .getBBox() method
+ * @param {ExtractOptions} options - Extraction options
+ * @returns {Promise<void>}
  */
 async function extractWithGetBBox(options) {
   const { inputFile, elementId, outputSvg, outputPng, margin, background, scale, width, height } =
@@ -80,7 +141,7 @@ async function extractWithGetBBox(options) {
             width: bbox.width,
             height: bbox.height
           },
-          svgViewBox: svg.getAttribute('viewBox'),
+          svgViewBox: svg ? svg.getAttribute('viewBox') : null,
           element: {
             tagName: element.tagName,
             id: element.id
@@ -106,6 +167,9 @@ async function extractWithGetBBox(options) {
           /** @type {unknown} */ (document.getElementById(id))
         );
         const svg = element.ownerSVGElement;
+        if (!svg) {
+          throw new Error('Element is not part of an SVG document');
+        }
 
         // Clone the element
         const clone = element.cloneNode(true);
@@ -151,6 +215,11 @@ ${defsContent}${/** @type {Element} */ (clone).outerHTML}
 
 /**
  * Render SVG to PNG using Puppeteer
+ * @param {import('puppeteer').Page} page - Puppeteer page instance
+ * @param {string} svgContent - SVG content to render
+ * @param {string} outputPath - Output PNG file path
+ * @param {RenderOptions} options - Render options
+ * @returns {Promise<void>}
  */
 async function renderToPng(page, svgContent, outputPath, options) {
   const { width, height, scale, background, viewBox } = options;
@@ -352,6 +421,9 @@ USE CASES:
  * - Each line: input.svg object_id output.svg
  * - Tab or space separated
  * - Lines starting with # are comments
+ *
+ * @param {string} batchFilePath - Path to batch file
+ * @returns {BatchEntry[]} Array of batch entries
  */
 function readBatchFile(batchFilePath) {
   // Check batch file exists
@@ -385,7 +457,8 @@ function readBatchFile(batchFilePath) {
       // Look for pattern: input.svg object_id output.svg (three parts)
       // Match: (anything ending in .svg) + (whitespace) + (non-whitespace ID) + (whitespace) + (anything ending in .svg)
       const svgMatch = line.match(/^(.+\.svg)\s+(\S+)\s+(.+\.svg)$/i);
-      if (svgMatch) {
+      // WHY: Regex has 3 capturing groups, so indices 1-3 are always defined when match succeeds
+      if (svgMatch && svgMatch[1] && svgMatch[2] && svgMatch[3]) {
         parts = [svgMatch[1].trim(), svgMatch[2].trim(), svgMatch[3].trim()];
       }
     }
@@ -407,9 +480,10 @@ function readBatchFile(batchFilePath) {
       );
     }
 
-    const inputFile = parts[0];
-    const objectId = parts[1];
-    const outputFile = parts[2];
+    // WHY: We verified parts.length >= 3 above, so indices 0-2 are always defined
+    const inputFile = /** @type {string} */ (parts[0]);
+    const objectId = /** @type {string} */ (parts[1]);
+    const outputFile = /** @type {string} */ (parts[2]);
 
     return { input: inputFile, objectId, output: outputFile };
   });
@@ -425,6 +499,8 @@ function readBatchFile(batchFilePath) {
 
 /**
  * Parse command line arguments
+ * @param {string[]} argv - Command line arguments array (process.argv)
+ * @returns {ParsedOptions} Parsed options object
  */
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -441,7 +517,9 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
+  /** @type {string[]} */
   const positional = [];
+  /** @type {ParsedOptions} */
   const options = {
     id: null,
     output: null,
@@ -451,13 +529,20 @@ function parseArgs(argv) {
     width: null,
     height: null,
     background: 'transparent',
-    batch: null
+    batch: null,
+    input: undefined
   };
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    // WHY: TypeScript doesn't know args[i] is always defined within the loop bounds
+    if (!a) continue;
     if (a.startsWith('--')) {
-      const [key, val] = a.split('=');
+      const splitResult = a.split('=');
+      const key = splitResult[0];
+      const val = splitResult[1];
+      // WHY: key is always defined since split always returns at least one element
+      if (!key) continue;
       const name = key.replace(/^--/, '');
       const next = typeof val === 'undefined' ? args[i + 1] : val;
 
@@ -485,7 +570,8 @@ function parseArgs(argv) {
           useNext();
           break;
         case 'margin':
-          options.margin = parseFloat(next);
+          // WHY: parseFloat needs a string, but next could be undefined - use empty string as fallback (results in NaN)
+          options.margin = parseFloat(next || '');
           if (!isFinite(options.margin) || options.margin < 0) {
             printError('Margin must be a non-negative number');
             process.exit(1);
@@ -493,7 +579,8 @@ function parseArgs(argv) {
           useNext();
           break;
         case 'scale':
-          options.scale = parseFloat(next);
+          // WHY: parseFloat needs a string, but next could be undefined - use empty string as fallback (results in NaN)
+          options.scale = parseFloat(next || '');
           if (!isFinite(options.scale) || options.scale <= 0 || options.scale > 20) {
             printError('Scale must be between 0 and 20');
             process.exit(1);
@@ -501,11 +588,13 @@ function parseArgs(argv) {
           useNext();
           break;
         case 'width':
-          options.width = parseInt(next, 10);
+          // WHY: parseInt needs a string, use empty string fallback (results in NaN)
+          options.width = parseInt(next || '', 10);
           useNext();
           break;
         case 'height':
-          options.height = parseInt(next, 10);
+          // WHY: parseInt needs a string, use empty string fallback (results in NaN)
+          options.height = parseInt(next || '', 10);
           useNext();
           break;
         case 'background':
@@ -551,8 +640,10 @@ function parseArgs(argv) {
     options.input = positional[0];
 
     // Check input file exists
-    if (!fs.existsSync(options.input)) {
-      printError(`Input file not found: ${options.input}`);
+    // WHY: TypeScript needs explicit null check since options.input is string | undefined
+    const inputPath = options.input;
+    if (!inputPath || !fs.existsSync(inputPath)) {
+      printError(`Input file not found: ${options.input ?? '(none)'}`);
       process.exit(1);
     }
   }
@@ -562,6 +653,7 @@ function parseArgs(argv) {
 
 /**
  * Main CLI entry point
+ * @returns {Promise<void>}
  */
 async function main() {
   printInfo(`sbb-chrome-extract v${getVersion()} | svg-bbox toolkit\n`);
@@ -571,12 +663,16 @@ async function main() {
   // BATCH MODE
   if (options.batch) {
     const entries = readBatchFile(options.batch);
+    /** @type {BatchResult[]} */
     const results = [];
 
     printInfo(`Processing ${entries.length} extraction(s) in batch mode...\n`);
 
     for (let i = 0; i < entries.length; i++) {
-      const { input: inputFile, objectId, output: outputFile } = entries[i];
+      // WHY: TypeScript needs explicit null check for array element access
+      const entry = entries[i];
+      if (!entry) continue;
+      const { input: inputFile, objectId, output: outputFile } = entry;
 
       try {
         // WHY: Validate input file exists before attempting extraction
@@ -587,6 +683,7 @@ async function main() {
 
         printInfo(`[${i + 1}/${entries.length}] Extracting "${objectId}" from ${inputFile}...`);
 
+        /** @type {ExtractOptions} */
         const extractOptions = {
           inputFile,
           elementId: objectId,
@@ -610,16 +707,19 @@ async function main() {
 
         console.log(`  ✓ ${path.basename(outputFile)}`);
       } catch (err) {
+        // WHY: TypeScript requires type guard for catch block errors (type 'unknown')
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        /** @type {BatchResult} */
         const errorResult = {
           inputPath: inputFile,
           objectId,
           outputPath: outputFile,
-          error: err.message
+          error: errorMessage
         };
         results.push(errorResult);
 
         console.error(`  ✗ Failed: ${inputFile}`);
-        console.error(`    ${err.message}`);
+        console.error(`    ${errorMessage}`);
       }
     }
 
@@ -638,6 +738,13 @@ async function main() {
   }
 
   // SINGLE FILE MODE
+  // WHY: In single mode, parseArgs() validates these fields exist before returning.
+  // TypeScript doesn't know this, so we use non-null assertions.
+  if (!options.input || !options.id || !options.output) {
+    // This should never happen due to parseArgs validation, but satisfies TypeScript
+    throw new SVGBBoxError('Missing required options in single mode');
+  }
+  /** @type {ExtractOptions} */
   const extractOptions = {
     inputFile: options.input,
     elementId: options.id,

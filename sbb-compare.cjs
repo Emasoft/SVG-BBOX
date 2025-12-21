@@ -8,6 +8,99 @@
  * Part of the svg-bbox toolkit.
  */
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPE DEFINITIONS (JSDoc)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * @typedef {import('puppeteer').Browser} Browser
+ */
+
+/**
+ * @typedef {Object} ViewBoxInfo
+ * @property {number} x - ViewBox x origin
+ * @property {number} y - ViewBox y origin
+ * @property {number} width - ViewBox width
+ * @property {number} height - ViewBox height
+ * @property {number} centerX - ViewBox center X coordinate
+ * @property {number} centerY - ViewBox center Y coordinate
+ */
+
+/**
+ * @typedef {Object} SVGAnalysis
+ * @property {ViewBoxInfo|null} viewBox - ViewBox information
+ * @property {number|null} width - Width attribute value
+ * @property {number|null} height - Height attribute value
+ * @property {{x: number, y: number}} origin - Origin point
+ * @property {string|null} preserveAspectRatio - preserveAspectRatio attribute
+ */
+
+/**
+ * @typedef {Object} ComparisonArgs
+ * @property {string|null} svg1 - First SVG file path
+ * @property {string|null} svg2 - Second SVG file path
+ * @property {string|null} outDiff - Output diff PNG file path
+ * @property {number} threshold - Pixel difference threshold (1-255)
+ * @property {string} alignment - Alignment mode
+ * @property {{x: number, y: number}|string|null} alignmentParam - Alignment parameter
+ * @property {string} resolution - Resolution mode
+ * @property {string} meetRule - Meet rule for scaling
+ * @property {string} sliceRule - Slice rule for clipping
+ * @property {boolean} json - Output as JSON
+ * @property {boolean} verbose - Verbose output
+ * @property {string|null} batch - Batch file path
+ * @property {boolean} addMissingViewbox - Force regenerate viewBox
+ * @property {number} aspectRatioThreshold - Max aspect ratio difference
+ * @property {number} scale - Resolution multiplier
+ * @property {boolean} [headless] - Alias for no-html
+ * @property {boolean} [noHtml] - Do not open HTML report
+ */
+
+/**
+ * @typedef {Object} ComparisonResult
+ * @property {string} svg1 - First SVG path
+ * @property {string} svg2 - Second SVG path
+ * @property {number} [totalPixels] - Total pixels compared
+ * @property {number} [differentPixels] - Number of different pixels
+ * @property {number} diffPercentage - Difference percentage
+ * @property {number} [threshold] - Threshold used
+ * @property {string} [diffImage] - Path to diff image
+ * @property {SVGAnalysis} [svgAnalysis1] - Analysis of first SVG
+ * @property {SVGAnalysis} [svgAnalysis2] - Analysis of second SVG
+ * @property {boolean} [aspectRatioMismatch] - Whether aspect ratios mismatched
+ * @property {string} [error] - Error message if failed
+ * @property {boolean} [failed] - Whether comparison failed
+ */
+
+/**
+ * @typedef {Object} ImageCompareResult
+ * @property {number} totalPixels - Total pixels compared
+ * @property {number} differentPixels - Number of different pixels
+ * @property {string} diffPercentage - Difference percentage as string
+ */
+
+/**
+ * @typedef {Object} AspectRatioInfo
+ * @property {number|null} ratio - The calculated aspect ratio
+ * @property {string} source - Where the ratio came from
+ * @property {boolean} needsRegeneration - Whether viewBox needs regeneration
+ * @property {string} [reason] - Reason for regeneration
+ */
+
+/**
+ * @typedef {Object} RenderParams
+ * @property {{offsetX: number, offsetY: number, width: number, height: number}} svg1 - SVG1 params
+ * @property {{offsetX: number, offsetY: number, width: number, height: number}} svg2 - SVG2 params
+ * @property {number} canvasWidth - Canvas width
+ * @property {number} canvasHeight - Canvas height
+ */
+
+/**
+ * @typedef {Object} SVGPair
+ * @property {string} svg1 - First SVG path
+ * @property {string} svg2 - Second SVG path
+ */
+
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
@@ -148,6 +241,11 @@ OUTPUT:
 `);
 }
 
+/**
+ * Print version information
+ * @param {string} toolName - Name of the tool
+ * @returns {void}
+ */
 function _printVersion(toolName) {
   const version = getVersion();
   console.log(`${toolName} v${version} | svg-bbox toolkit`);
@@ -157,6 +255,11 @@ function _printVersion(toolName) {
 // ARGUMENT PARSING
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Parse command line arguments
+ * @param {string[]} argv - Command line arguments
+ * @returns {ComparisonArgs} Parsed arguments
+ */
 function parseArgs(argv) {
   const { createModeArgParser } = require('./lib/cli-utils.cjs');
 
@@ -249,12 +352,14 @@ function parseArgs(argv) {
   const result = parser(argv);
 
   // Map parser output to the expected legacy format for backward compatibility
+  /** @type {ComparisonArgs} */
   const args = {
     svg1: result.positional[0] || null,
     svg2: result.positional[1] || null,
     outDiff: result.flags['out-diff'] || null,
     threshold: result.flags.threshold || 1,
     alignment: 'origin', // Will be set below after parsing
+    /** @type {{x: number, y: number}|string|null} */
     alignmentParam: null, // Will be set below after parsing
     resolution: result.flags.resolution || 'viewbox',
     meetRule: result.flags['meet-rule'] || 'xMidYMid',
@@ -267,7 +372,9 @@ function parseArgs(argv) {
     // CRITICAL: Default scale of 4x for detailed SVG comparison
     // SVGs are extremely detailed - differences hidden at low resolution become visible at 4x
     // A flower and a planet may look identical at 1024px but completely different at 4096px
-    scale: result.flags.scale || 4
+    scale: result.flags.scale || 4,
+    headless: result.flags.headless || false,
+    noHtml: result.flags['no-html'] || false
   };
 
   // Validate threshold range (1-255)
@@ -322,6 +429,8 @@ function parseArgs(argv) {
 /**
  * Read and parse batch comparison file (tab-separated: svg1\tsvg2)
  * Returns array of {svg1, svg2} pairs
+ * @param {string} batchFilePath - Path to the batch file
+ * @returns {SVGPair[]} Array of SVG pairs
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file path
@@ -333,9 +442,13 @@ function readBatchFile(batchFilePath) {
   const content = fs.readFileSync(safeBatchPath, 'utf-8');
   const lines = content.split('\n').filter((line) => line.trim() && !line.trim().startsWith('#'));
 
+  /** @type {SVGPair[]} */
   const pairs = [];
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const lineRaw = lines[i];
+    // Type guard: lines[i] cannot be undefined due to loop condition
+    if (lineRaw === undefined) continue;
+    const line = lineRaw.trim();
     const parts = line.split('\t');
 
     if (parts.length !== 2) {
@@ -345,8 +458,12 @@ function readBatchFile(batchFilePath) {
       );
     }
 
-    const svg1 = parts[0].trim();
-    const svg2 = parts[1].trim();
+    const part0 = parts[0];
+    const part1 = parts[1];
+    // Type guard: parts[0] and parts[1] exist since length === 2
+    if (part0 === undefined || part1 === undefined) continue;
+    const svg1 = part0.trim();
+    const svg2 = part1.trim();
 
     if (!svg1 || !svg2) {
       throw new ValidationError(`Invalid batch file format at line ${i + 1}: empty SVG path`);
@@ -366,6 +483,12 @@ function readBatchFile(batchFilePath) {
 // SVG ANALYSIS
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Analyze an SVG file to extract viewBox, dimensions, and other attributes
+ * @param {string} svgPath - Path to the SVG file
+ * @param {Browser} browser - Puppeteer browser instance
+ * @returns {Promise<SVGAnalysis|null>} Analysis result or null if SVG not found
+ */
 async function analyzeSvg(svgPath, browser) {
   // SECURITY: Read and sanitize SVG
   const safePath = validateFilePath(svgPath, {
@@ -402,18 +525,19 @@ async function analyzeSvg(svgPath, browser) {
       return null;
     }
 
-    const result = {
-      viewBox: null,
-      width: null,
-      height: null,
-      origin: { x: 0, y: 0 },
-      preserveAspectRatio: null
-    };
+    /** @type {{x: number, y: number, width: number, height: number, centerX: number, centerY: number}|null} */
+    let viewBox = null;
+    /** @type {number|null} */
+    let width = null;
+    /** @type {number|null} */
+    let height = null;
+    /** @type {string|null} */
+    let preserveAspectRatio = null;
 
     // Get viewBox
     const vb = svg.viewBox.baseVal;
     if (vb && vb.width && vb.height) {
-      result.viewBox = {
+      viewBox = {
         x: vb.x,
         y: vb.y,
         width: vb.width,
@@ -429,25 +553,38 @@ async function analyzeSvg(svgPath, browser) {
     const widthAttr = svg.getAttribute('width');
     const heightAttr = svg.getAttribute('height');
     if (widthAttr && !widthAttr.includes('%')) {
-      result.width = parseFloat(widthAttr);
+      width = parseFloat(widthAttr);
     }
     if (heightAttr && !heightAttr.includes('%')) {
-      result.height = parseFloat(heightAttr);
+      height = parseFloat(heightAttr);
     }
 
     // Get preserveAspectRatio attribute
     const preserveAspectRatioAttr = svg.getAttribute('preserveAspectRatio');
     if (preserveAspectRatioAttr) {
-      result.preserveAspectRatio = preserveAspectRatioAttr;
+      preserveAspectRatio = preserveAspectRatioAttr;
     }
 
-    return result;
+    return {
+      viewBox,
+      width,
+      height,
+      origin: { x: 0, y: 0 },
+      preserveAspectRatio
+    };
   });
 
   await page.close();
   return analysis;
 }
 
+/**
+ * Get bounding box center coordinates for a specific object in an SVG
+ * @param {string} svgPath - Path to the SVG file
+ * @param {string} objectId - ID of the element to get bbox for
+ * @param {Browser} browser - Puppeteer browser instance
+ * @returns {Promise<{x: number, y: number}|null>} Center coordinates or null
+ */
 async function getObjectBBox(svgPath, objectId, browser) {
   // SECURITY: Read and sanitize SVG
   const safePath = validateFilePath(svgPath, {
@@ -472,22 +609,26 @@ async function getObjectBBox(svgPath, objectId, browser) {
     </html>
   `);
 
-  const bbox = await page.evaluate((id) => {
-    // eslint-disable-next-line no-undef
-    const element = document.getElementById(id);
-    if (!element) {
-      return null;
-    }
+  const bbox = await page.evaluate(
+    /** @param {string} id */
+    (id) => {
+      // eslint-disable-next-line no-undef
+      const element = document.getElementById(id);
+      if (!element) {
+        return null;
+      }
 
-    // Type assertion: getBBox is only available on SVGGraphicsElement
-    // Cast through unknown to satisfy TypeScript's strict type checking
-    const svgElement = /** @type {SVGGraphicsElement} */ (/** @type {unknown} */ (element));
-    const rect = svgElement.getBBox();
-    return {
-      x: rect.x + rect.width / 2,
-      y: rect.y + rect.height / 2
-    };
-  }, objectId);
+      // Type assertion: getBBox is only available on SVGGraphicsElement
+      // Cast through unknown to satisfy TypeScript's strict type checking
+      const svgElement = /** @type {SVGGraphicsElement} */ (/** @type {unknown} */ (element));
+      const rect = svgElement.getBBox();
+      return {
+        x: rect.x + rect.width / 2,
+        y: rect.y + rect.height / 2
+      };
+    },
+    objectId
+  );
 
   await page.close();
   return bbox;
@@ -497,6 +638,14 @@ async function getObjectBBox(svgPath, objectId, browser) {
 // ALIGNMENT & RESOLUTION CALCULATION
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Calculate render parameters for comparing two SVGs
+ * @param {string} svg1Path - Path to first SVG file
+ * @param {string} svg2Path - Path to second SVG file
+ * @param {ComparisonArgs} args - Comparison arguments
+ * @param {Browser} browser - Puppeteer browser instance
+ * @returns {Promise<RenderParams>} Render parameters
+ */
 async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
   const analysis1 = await analyzeSvg(svg1Path, browser);
   const analysis2 = await analyzeSvg(svg2Path, browser);
@@ -540,8 +689,10 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       break;
 
     case 'object': {
-      const bbox1 = await getObjectBBox(svg1Path, args.alignmentParam, browser);
-      const bbox2 = await getObjectBBox(svg2Path, args.alignmentParam, browser);
+      // alignmentParam is a string (object ID) in 'object' mode
+      const objectId = /** @type {string} */ (args.alignmentParam);
+      const bbox1 = await getObjectBBox(svg1Path, objectId, browser);
+      const bbox2 = await getObjectBBox(svg2Path, objectId, browser);
       if (bbox1) {
         align1 = bbox1;
       }
@@ -551,10 +702,13 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       break;
     }
 
-    case 'custom':
-      align1 = args.alignmentParam;
-      align2 = args.alignmentParam;
+    case 'custom': {
+      // alignmentParam is {x, y} object in 'custom' mode
+      const customAlign = /** @type {{x: number, y: number}} */ (args.alignmentParam);
+      align1 = customAlign;
+      align2 = customAlign;
       break;
+    }
   }
 
   // CRITICAL BUG FIX: Apply scale factor for detailed comparison
@@ -666,6 +820,15 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
 // PNG RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Render an SVG file to PNG
+ * @param {string} svgPath - Path to the SVG file
+ * @param {string} outputPath - Path for the output PNG
+ * @param {number} width - Target width in pixels
+ * @param {number} height - Target height in pixels
+ * @param {Browser} browser - Puppeteer browser instance
+ * @returns {Promise<void>}
+ */
 async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
   // SECURITY: Read and sanitize SVG
   const safePath = validateFilePath(svgPath, {
@@ -731,6 +894,14 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
 // PIXEL COMPARISON
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Compare two PNG images pixel by pixel
+ * @param {string} png1Path - Path to first PNG
+ * @param {string} png2Path - Path to second PNG
+ * @param {string} diffPath - Path for the diff output PNG
+ * @param {number} threshold - Difference threshold (1-255)
+ * @returns {Promise<ImageCompareResult>} Comparison result
+ */
 async function compareImages(png1Path, png2Path, diffPath, threshold) {
   // SECURITY: Validate PNG input paths
   const safePng1Path = validateFilePath(png1Path, {
@@ -773,15 +944,16 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
       const idx = (width * y + x) << 2;
 
       // Get pixel values (handle images of different sizes)
-      const r1 = x < png1.width && y < png1.height ? png1.data[idx] : 0;
-      const g1 = x < png1.width && y < png1.height ? png1.data[idx + 1] : 0;
-      const b1 = x < png1.width && y < png1.height ? png1.data[idx + 2] : 0;
-      const a1 = x < png1.width && y < png1.height ? png1.data[idx + 3] : 0;
+      // Use ?? 0 to satisfy TypeScript's undefined check on array access
+      const r1 = x < png1.width && y < png1.height ? (png1.data[idx] ?? 0) : 0;
+      const g1 = x < png1.width && y < png1.height ? (png1.data[idx + 1] ?? 0) : 0;
+      const b1 = x < png1.width && y < png1.height ? (png1.data[idx + 2] ?? 0) : 0;
+      const a1 = x < png1.width && y < png1.height ? (png1.data[idx + 3] ?? 0) : 0;
 
-      const r2 = x < png2.width && y < png2.height ? png2.data[idx] : 0;
-      const g2 = x < png2.width && y < png2.height ? png2.data[idx + 1] : 0;
-      const b2 = x < png2.width && y < png2.height ? png2.data[idx + 2] : 0;
-      const a2 = x < png2.width && y < png2.height ? png2.data[idx + 3] : 0;
+      const r2 = x < png2.width && y < png2.height ? (png2.data[idx] ?? 0) : 0;
+      const g2 = x < png2.width && y < png2.height ? (png2.data[idx + 1] ?? 0) : 0;
+      const b2 = x < png2.width && y < png2.height ? (png2.data[idx + 2] ?? 0) : 0;
+      const a2 = x < png2.width && y < png2.height ? (png2.data[idx + 3] ?? 0) : 0;
 
       // Check if pixels are different (any channel differs by more than threshold)
       const rDiff = Math.abs(r1 - r2);
@@ -829,6 +1001,17 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
 // HTML REPORT GENERATION
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Generate an HTML report for SVG comparison
+ * @param {string} svg1Path - Path to first SVG file
+ * @param {string} svg2Path - Path to second SVG file
+ * @param {string} diffPngPath - Path to the diff PNG image
+ * @param {{totalPixels: number, differentPixels: number, diffPercentage: string}} result - Comparison result
+ * @param {ComparisonArgs} args - Comparison arguments
+ * @param {SVGAnalysis} svgAnalysis1 - Analysis of first SVG
+ * @param {SVGAnalysis} svgAnalysis2 - Analysis of second SVG
+ * @returns {Promise<string>} Path to the generated HTML report
+ */
 async function generateHtmlReport(
   svg1Path,
   svg2Path,
@@ -869,6 +1052,7 @@ async function generateHtmlReport(
   // Get file modification dates
   const svg1Stats = fs.statSync(svg1Path);
   const svg2Stats = fs.statSync(svg2Path);
+  /** @param {Date} date - Date to format */
   const formatDate = (date) =>
     date.toLocaleString('en-US', {
       year: 'numeric',
@@ -882,6 +1066,7 @@ async function generateHtmlReport(
   const svg2Modified = formatDate(svg2Stats.mtime);
 
   // Format viewBox info
+  /** @param {ViewBoxInfo|null} vb - ViewBox info to format */
   const formatViewBox = (vb) => {
     if (!vb) {
       return 'none';
@@ -890,6 +1075,7 @@ async function generateHtmlReport(
   };
 
   // Format resolution info
+  /** @param {SVGAnalysis} analysis - SVG analysis to format */
   const formatResolution = (analysis) => {
     const w = analysis.width || (analysis.viewBox ? analysis.viewBox.width : 'none');
     const h = analysis.height || (analysis.viewBox ? analysis.viewBox.height : 'none');
@@ -1585,7 +1771,11 @@ async function regenerateViewBox(svgPath) {
     });
     return outputPath;
   } catch (error) {
-    throw new SVGBBoxError(`Failed to regenerate viewBox for ${svgPath}: ${error.message}`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new SVGBBoxError(
+      `Failed to regenerate viewBox for ${svgPath}: ${errorMessage}`,
+      'VIEWBOX_REGENERATION_FAILED'
+    );
   }
 }
 
@@ -1595,6 +1785,9 @@ async function regenerateViewBox(svgPath) {
  * - ratio: the calculated aspect ratio (width/height)
  * - source: where the ratio came from ('viewBox', 'attributes', or 'regenerated')
  * - needsRegeneration: true if viewBox needs to be regenerated
+ * @param {SVGAnalysis} analysis - The SVG analysis object containing viewBox, width, height
+ * @param {boolean} addMissingViewbox - Whether to regenerate missing viewBox
+ * @returns {AspectRatioInfo}
  */
 function getAspectRatioInfo(analysis, addMissingViewbox) {
   // Priority 1: Use viewBox if it exists
@@ -1642,6 +1835,11 @@ function getAspectRatioInfo(analysis, addMissingViewbox) {
 /**
  * Perform a single SVG comparison
  * Returns comparison result object
+ * @param {string} svg1Path - Path to first SVG file
+ * @param {string} svg2Path - Path to second SVG file
+ * @param {ComparisonArgs} args - Comparison arguments
+ * @param {import('puppeteer').Browser} browser - Puppeteer browser instance
+ * @returns {Promise<ComparisonResult>}
  */
 async function performSingleComparison(svg1Path, svg2Path, args, browser) {
   // SECURITY: Validate input SVG files
@@ -1674,6 +1872,11 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
   let svgAnalysis1 = await analyzeSvg(safeSvg1Path, browser);
   let svgAnalysis2 = await analyzeSvg(safeSvg2Path, browser);
 
+  // Ensure SVG analysis succeeded for both files
+  if (!svgAnalysis1 || !svgAnalysis2) {
+    throw new ValidationError('Failed to analyze one or both SVG files');
+  }
+
   // Get aspect ratio info for both SVGs
   const ratioInfo1 = getAspectRatioInfo(svgAnalysis1, args.addMissingViewbox);
   const ratioInfo2 = getAspectRatioInfo(svgAnalysis2, args.addMissingViewbox);
@@ -1694,7 +1897,11 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
     }
     svg1PathToUse = await regenerateViewBox(safeSvg1Path);
     regeneratedFiles.push(svg1PathToUse);
-    svgAnalysis1 = await analyzeSvg(svg1PathToUse, browser);
+    const newAnalysis1 = await analyzeSvg(svg1PathToUse, browser);
+    if (!newAnalysis1) {
+      throw new ValidationError('Failed to analyze regenerated SVG1');
+    }
+    svgAnalysis1 = newAnalysis1;
     ratioInfo1.ratio = getAspectRatioInfo(svgAnalysis1, false).ratio;
     if (args.verbose && !args.json) {
       printInfo(`SVG1 viewBox regenerated: ${svg1PathToUse}`);
@@ -1712,7 +1919,11 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
     }
     svg2PathToUse = await regenerateViewBox(safeSvg2Path);
     regeneratedFiles.push(svg2PathToUse);
-    svgAnalysis2 = await analyzeSvg(svg2PathToUse, browser);
+    const newAnalysis2 = await analyzeSvg(svg2PathToUse, browser);
+    if (!newAnalysis2) {
+      throw new ValidationError('Failed to analyze regenerated SVG2');
+    }
+    svgAnalysis2 = newAnalysis2;
     ratioInfo2.ratio = getAspectRatioInfo(svgAnalysis2, false).ratio;
     if (args.verbose && !args.json) {
       printInfo(`SVG2 viewBox regenerated: ${svg2PathToUse}`);
@@ -1723,7 +1934,10 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
   // PHASE 2: Validate aspect ratios
   // ═══════════════════════════════════════════════════════════════════════
 
-  const aspectRatioDiff = Math.abs(ratioInfo1.ratio - ratioInfo2.ratio);
+  // At this point, ratios should be non-null after regeneration (if needed)
+  const ratio1Value = ratioInfo1.ratio ?? 0;
+  const ratio2Value = ratioInfo2.ratio ?? 0;
+  const aspectRatioDiff = Math.abs(ratio1Value - ratio2Value);
 
   if (aspectRatioDiff > args.aspectRatioThreshold) {
     // CRITICAL: Aspect ratios differ beyond threshold
@@ -1739,8 +1953,8 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
       }
     }
 
-    const ratio1 = ratioInfo1.ratio.toFixed(6);
-    const ratio2 = ratioInfo2.ratio.toFixed(6);
+    const ratio1 = ratio1Value.toFixed(6);
+    const ratio2 = ratio2Value.toFixed(6);
 
     const message = `Images have different aspect ratios (${ratio1} vs ${ratio2}, difference: ${aspectRatioDiff.toFixed(6)} > threshold: ${args.aspectRatioThreshold}). Pixel-by-pixel comparison is meaningless. Returning 100% difference.`;
 
@@ -1924,7 +2138,10 @@ async function main() {
 
       const results = [];
       for (let i = 0; i < pairs.length; i++) {
-        const { svg1, svg2 } = pairs[i];
+        const pair = pairs[i];
+        // Type guard: pairs[i] cannot be undefined due to loop condition
+        if (!pair) continue;
+        const { svg1, svg2 } = pair;
 
         if (args.verbose) {
           console.log(`[${i + 1}/${pairs.length}] Comparing ${svg1} vs ${svg2}`);
@@ -1935,15 +2152,16 @@ async function main() {
           results.push(result);
         } catch (error) {
           // In batch mode, continue processing other pairs even if one fails
+          const errorMessage = error instanceof Error ? error.message : String(error);
           results.push({
             svg1,
             svg2,
-            error: error.message,
+            error: errorMessage,
             failed: true
           });
 
           if (args.verbose) {
-            console.error(`  Error: ${error.message}`);
+            console.error(`  Error: ${errorMessage}`);
           }
         }
       }
@@ -1978,6 +2196,11 @@ async function main() {
     }
 
     // SINGLE COMPARISON MODE
+    // Validate that SVG paths are provided
+    if (!args.svg1 || !args.svg2) {
+      throw new ValidationError('Both SVG file paths are required for comparison');
+    }
+
     if (args.verbose && !args.json) {
       console.log('Starting SVG comparison...');
       console.log(`SVG 1: ${args.svg1}`);
@@ -2023,47 +2246,54 @@ async function main() {
       console.log('╚════════════════════════════════════════════════════════════════════════╝\n');
       console.log(`  SVG 1:              ${result.svg1}`);
       console.log(`  SVG 2:              ${result.svg2}`);
-      console.log(`  Total pixels:       ${result.totalPixels.toLocaleString()}`);
-      console.log(`  Different pixels:   ${result.differentPixels.toLocaleString()}`);
+
+      // Check if we have full comparison results (not an aspect ratio mismatch)
+      const totalPixels = result.totalPixels ?? 0;
+      const differentPixels = result.differentPixels ?? 0;
+      console.log(`  Total pixels:       ${totalPixels.toLocaleString()}`);
+      console.log(`  Different pixels:   ${differentPixels.toLocaleString()}`);
       console.log(`  Difference:         ${result.diffPercentage}%`);
-      console.log(`  Threshold:          ${result.threshold}/256`);
-      console.log(`  Diff image:         ${result.diffImage}\n`);
+      console.log(`  Threshold:          ${result.threshold ?? args.threshold}/256`);
+      console.log(`  Diff image:         ${result.diffImage ?? 'N/A'}\n`);
 
-      // Generate HTML report
-      if (args.verbose) {
-        console.log('Generating HTML report...');
-      }
-      const htmlPath = await generateHtmlReport(
-        result.svg1,
-        result.svg2,
-        result.diffImage,
-        {
-          totalPixels: result.totalPixels,
-          differentPixels: result.differentPixels,
-          diffPercentage: result.diffPercentage.toFixed(2)
-        },
-        args,
-        result.svgAnalysis1,
-        result.svgAnalysis2
-      );
-
-      printSuccess(`HTML report: ${htmlPath}`);
-
-      // Auto-open in browser (unless --no-html or --headless is set)
-      // NOTE: HTML report is ALWAYS generated; these flags only suppress browser opening
-      const suppressBrowser = args['no-html'] || args.headless;
-      if (!suppressBrowser) {
+      // Generate HTML report only if we have full results
+      if (result.diffImage && result.svgAnalysis1 && result.svgAnalysis2) {
         if (args.verbose) {
-          console.log('Opening HTML report in browser...');
+          console.log('Generating HTML report...');
         }
-        const { openInChrome } = require('./browser-utils.cjs');
-        await openInChrome(htmlPath);
-      } else if (args.verbose) {
-        console.log('Skipping browser open (--no-html or --headless mode)');
+        const htmlPath = await generateHtmlReport(
+          result.svg1,
+          result.svg2,
+          result.diffImage,
+          {
+            totalPixels,
+            differentPixels,
+            diffPercentage: result.diffPercentage.toFixed(2)
+          },
+          args,
+          result.svgAnalysis1,
+          result.svgAnalysis2
+        );
+
+        printSuccess(`HTML report: ${htmlPath}`);
+
+        // Auto-open in browser (unless --no-html or --headless is set)
+        // NOTE: HTML report is ALWAYS generated; these flags only suppress browser opening
+        const suppressBrowser = args.noHtml || args.headless;
+        if (!suppressBrowser) {
+          if (args.verbose) {
+            console.log('Opening HTML report in browser...');
+          }
+          const { openInChrome } = require('./browser-utils.cjs');
+          await openInChrome(htmlPath);
+        } else if (args.verbose) {
+          console.log('Skipping browser open (--no-html or --headless mode)');
+        }
       }
     }
   } catch (error) {
-    throw new SVGBBoxError(`Comparison failed: ${error.message}`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new SVGBBoxError(`Comparison failed: ${errorMessage}`, 'COMPARISON_FAILED');
   } finally {
     // SECURITY: Ensure browser is always closed
     if (browser) {
@@ -2072,8 +2302,9 @@ async function main() {
         // eslint-disable-next-line no-unused-vars
       } catch (_closeErr) {
         // Force kill if close fails
-        if (browser.process()) {
-          browser.process().kill('SIGKILL');
+        const browserProcess = browser.process();
+        if (browserProcess) {
+          browserProcess.kill('SIGKILL');
         }
       }
     }

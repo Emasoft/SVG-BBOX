@@ -31,6 +31,87 @@ const {
 const { runCLI, printSuccess, printError, printInfo } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TYPE DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * @typedef {Object} ParsedArgs
+ * @property {string | null} input - Input SVG file path
+ * @property {string | null} output - Output PNG file path
+ * @property {number | null} width - Export width in pixels
+ * @property {number | null} height - Export height in pixels
+ * @property {number | null} dpi - Export DPI
+ * @property {number | null} margin - Margin around export area
+ * @property {boolean} areaDrawing - Export bounding box of all objects
+ * @property {boolean} areaPage - Export full SVG page/viewBox area
+ * @property {boolean} areaSnap - Snap export area to nearest integer px
+ * @property {string | null} objectId - Export specific object by ID
+ * @property {string | null} colorMode - Bit depth and color type
+ * @property {number | null} compression - PNG compression level (0-9)
+ * @property {number | null} antialias - Antialiasing level (0-3)
+ * @property {string | null} background - Background color
+ * @property {number | null} backgroundOpacity - Background opacity (0-255)
+ * @property {string} convertDpiMethod - Method for legacy files
+ * @property {string | null} batch - Batch file path
+ */
+
+/**
+ * @typedef {Object} ExportOptions
+ * @property {number | null} [width] - Export width in pixels
+ * @property {number | null} [height] - Export height in pixels
+ * @property {number | null} [dpi] - Export DPI
+ * @property {number | null} [margin] - Margin around export area
+ * @property {boolean} [areaDrawing] - Export bounding box of all objects
+ * @property {boolean} [areaPage] - Export full SVG page/viewBox area
+ * @property {boolean} [areaSnap] - Snap export area to nearest integer px
+ * @property {string | null} [objectId] - Export specific object by ID
+ * @property {string | null} [colorMode] - Bit depth and color type
+ * @property {number | null} [compression] - PNG compression level (0-9)
+ * @property {number | null} [antialias] - Antialiasing level (0-3)
+ * @property {string | null} [background] - Background color
+ * @property {number | null} [backgroundOpacity] - Background opacity (0-255)
+ * @property {string} [convertDpiMethod] - Method for legacy files
+ */
+
+/**
+ * @typedef {Object} ExportResult
+ * @property {string} inputPath - Input file path
+ * @property {string} outputPath - Output file path
+ * @property {number} fileSize - Output file size in bytes
+ * @property {number | null} width - Export width
+ * @property {number | null} height - Export height
+ * @property {number | null} dpi - Export DPI
+ * @property {number | null} margin - Margin
+ * @property {boolean} areaDrawing - Area drawing mode
+ * @property {boolean} areaPage - Area page mode
+ * @property {boolean} areaSnap - Area snap mode
+ * @property {string | null} objectId - Object ID
+ * @property {string | null} colorMode - Color mode
+ * @property {number | null} compression - Compression level
+ * @property {number | null} antialias - Antialias level
+ * @property {string | null} background - Background color
+ * @property {number | null} backgroundOpacity - Background opacity
+ * @property {string} convertDpiMethod - DPI conversion method
+ * @property {string} stdout - Inkscape stdout
+ * @property {string} stderr - Inkscape stderr
+ */
+
+/**
+ * @typedef {Object} BatchFilePair
+ * @property {string} input - Input SVG file path
+ * @property {string} output - Output PNG file path
+ */
+
+/**
+ * @typedef {Object} BatchResult
+ * @property {boolean} success - Whether export succeeded
+ * @property {string} input - Input file path
+ * @property {string} [output] - Output file path (on success)
+ * @property {number} [fileSize] - File size in bytes (on success)
+ * @property {string} [error] - Error message (on failure)
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -148,6 +229,11 @@ NOTES:
 `);
 }
 
+/**
+ * Print version information.
+ * @param {string} toolName - The name of the tool
+ * @returns {void}
+ */
 function printVersion(toolName) {
   const version = getVersion();
   console.log(`${toolName} v${version} | svg-bbox toolkit`);
@@ -157,7 +243,13 @@ function printVersion(toolName) {
 // ARGUMENT PARSING
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Parse command line arguments.
+ * @param {string[]} argv - Command line arguments array
+ * @returns {ParsedArgs} Parsed arguments object
+ */
 function parseArgs(argv) {
+  /** @type {ParsedArgs} */
   const args = {
     input: null,
     output: null,
@@ -187,6 +279,10 @@ function parseArgs(argv) {
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
 
+    // WHY: Helper to safely get next argument value with type assertion
+    // After bounds check, the value is guaranteed to exist
+    const getNextArg = () => /** @type {string} */ (argv[++i]);
+
     if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -194,27 +290,27 @@ function parseArgs(argv) {
       printVersion('sbb-inkscape-svg2png');
       process.exit(0);
     } else if (arg === '--output' && i + 1 < argv.length) {
-      args.output = argv[++i];
+      args.output = getNextArg();
     } else if (arg === '--width' && i + 1 < argv.length) {
-      args.width = parseInt(argv[++i], 10);
+      args.width = parseInt(getNextArg(), 10);
       if (isNaN(args.width) || args.width <= 0) {
         console.error('Error: --width must be a positive number');
         process.exit(2);
       }
     } else if (arg === '--height' && i + 1 < argv.length) {
-      args.height = parseInt(argv[++i], 10);
+      args.height = parseInt(getNextArg(), 10);
       if (isNaN(args.height) || args.height <= 0) {
         console.error('Error: --height must be a positive number');
         process.exit(2);
       }
     } else if (arg === '--dpi' && i + 1 < argv.length) {
-      args.dpi = parseInt(argv[++i], 10);
+      args.dpi = parseInt(getNextArg(), 10);
       if (isNaN(args.dpi) || args.dpi <= 0) {
         console.error('Error: --dpi must be a positive number');
         process.exit(2);
       }
     } else if (arg === '--margin' && i + 1 < argv.length) {
-      args.margin = parseFloat(argv[++i]);
+      args.margin = parseFloat(getNextArg());
       if (isNaN(args.margin) || args.margin < 0) {
         console.error('Error: --margin must be a non-negative number');
         process.exit(2);
@@ -228,9 +324,9 @@ function parseArgs(argv) {
     } else if (arg === '--area-snap') {
       args.areaSnap = true;
     } else if (arg === '--id' && i + 1 < argv.length) {
-      args.objectId = argv[++i];
+      args.objectId = getNextArg();
     } else if (arg === '--color-mode' && i + 1 < argv.length) {
-      args.colorMode = argv[++i];
+      args.colorMode = getNextArg();
       const validModes = [
         'Gray_1',
         'Gray_2',
@@ -244,26 +340,26 @@ function parseArgs(argv) {
         'RGBA_8',
         'RGBA_16'
       ];
-      if (!validModes.includes(args.colorMode)) {
+      if (!args.colorMode || !validModes.includes(args.colorMode)) {
         console.error(`Error: --color-mode must be one of: ${validModes.join(', ')}`);
         process.exit(2);
       }
     } else if (arg === '--compression' && i + 1 < argv.length) {
-      args.compression = parseInt(argv[++i], 10);
+      args.compression = parseInt(getNextArg(), 10);
       if (isNaN(args.compression) || args.compression < 0 || args.compression > 9) {
         console.error('Error: --compression must be between 0 and 9');
         process.exit(2);
       }
     } else if (arg === '--antialias' && i + 1 < argv.length) {
-      args.antialias = parseInt(argv[++i], 10);
+      args.antialias = parseInt(getNextArg(), 10);
       if (isNaN(args.antialias) || args.antialias < 0 || args.antialias > 3) {
         console.error('Error: --antialias must be between 0 and 3');
         process.exit(2);
       }
     } else if (arg === '--background' && i + 1 < argv.length) {
-      args.background = argv[++i];
+      args.background = getNextArg();
     } else if (arg === '--background-opacity' && i + 1 < argv.length) {
-      args.backgroundOpacity = parseFloat(argv[++i]);
+      args.backgroundOpacity = parseFloat(getNextArg());
       if (isNaN(args.backgroundOpacity) || args.backgroundOpacity < 0) {
         console.error('Error: --background-opacity must be >= 0');
         process.exit(2);
@@ -276,14 +372,15 @@ function parseArgs(argv) {
         process.exit(2);
       }
     } else if (arg === '--convert-dpi' && i + 1 < argv.length) {
-      args.convertDpiMethod = argv[++i];
-      if (!['none', 'scale-viewbox', 'scale-document'].includes(args.convertDpiMethod)) {
+      const dpiMethod = getNextArg();
+      if (!['none', 'scale-viewbox', 'scale-document'].includes(dpiMethod)) {
         console.error('Error: --convert-dpi must be "none", "scale-viewbox", or "scale-document"');
         process.exit(2);
       }
+      args.convertDpiMethod = dpiMethod;
     } else if (arg === '--batch' && i + 1 < argv.length) {
-      args.batch = argv[++i];
-    } else if (!arg.startsWith('-')) {
+      args.batch = getNextArg();
+    } else if (arg && !arg.startsWith('-')) {
       if (!args.input) {
         args.input = arg;
       } else {
@@ -311,7 +408,8 @@ function parseArgs(argv) {
   }
 
   // Set default output file (only for non-batch mode)
-  if (!args.batch && !args.output) {
+  // WHY: TypeScript requires explicit null check despite validation above guaranteeing args.input is non-null here
+  if (!args.batch && !args.output && args.input) {
     const inputBase = path.basename(args.input, path.extname(args.input));
     args.output = `${inputBase}.png`;
   }
@@ -332,6 +430,9 @@ function parseArgs(argv) {
  * 2. Input/output pair (tab or space separated): input.svg output.png
  *
  * Lines starting with # are comments and are ignored.
+ *
+ * @param {string} batchFilePath - Path to the batch file
+ * @returns {BatchFilePair[]} Array of input/output file pairs
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file path
@@ -366,7 +467,8 @@ function readBatchFile(batchFilePath) {
     if (parts.length === 1) {
       // Match: (anything ending in .svg) + (whitespace) + (anything ending in .png)
       const fileMatch = line.match(/^(.+\.svg)\s+(.+\.png)$/i);
-      if (fileMatch) {
+      // WHY: Guard ensures capture groups are defined before accessing
+      if (fileMatch && fileMatch[1] && fileMatch[2]) {
         parts = [fileMatch[1].trim(), fileMatch[2].trim()];
       }
     }
@@ -384,11 +486,13 @@ function readBatchFile(batchFilePath) {
       throw new ValidationError(`Empty line at line ${index + 1} in batch file`);
     }
 
-    const inputFile = parts[0];
+    // WHY: After length check, first element is guaranteed to exist
+    const inputFile = /** @type {string} */ (parts[0]);
 
     // If output is specified, use it; otherwise auto-generate
+    /** @type {string} */
     let outputFile;
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[1]) {
       // Explicit output path provided
       outputFile = parts[1];
     } else {
@@ -424,6 +528,13 @@ function readBatchFile(batchFilePath) {
 // INKSCAPE PNG EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Export an SVG file to PNG using Inkscape.
+ * @param {string} inputPath - Input SVG file path
+ * @param {string} outputPath - Output PNG file path
+ * @param {ExportOptions} [options] - Export options
+ * @returns {Promise<ExportResult>} Export result with file info
+ */
 async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
   // SECURITY: Validate input file path
   const safeInputPath = validateFilePath(inputPath, {
@@ -605,15 +716,26 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
       stderr: stderr.trim()
     };
   } catch (error) {
-    if (error.code === 'ENOENT') {
+    // WHY: TypeScript requires type guards for unknown error type
+    /** @type {{ code?: string; killed?: boolean; message?: string }} */
+    const execError =
+      error && typeof error === 'object'
+        ? /** @type {{ code?: string; killed?: boolean; message?: string }} */ (error)
+        : { message: String(error) };
+
+    if (execError.code === 'ENOENT') {
       throw new SVGBBoxError(
         'Inkscape not found. Please install Inkscape and ensure it is in your PATH.\n' +
           'Download from: https://inkscape.org/release/'
       );
-    } else if (error.killed) {
+    } else if (execError.killed) {
       throw new SVGBBoxError('Inkscape process timed out (30s limit)');
     } else {
-      throw new SVGBBoxError(`Inkscape PNG export failed: ${error.message}`, error);
+      const errorMessage = execError.message || 'Unknown error';
+      // WHY: SVGBBoxError expects (message, code, details) - pass error code and original error in details
+      throw new SVGBBoxError(`Inkscape PNG export failed: ${errorMessage}`, 'INKSCAPE_ERROR', {
+        originalError: error
+      });
     }
   }
 }
@@ -622,6 +744,10 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Main CLI entry point.
+ * @returns {Promise<void>}
+ */
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -633,9 +759,12 @@ async function main() {
 
     console.log(`Processing ${filePairs.length} SVG files from ${args.batch}...\n`);
 
+    /** @type {BatchResult[]} */
     const results = [];
     for (let i = 0; i < filePairs.length; i++) {
-      const { input: svgPath, output: pngPath } = filePairs[i];
+      // WHY: Bounds check above guarantees element exists
+      const pair = /** @type {BatchFilePair} */ (filePairs[i]);
+      const { input: svgPath, output: pngPath } = pair;
 
       console.log(`[${i + 1}/${filePairs.length}] Exporting ${svgPath}...`);
       console.log(`    Target: ${pngPath}`);
@@ -675,13 +804,16 @@ async function main() {
           `  ✓ Created ${result.outputPath} (${(result.fileSize / 1024).toFixed(1)} KB)`
         );
       } catch (error) {
+        // WHY: TypeScript requires type guards for unknown error type
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
         results.push({
           success: false,
           input: svgPath,
-          error: error.message
+          error: errorMessage
         });
 
-        printError(`  ✗ Failed: ${error.message}`);
+        printError(`  ✗ Failed: ${errorMessage}`);
       }
     }
 
@@ -697,6 +829,12 @@ async function main() {
   }
 
   // SINGLE FILE MODE
+  // WHY: TypeScript requires explicit null checks despite validation in parseArgs
+  // Single file mode validation ensures args.input and args.output are non-null
+  if (!args.input || !args.output) {
+    throw new SVGBBoxError('Input and output paths are required in single file mode');
+  }
+
   console.log(`Exporting ${args.input} to PNG...`);
 
   const result = await exportPngWithInkscape(args.input, args.output, {
