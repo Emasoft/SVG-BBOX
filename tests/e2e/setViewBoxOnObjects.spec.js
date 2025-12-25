@@ -1,4 +1,3 @@
-/* eslint-env node, browser */
 /**
  * setViewBoxOnObjects() E2E Tests
  *

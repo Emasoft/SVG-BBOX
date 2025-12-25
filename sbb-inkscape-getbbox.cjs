@@ -20,7 +20,7 @@ const { getVersion } = require('./version.cjs');
 // DO NOT: Implement custom saveJSON - use writeJSONOutput instead
 // NOTE: printSuccess removed - writeJSONOutput handles success feedback internally
 const { runCLI, printError, printInfo, writeJSONOutput } = require('./lib/cli-utils.cjs');
-const { validateFilePath } = require('./lib/security-utils.cjs');
+const { validateFilePath, VALID_ID_PATTERN } = require('./lib/security-utils.cjs');
 
 const execFilePromise = promisify(execFile);
 
@@ -114,6 +114,16 @@ async function getBBoxWithInkscape(options) {
   } else {
     // Get bbox for each element ID
     for (const id of elementIds) {
+      // WHY: Validate ID format before passing to Inkscape to prevent command injection
+      // IDs are passed via --query-id flag and could contain shell metacharacters
+      // VALID_ID_PATTERN ensures IDs match XML spec: start with letter/underscore, followed by word chars, periods, hyphens
+      if (!VALID_ID_PATTERN.test(id)) {
+        results[id] = {
+          error: `Invalid ID format: "${id}". IDs must start with a letter or underscore, followed by letters, digits, underscores, periods, or hyphens.`
+        };
+        continue;
+      }
+
       try {
         const { stdout } = await execFilePromise('inkscape', [
           `--query-id=${id}`,

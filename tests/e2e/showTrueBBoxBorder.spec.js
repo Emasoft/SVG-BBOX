@@ -1,5 +1,4 @@
 // @ts-nocheck
-/* eslint-env node, browser */
 /**
  * showTrueBBoxBorder() E2E Tests
  *

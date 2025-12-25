@@ -1,4 +1,3 @@
-/* eslint-env node, browser */
 /**
  * HTML List Interactive Features E2E Tests
  *
