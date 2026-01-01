@@ -112,7 +112,8 @@
   "dependencies": {
     "chrome-launcher": "^1.2.1",
     "pngjs": "^7.0.0",
-    "puppeteer": "^24.34.0"
+    "puppeteer": "^24.34.0",
+    "sharp": "^0.34.3"
   },
   "pnpm": {
     "overrides": {

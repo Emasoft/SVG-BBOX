@@ -16,6 +16,8 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { getVersion } = require('./version.cjs');
+// WHY: sharp is used for PNG-to-JPEG conversion with 100% quality
+const sharp = require('sharp');
 
 const execFilePromise = promisify(execFile);
 
@@ -53,6 +55,8 @@ const { runCLI, printSuccess, printError, printInfo } = require('./lib/cli-utils
  * @property {number | null} backgroundOpacity - Background opacity (0-255)
  * @property {string} convertDpiMethod - Method for legacy files
  * @property {string | null} batch - Batch file path
+ * @property {boolean} jpg - Also produce a JPEG version at 100% quality
+ * @property {boolean} deletePngAfter - Delete PNG after creating JPG (requires --jpg)
  */
 
 /**
@@ -176,6 +180,16 @@ BATCH PROCESSING:
                             Lines starting with # are comments
                             All export options apply to each file
 
+JPEG CONVERSION:
+  --jpg                     Also produce a JPEG version at 100% quality
+                            The PNG is always created first, then converted
+                            Both files are saved by default
+                            JPEG filename: output.png -> output.jpg
+
+  --delete-png-after        Delete the PNG file after creating JPEG version
+                            Useful for batch processing to save disk space
+                            REQUIRES: --jpg must be specified
+
 OTHER OPTIONS:
   --help                    Show this help
   --version                 Show version
@@ -211,6 +225,12 @@ EXAMPLES:
   # Batch export with shared settings
   node sbb-inkscape-svg2png.cjs --batch icons.txt \\
     --width 256 --height 256 --compression 9
+
+  # Export to PNG and also create JPEG at 100% quality
+  node sbb-inkscape-svg2png.cjs icon.svg --jpg
+
+  # Batch export to JPEG only (delete PNG after conversion)
+  node sbb-inkscape-svg2png.cjs --batch icons.txt --jpg --delete-png-after
 
 OUTPUT:
   Creates PNG file(s) from SVG input with specified parameters.
@@ -273,7 +293,10 @@ function parseArgs(argv) {
     // Legacy handling
     convertDpiMethod: 'none',
     // Batch
-    batch: null
+    batch: null,
+    // JPEG conversion
+    jpg: false,
+    deletePngAfter: false
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -380,6 +403,12 @@ function parseArgs(argv) {
       args.convertDpiMethod = dpiMethod;
     } else if (arg === '--batch' && i + 1 < argv.length) {
       args.batch = getNextArg();
+    } else if (arg === '--jpg') {
+      // WHY: Produce JPEG version of PNG at 100% quality
+      args.jpg = true;
+    } else if (arg === '--delete-png-after') {
+      // WHY: Delete PNG after JPG creation to save disk space in batch processing
+      args.deletePngAfter = true;
     } else if (arg && !arg.startsWith('-')) {
       if (!args.input) {
         args.input = arg;
@@ -404,6 +433,14 @@ function parseArgs(argv) {
   // Batch mode cannot have individual input file
   if (args.batch && args.input) {
     console.error('Error: --batch mode cannot be combined with individual SVG file argument');
+    process.exit(2);
+  }
+
+  // WHY: --delete-png-after only makes sense when --jpg is used (otherwise PNG is the only output)
+  if (args.deletePngAfter && !args.jpg) {
+    console.error('Error: --delete-png-after requires --jpg to be specified');
+    console.error('The --delete-png-after option deletes the PNG after creating the JPG version.');
+    console.error('Without --jpg, there would be no output file.');
     process.exit(2);
   }
 
@@ -803,6 +840,24 @@ async function main() {
         printSuccess(
           `  ✓ Created ${result.outputPath} (${(result.fileSize / 1024).toFixed(1)} KB)`
         );
+
+        // WHY: Convert PNG to JPEG at 100% quality if --jpg option is specified
+        if (args.jpg) {
+          // Derive JPEG path from PNG path (replace .png extension with .jpg)
+          const jpgPath = result.outputPath.replace(/\.png$/i, '.jpg');
+
+          // WHY: Using sharp for high-quality PNG-to-JPEG conversion
+          // Quality 100 = maximum quality, minimal compression artifacts
+          await sharp(result.outputPath).jpeg({ quality: 100 }).toFile(jpgPath);
+
+          printSuccess(`  ✓ Converted to JPEG: ${jpgPath}`);
+
+          // WHY: Delete PNG after successful JPEG creation if --delete-png-after is specified
+          if (args.deletePngAfter) {
+            fs.unlinkSync(result.outputPath);
+            printInfo(`  Deleted PNG: ${result.outputPath}`);
+          }
+        }
       } catch (error) {
         // WHY: TypeScript requires type guards for unknown error type
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -911,6 +966,18 @@ async function main() {
   // Show Inkscape warnings if any
   if (result.stderr) {
     printInfo(`\nInkscape warnings:\n${result.stderr}`);
+  }
+
+  // JPEG conversion for single file mode
+  if (args.jpg) {
+    const jpgPath = result.outputPath.replace(/\.png$/i, '.jpg');
+    await sharp(result.outputPath).jpeg({ quality: 100 }).toFile(jpgPath);
+    printSuccess(`✓ Converted to JPEG: ${jpgPath}`);
+
+    if (args.deletePngAfter) {
+      fs.unlinkSync(result.outputPath);
+      printInfo(`Deleted PNG: ${result.outputPath}`);
+    }
   }
 }
 

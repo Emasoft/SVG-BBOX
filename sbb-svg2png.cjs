@@ -41,6 +41,8 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+// WHY: sharp is used for PNG-to-JPEG conversion with 100% quality
+const sharp = require('sharp');
 
 /**
  * @typedef {Object} CLIOptions
@@ -53,6 +55,8 @@ const path = require('path');
  * @property {number} margin - Extra padding in SVG user units
  * @property {boolean} autoOpen - Open PNG after rendering
  * @property {string | null} batch - Batch file path
+ * @property {boolean} jpg - Also produce a JPEG version at 100% quality
+ * @property {boolean} deletePngAfter - Delete PNG after creating JPG (requires --jpg)
  * @property {string} [input] - Input SVG file path (single file mode)
  * @property {string} [output] - Output PNG file path (single file mode)
  */
@@ -160,6 +164,17 @@ OPTIONS:
   --auto-open
       Automatically open PNG in Chrome/Chromium after rendering
 
+  --jpg
+      Also produce a JPEG version of the image at 100% quality
+      The PNG is always created first, then converted to JPEG
+      Both files are saved by default (see --delete-png-after)
+      JPEG filename is derived from PNG path (e.g., output.png -> output.jpg)
+
+  --delete-png-after
+      Delete the PNG file after creating the JPEG version
+      Useful for batch processing to save disk space
+      REQUIRES: --jpg must be specified (error otherwise)
+
   --batch <file>
       Batch processing mode using file list
       Supports two formats per line:
@@ -198,6 +213,12 @@ EXAMPLES:
   # Batch render with shared settings
   node sbb-svg2png.cjs --batch files.txt \\
     --mode full --scale 8 --background transparent
+
+  # Render to PNG and also create JPEG at 100% quality
+  node sbb-svg2png.cjs drawing.svg output.png --jpg
+
+  # Batch render to JPEG only (delete PNG after conversion)
+  node sbb-svg2png.cjs --batch files.txt --jpg --delete-png-after
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -249,7 +270,9 @@ function parseArgs(argv) {
     background: 'white',
     margin: 0,
     autoOpen: false,
-    batch: null
+    batch: null,
+    jpg: false,
+    deletePngAfter: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -312,6 +335,14 @@ function parseArgs(argv) {
           options.batch = next || null;
           useNext();
           break;
+        case 'jpg':
+          // WHY: Produce JPEG version of PNG at 100% quality
+          options.jpg = true;
+          break;
+        case 'delete-png-after':
+          // WHY: Delete PNG after JPG creation to save disk space in batch processing
+          options.deletePngAfter = true;
+          break;
         default:
           console.warn('Unknown option:', key);
       }
@@ -331,6 +362,14 @@ function parseArgs(argv) {
   // Batch mode cannot have individual input/output files
   if (options.batch && positional.length > 0) {
     console.error('Error: --batch mode cannot be combined with individual SVG file arguments');
+    process.exit(1);
+  }
+
+  // WHY: --delete-png-after only makes sense when --jpg is used (otherwise PNG is the only output)
+  if (options.deletePngAfter && !options.jpg) {
+    console.error('Error: --delete-png-after requires --jpg to be specified');
+    console.error('The --delete-png-after option deletes the PNG after creating the JPG version.');
+    console.error('Without --jpg, there would be no output file.');
     process.exit(1);
   }
 
@@ -468,6 +507,8 @@ const PUPPETEER_OPTIONS = {
  * @property {string} background - Background color
  * @property {number} margin - Extra padding in SVG user units
  * @property {boolean} autoOpen - Open PNG after rendering
+ * @property {boolean} jpg - Also produce a JPEG version at 100% quality
+ * @property {boolean} deletePngAfter - Delete PNG after creating JPG (requires --jpg)
  */
 
 /**
@@ -836,6 +877,24 @@ ${sanitizedSvg}
     console.log(`  background: ${opts.background}`);
     console.log(`  margin (user units): ${opts.margin}`);
 
+    // WHY: Convert PNG to JPEG at 100% quality if --jpg option is specified
+    if (opts.jpg) {
+      // Derive JPEG path from PNG path (replace .png extension with .jpg)
+      const jpgPath = safeOutPath.replace(/\.png$/i, '.jpg');
+
+      // WHY: Using sharp for high-quality PNG-to-JPEG conversion
+      // Quality 100 = maximum quality, minimal compression artifacts
+      await sharp(safeOutPath).jpeg({ quality: 100 }).toFile(jpgPath);
+
+      printSuccess(`Converted to JPEG: ${jpgPath}`);
+
+      // WHY: Delete PNG after successful JPEG creation if --delete-png-after is specified
+      if (opts.deletePngAfter) {
+        fs.unlinkSync(safeOutPath);
+        printInfo(`Deleted PNG: ${safeOutPath}`);
+      }
+    }
+
     // Auto-open PNG in Chrome/Chromium if requested
     // CRITICAL: Must use Chrome/Chromium (other browsers have poor image rendering)
     if (opts.autoOpen) {
@@ -918,7 +977,9 @@ async function main() {
           height: opts.height,
           background: opts.background,
           margin: opts.margin,
-          autoOpen: false // Never auto-open in batch mode
+          autoOpen: false, // Never auto-open in batch mode
+          jpg: opts.jpg,
+          deletePngAfter: opts.deletePngAfter
         });
 
         results.push({
@@ -965,7 +1026,9 @@ async function main() {
     height: opts.height,
     background: opts.background,
     margin: opts.margin,
-    autoOpen: opts.autoOpen
+    autoOpen: opts.autoOpen,
+    jpg: opts.jpg,
+    deletePngAfter: opts.deletePngAfter
   });
 }
 
