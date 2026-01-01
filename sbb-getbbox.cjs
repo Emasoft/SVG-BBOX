@@ -116,16 +116,14 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { getVersion, printVersion: _printVersion } = require('./version.cjs');
+const { getVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // Import security utilities
 const {
   validateFilePath,
   readSVGFileSafe,
-  readJSONFileSafe: _readJSONFileSafe,
   sanitizeSVGContent,
-  ensureDirectoryExists: _ensureDirectoryExists,
   ValidationError,
   FileSystemError
 } = require('./lib/security-utils.cjs');

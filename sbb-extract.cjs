@@ -187,8 +187,7 @@ const {
   validateRenameMapping,
   SHELL_METACHARACTERS,
   SVGBBoxError,
-  ValidationError,
-  FileSystemError: _FileSystemError
+  ValidationError
 } = require('./lib/security-utils.cjs');
 
 const {
@@ -1244,6 +1243,8 @@ async function listAndAssignIds(
  */
 function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {}) {
   const safeTitle = String(titleName || 'SVG');
+  // SECURITY: Escape for JavaScript string context to prevent XSS
+  const safeTitleJS = JSON.stringify(safeTitle);
   /** @type {string[]} */
   const rows = [];
 
@@ -1802,7 +1803,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
         }
 
         const payload = {
-          sourceSvgFile: '${safeTitle}',
+          sourceSvgFile: ${safeTitleJS},
           createdAt: new Date().toISOString(),
           mappings
         };
@@ -1811,7 +1812,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = '${safeTitle.replace(/[^a-zA-Z0-9._-]+/g, '_')}.rename.json';
+        a.download = ${JSON.stringify(safeTitle.replace(/[^a-zA-Z0-9._-]+/g, '_') + '.rename.json')};
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

@@ -535,7 +535,8 @@ async function analyzeSvg(svgPath, browser) {
     let preserveAspectRatio = null;
 
     // Get viewBox
-    const vb = svg.viewBox.baseVal;
+    // SAFETY: Use optional chaining in case svg.viewBox is null/undefined
+    const vb = svg.viewBox?.baseVal;
     if (vb && vb.width && vb.height) {
       viewBox = {
         x: vb.x,

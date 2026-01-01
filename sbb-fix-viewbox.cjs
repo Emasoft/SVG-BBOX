@@ -36,9 +36,8 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion, printVersion, hasVersionFlag: _hasVersionFlag } = require('./version.cjs');
+const { getVersion, printVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
@@ -49,8 +48,7 @@ const {
   sanitizeSVGContent,
   writeFileSafe,
   SHELL_METACHARACTERS,
-  SVGBBoxError: _SVGBBoxError,
-  ValidationError: _ValidationError,
+  ValidationError,
   FileSystemError
 } = require('./lib/security-utils.cjs');
 
@@ -199,13 +197,13 @@ function parseArgs(argv) {
     } else if (!arg.startsWith('-')) {
       positional.push(arg);
     } else {
-      throw new _ValidationError(`Unknown option: ${arg}`);
+      throw new ValidationError(`Unknown option: ${arg}`);
     }
   }
 
   // Validate batch vs single mode
   if (batch && positional.length > 0) {
-    throw new _ValidationError('Cannot use both --batch and input file argument');
+    throw new ValidationError('Cannot use both --batch and input file argument');
   }
 
   // Validate required arguments
@@ -258,7 +256,7 @@ function readBatchFile(batchFilePath) {
     .filter((line) => line.length > 0 && !line.startsWith('#'));
 
   if (lines.length === 0) {
-    throw new _ValidationError(`Batch file is empty: ${safeBatchPath}`);
+    throw new ValidationError(`Batch file is empty: ${safeBatchPath}`);
   }
 
   // Parse each line into { input, output } pairs
@@ -289,14 +287,14 @@ function readBatchFile(batchFilePath) {
     // SECURITY: Validate each path for shell metacharacters
     parts.forEach((part) => {
       if (SHELL_METACHARACTERS.test(part)) {
-        throw new _ValidationError(
+        throw new ValidationError(
           `Invalid file path at line ${index + 1} in batch file: contains shell metacharacters`
         );
       }
     });
 
     if (parts.length === 0) {
-      throw new _ValidationError(`Empty line at line ${index + 1} in batch file`);
+      throw new ValidationError(`Empty line at line ${index + 1} in batch file`);
     }
 
     // WHY: After parts.length check, parts[0] is guaranteed to exist, but TypeScript
@@ -333,7 +331,7 @@ function readBatchFile(batchFilePath) {
   // WHY: Handle empty batch file entries after filtering
   // Empty files should fail early with a clear message
   if (filePairs.length === 0) {
-    throw new _ValidationError(`No valid entries found in batch file: ${safeBatchPath}`);
+    throw new ValidationError(`No valid entries found in batch file: ${safeBatchPath}`);
   }
 
   return filePairs;
@@ -598,7 +596,7 @@ async function main() {
         // WHY: Validate input file exists before attempting fix
         // Prevents cryptic Puppeteer errors when file is missing
         if (!fs.existsSync(inputFile)) {
-          throw new _ValidationError(`Input file not found: ${inputFile}`);
+          throw new ValidationError(`Input file not found: ${inputFile}`);
         }
 
         printInfo(`[${i + 1}/${filePairs.length}] Fixing: ${inputFile}`);

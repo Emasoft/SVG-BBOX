@@ -62,13 +62,8 @@ const path = require('path');
  * @property {string} input - Input SVG file path
  * @property {string} output - Output PNG file path
  */
-const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
-const {
-  getVersion,
-  printVersion: _printVersion,
-  hasVersionFlag: _hasVersionFlag
-} = require('./version.cjs');
+const { getVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
@@ -496,9 +491,14 @@ async function renderSvgWithModes(opts) {
   const sanitizedSvg = sanitizeSVGContent(svgContent);
 
   // Decide background CSS + omitBackground
+  // SECURITY: Validate CSS color to prevent CSS injection
   const bgLower = (opts.background || '').toString().toLowerCase();
   const isTransparentBg = bgLower === 'transparent';
-  const bgCSS = isTransparentBg ? 'transparent' : opts.background || 'white';
+  // SECURITY: Only allow safe CSS color values (named colors, hex, rgb/rgba, hsl/hsla)
+  const validColorPattern =
+    /^(transparent|[a-z]{3,20}|#[0-9a-f]{3,8}|rgba?\([^)]{1,50}\)|hsla?\([^)]{1,50}\))$/i;
+  const rawBgColor = isTransparentBg ? 'transparent' : opts.background || 'white';
+  const bgCSS = validColorPattern.test(rawBgColor) ? rawBgColor : 'white';
 
   let browser = null;
 
