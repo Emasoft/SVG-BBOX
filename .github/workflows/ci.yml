@@ -17,6 +17,7 @@ concurrency:
 env:
   PNPM_VERSION: '10'
   NODE_VERSION: '24' # Only support Node.js 24 (latest)
+  BUN_VERSION: '1.1.42' # Pinned Bun version for reproducible builds
   GIT_FETCH_DEPTH: '10' # Increased from 1 to support selective testing
 
 jobs:
@@ -25,6 +26,47 @@ jobs:
   # =============================================================================
   # These jobs run in parallel and are required to pass before tests run.
   # Lint and typecheck failures will stop the pipeline early, saving CI time.
+
+  build:
+    name: Build with Bun
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build with Bun
+        run: bun run build.js
+
+      - name: Verify build output
+        run: |
+          if [ ! -f SvgVisualBBox.min.js ]; then
+            echo "::error::Build failed - SvgVisualBBox.min.js not created"
+            exit 1
+          fi
+          echo "Build output:"
+          ls -la SvgVisualBBox*.js
+          head -1 SvgVisualBBox.min.js
 
   lint:
     name: Lint & Format
@@ -86,7 +128,7 @@ jobs:
 
   test:
     name: Test
-    needs: [lint, typecheck]
+    needs: [build, lint, typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -140,7 +182,7 @@ jobs:
 
   e2e:
     name: E2E Tests
-    needs: [lint, typecheck]
+    needs: [build, lint, typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

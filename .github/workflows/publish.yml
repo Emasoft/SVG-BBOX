@@ -10,6 +10,12 @@ permissions:
   contents: read
   id-token: write
 
+# Centralized configuration - Single source of truth for versions
+env:
+  PNPM_VERSION: '10'
+  NODE_VERSION: '24'
+  BUN_VERSION: '1.1.42' # Pinned Bun version for reproducible builds
+
 jobs:
   publish:
     name: Publish to npm
@@ -20,35 +26,53 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Setup Node.js 24 (npm 11.6.2 with OIDC support)
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies (for prepublishOnly script)
-        run: npm install --production=false
+        run: pnpm install --frozen-lockfile
 
-      - name: Verify Node.js 24 and npm >= 11.5.1 (required for OIDC)
+      - name: Verify toolchain versions
         run: |
-          NODE_VERSION=$(node --version | sed 's/v//')
-          NPM_VERSION=$(npm --version)
-          echo "Node.js: $NODE_VERSION"
-          echo "npm: $NPM_VERSION"
+          NODE_VER=$(node --version | sed 's/v//')
+          NPM_VER=$(npm --version)
+          BUN_VER=$(bun --version)
+          echo "Node.js: $NODE_VER"
+          echo "npm: $NPM_VER"
+          echo "Bun: $BUN_VER"
 
           # Verify Node.js 24.x (required for npm 11.5.1+)
-          if [[ ! "$NODE_VERSION" =~ ^24\. ]]; then
-            echo "::error::Expected Node.js 24.x, got $NODE_VERSION"
+          if [[ ! "$NODE_VER" =~ ^24\. ]]; then
+            echo "::error::Expected Node.js 24.x, got $NODE_VER"
             exit 1
           fi
 
           # Verify npm >= 11.5.1 (required for OIDC trusted publishing)
-          NPM_MAJOR=$(echo $NPM_VERSION | cut -d. -f1)
-          NPM_MINOR=$(echo $NPM_VERSION | cut -d. -f2)
+          NPM_MAJOR=$(echo $NPM_VER | cut -d. -f1)
+          NPM_MINOR=$(echo $NPM_VER | cut -d. -f2)
           if [ "$NPM_MAJOR" -lt 11 ] || ([ "$NPM_MAJOR" -eq 11 ] && [ "$NPM_MINOR" -lt 5 ]); then
-            echo "::error::npm version must be >= 11.5.1 for OIDC (got $NPM_VERSION)"
+            echo "::error::npm version must be >= 11.5.1 for OIDC (got $NPM_VER)"
             exit 1
           fi
-          echo "::notice::Node.js and npm versions verified for OIDC publishing"
+
+          # Verify Bun version matches pinned version
+          if [[ "$BUN_VER" != "${{ env.BUN_VERSION }}" ]]; then
+            echo "::warning::Bun version mismatch: expected ${{ env.BUN_VERSION }}, got $BUN_VER"
+          fi
+          echo "::notice::Toolchain versions verified for publishing"
 
       - name: Publish to npm (using OIDC trusted publishing)
         run: npm publish --access public
