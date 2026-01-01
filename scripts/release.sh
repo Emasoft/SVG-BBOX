@@ -3875,9 +3875,10 @@ validate_umd_wrapper() {
 
     # Step 3: Verify UMD factory pattern structure
     # Check for the characteristic UMD wrapper pattern
-    # NOTE: Use grep -qF for fixed-string matching (pattern is literal)
-    if ! grep -qF 'module.exports' "$MINIFIED_FILE"; then
-        log_error "UMD wrapper missing CommonJS export (module.exports)"
+    # NOTE: Minifiers rename 'module' to short names like 't', so check for
+    # the pattern '.exports' which matches both 'module.exports' and 't.exports'
+    if ! grep -qE '\.exports' "$MINIFIED_FILE"; then
+        log_error "UMD wrapper missing CommonJS export pattern (.exports)"
         return 1
     fi
 
