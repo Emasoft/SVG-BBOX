@@ -13,9 +13,11 @@
  *   npx sbb-getbbox ...       # Use specific tool directly
  */
 
+const path = require('path');
 const { getVersion } = require('./version.cjs');
 const { printError } = require('./lib/cli-utils.cjs');
 const readline = require('readline');
+const { spawn } = require('child_process');
 
 // ANSI color codes for consistent styling
 const COLORS = {
@@ -114,7 +116,9 @@ const TOOLS = [
 ];
 
 /**
- * Print the main help message
+ * Print the main help message with available commands and usage examples.
+ * Displays all CLI tools organized by category (Core, Chrome, Inkscape).
+ * @returns {void}
  */
 function printHelp() {
   const version = getVersion();
@@ -179,7 +183,8 @@ ${c.yellow}${c.bold}════════════════════
 }
 
 /**
- * Print version information
+ * Print version information from package.json.
+ * @returns {void}
  */
 function printVersionInfo() {
   const version = getVersion();
@@ -187,10 +192,18 @@ function printVersionInfo() {
 }
 
 /**
- * Interactive tool selection
+ * Interactive tool selection prompt.
+ * Asks user to enter a tool number (1-12) and displays help for that tool.
+ * Only works in TTY (terminal) mode; exits silently if not a TTY.
+ * @returns {void}
  */
 function promptToolSelection() {
-  const { spawn } = require('child_process');
+  // VALIDATION: Check if running in interactive TTY mode
+  // WHY: readline.question hangs indefinitely when stdin is not a TTY (e.g., piped input)
+  if (!process.stdin.isTTY) {
+    process.exit(0);
+  }
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -216,7 +229,9 @@ function promptToolSelection() {
     console.log(`\n${c.green}Showing help for: ${c.bold}${selectedTool.name}${c.reset}\n`);
 
     // Execute the tool with --help flag
-    const toolProcess = spawn('node', [`./${selectedTool.name}.cjs`, '--help'], {
+    // Use path.join(__dirname, ...) to resolve path correctly when installed via npm
+    const toolPath = path.join(__dirname, `${selectedTool.name}.cjs`);
+    const toolProcess = spawn('node', [toolPath, '--help'], {
       stdio: 'inherit'
     });
 
@@ -227,7 +242,9 @@ function promptToolSelection() {
 }
 
 /**
- * Main entry point
+ * Main entry point for the svg-bbox CLI wrapper.
+ * Handles --version, --help flags and starts interactive tool selection.
+ * @returns {void}
  */
 function main() {
   const args = process.argv.slice(2);

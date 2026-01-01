@@ -87,6 +87,24 @@ async function detectChrome() {
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
 async function openInChrome(filePath) {
+  // VALIDATION: Check for null/undefined/empty filePath parameter
+  // WHY: Prevents undefined behavior when spawning browser with invalid path
+  if (!filePath || typeof filePath !== 'string') {
+    return {
+      success: false,
+      error: 'Invalid file path: path must be a non-empty string'
+    };
+  }
+
+  // VALIDATION: Check for path traversal attempts and special characters
+  // WHY: Prevents command injection via malicious file paths
+  if (filePath.includes('\0') || filePath.includes('\n') || filePath.includes('\r')) {
+    return {
+      success: false,
+      error: 'Invalid file path: path contains forbidden characters'
+    };
+  }
+
   const detection = await detectChrome();
 
   if (!detection.found) {

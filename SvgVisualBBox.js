@@ -281,8 +281,10 @@
     if (!doc) {
       doc = document;
     }
-    if (typeof timeoutMs !== 'number') {
-      timeoutMs = 5000; // CRITICAL FIX #3: Default timeout to prevent indefinite hangs
+    if (typeof timeoutMs !== 'number' || !isFinite(timeoutMs)) {
+      // CRITICAL FIX #3: Default timeout to prevent indefinite hangs
+      // Also handle NaN since typeof NaN === 'number' but setTimeout(NaN) fires immediately
+      timeoutMs = 5000;
     }
 
     const fonts = doc.fonts;

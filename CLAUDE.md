@@ -535,3 +535,144 @@ environments.
 - Font rendering tolerance set to 4px (cross-platform differences)
 - Integration tests use temp directories to avoid polluting project root
 - SVG comparison tool has configurable thresholds and alignment modes
+
+---
+
+## Codebase Audit Method (Agent Swarm Pattern)
+
+**ALWAYS use this method for comprehensive codebase audits.**
+
+This approach uses a swarm of parallel agents to audit every file in the codebase, ensuring thorough coverage and consistent quality checks.
+
+### When to Use
+
+- Before major releases
+- After significant refactoring
+- When inheriting/reviewing a codebase
+- Periodic quality assurance checks
+
+### Audit Procedure
+
+#### Step 1: Create Timestamped Audit Directory
+
+```bash
+# Create directory with timestamp in docs_dev/
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+mkdir -p docs_dev/audit_reports_${TIMESTAMP}
+```
+
+#### Step 2: Identify All Files to Audit
+
+Audit these file categories:
+- **Source files**: `*.cjs`, `*.js`, `*.mjs`, `*.ts`
+- **Library files**: `lib/*.cjs`
+- **Config files**: `*.config.js`, `config/*.cjs`
+- **Documentation**: `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `API.md`, `SECURITY.md`
+- **Build scripts**: `scripts/*.cjs`, `scripts/*.js`, `build.js`
+- **Test files**: `tests/**/*.test.js`
+- **Example files**: `examples/*.html`, `examples/*.js`
+
+#### Step 3: Spawn Parallel Agents (One Per File)
+
+Use the Task tool to spawn up to 40 agents in parallel. Each agent:
+- Reads exactly ONE file
+- Applies the standardized audit checklist
+- Outputs a report to `audit_<filename>.md`
+
+**Agent Prompt Template:**
+
+```
+Audit the file: <FILE_PATH>
+
+Check for:
+1. ERRORS & BUGS: Logic errors, uncaught exceptions, edge cases
+2. OUTDATED COMMENTS: Comments that don't match current code
+3. INCOMPLETE JSDOC: Missing @param, @returns, @throws, @example
+4. REDUNDANT CODE: Dead code, unused imports, duplicate logic
+5. HELP SCREEN ACCURACY: CLI help text matches actual behavior
+6. SECURITY ISSUES: Injection risks, unsafe operations
+7. VERSION CONSISTENCY: All version references match package.json
+8. CODE QUALITY: Style, naming, complexity issues
+
+Classify issues as:
+- CRITICAL: Must fix immediately (security, crashes, data loss)
+- MAJOR: Should fix before release (bugs, incorrect behavior)
+- MINOR: Nice to fix (style, documentation, minor improvements)
+
+Output a report to: docs_dev/audit_reports_<TIMESTAMP>/audit_<filename>.md
+
+Report format:
+# Audit Report: <filename>
+## Summary
+[1-2 sentence summary]
+## Issues Found
+### CRITICAL
+[List or "None"]
+### MAJOR
+[List with line numbers]
+### MINOR
+[List with line numbers]
+## Recommendations
+[Prioritized action items]
+```
+
+#### Step 4: Collect Reports and Create Master Summary
+
+After all agents complete, create `AUDIT_MASTER_SUMMARY.md`:
+- Executive summary with issue counts
+- Issues organized by severity (CRITICAL → MAJOR → MINOR)
+- Files organized by assessment (Excellent → Good → Needs Attention)
+- Fix priority order
+- Audit methodology documentation
+
+#### Step 5: Fix Issues in Priority Order
+
+1. **Phase 1 - CRITICAL**: Fix immediately (security, crashes)
+2. **Phase 2 - MAJOR**: Fix before release (bugs, incorrect behavior)
+3. **Phase 3 - MINOR**: Fix as time allows (documentation, style)
+
+### Audit Checklist Reference
+
+| Category | What to Check |
+|----------|---------------|
+| **Errors** | Null/undefined access, type mismatches, boundary conditions |
+| **Comments** | Match code behavior, no TODO/FIXME left behind |
+| **JSDoc** | All public functions documented with @param, @returns |
+| **Imports** | No unused imports, correct paths |
+| **Help Text** | Matches actual CLI behavior, correct examples |
+| **Security** | Input validation, no injection risks, safe file ops |
+| **Versions** | All references match package.json version |
+| **Deprecated** | No deprecated APIs (substr→slice, etc.) |
+
+### Example Audit Session
+
+```bash
+# 1. Created audit directory
+docs_dev/audit_reports_20260101_222054/
+
+# 2. Spawned 40 agents for all files
+
+# 3. Collected results:
+- 2 CRITICAL issues (README version mismatch, path resolution bug)
+- 12 MAJOR issues (bugs, outdated references, deprecated APIs)
+- 15+ MINOR issues (missing JSDoc, unused imports)
+
+# 4. Fixed in order:
+- CRITICAL: README Node.js version ≥18 → ≥24
+- CRITICAL: svg-bbox.cjs path resolution for npm install
+- MAJOR: wrapError() context preservation
+- MAJOR: sbb-extract.cjs outdated filename references
+- MAJOR: sbb-compare.cjs deprecated substr() → slice()
+- MINOR: SvgVisualBBox.js NaN validation
+- MINOR: Missing JSDoc annotations
+- MINOR: TTY check for interactive mode
+```
+
+### Benefits of Agent Swarm Pattern
+
+1. **Parallel execution**: 40 files audited simultaneously
+2. **Consistent checks**: Same checklist applied to every file
+3. **Complete coverage**: No file missed
+4. **Traceable results**: Timestamped reports for reference
+5. **Prioritized fixes**: CRITICAL → MAJOR → MINOR order
+6. **Documentation**: Audit methodology preserved for future use

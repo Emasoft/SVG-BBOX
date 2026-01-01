@@ -2040,11 +2040,11 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
 
   const png1Path = path.join(
     tempDir,
-    `svg1_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`
+    `svg1_${Date.now()}_${Math.random().toString(36).slice(2, 11)}.png`
   );
   const png2Path = path.join(
     tempDir,
-    `svg2_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`
+    `svg2_${Date.now()}_${Math.random().toString(36).slice(2, 11)}.png`
   );
 
   try {

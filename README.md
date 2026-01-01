@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/Emasoft/SVG-BBOX/actions"><img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/Emasoft/SVG-BBOX/ci.yml?branch=main&style=for-the-badge&logo=github&logoColor=white&label=CI"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge&logo=opensourceinitiative&logoColor=white"></a>
-  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=for-the-badge&logo=nodedotjs&logoColor=white">
+  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D24-brightgreen?style=for-the-badge&logo=nodedotjs&logoColor=white">
   <img alt="TypeScript Ready" src="https://img.shields.io/badge/TypeScript-Ready-blue?style=for-the-badge&logo=typescript&logoColor=white">
 </p>
 
@@ -228,7 +228,7 @@ pnpm install
 
 ### Requirements
 
-> **IMPORTANT**: You need **Node.js ≥ 18** and **Chrome or Chromium** installed.
+> **IMPORTANT**: You need **Node.js ≥ 24** and **Chrome or Chromium** installed.
 >
 > **⚠️ ONLY Chrome/Chromium are supported** — other browsers have poor SVG
 > support. This library uses headless Chrome via Puppeteer for measurements, and
@@ -531,7 +531,7 @@ computation and visual debugging.
 </html>
 ```
 
-### 8 Node.js (install via npm)
+### Node.js (install via npm)
 
 ```bash
 npm install svg-bbox

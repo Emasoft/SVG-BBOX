@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * extract_svg_objects.js
+ * sbb-extract.cjs
  *
  * Advanced SVG object tooling using Puppeteer + SvgVisualBBox.
  *
@@ -9,7 +9,7 @@
  *
  * 1) LIST OBJECTS (HTML overview + optional fixed SVG with IDs)
  * ------------------------------------------------------------
- *   node extract_svg_objects.js input.svg --list
+ *   node sbb-extract.cjs input.svg --list
  *     [--assign-ids --out-fixed fixed.svg]
  *     [--out-html list.html]
  *     [--auto-open]  # Opens HTML in Chrome/Chromium ONLY (not Safari!)
@@ -51,7 +51,7 @@
  *
  * 2) RENAME IDS USING A JSON MAPPING
  * ----------------------------------
- *   node extract_svg_objects.js input.svg --rename mapping.json output.svg
+ *   node sbb-extract.cjs input.svg --rename mapping.json output.svg
  *     [--json]
  *
  *   • Applies ID renaming according to mapping.json, typically generated
@@ -88,7 +88,7 @@
  *
  * 3) EXTRACT ONE OBJECT BY ID
  * ---------------------------
- *   node extract_svg_objects.js input.svg --extract id output.svg
+ *   node sbb-extract.cjs input.svg --extract id output.svg
  *     [--margin N] [--include-context] [--json]
  *
  *   • Computes the "visual" bbox of the object (including strokes, filters,
@@ -113,7 +113,7 @@
  *
  * 4) EXPORT ALL OBJECTS
  * ---------------------
- *   node extract_svg_objects.js input.svg --export-all out-dir
+ *   node sbb-extract.cjs input.svg --export-all out-dir
  *     [--margin N] [--export-groups] [--json]
  *
  *   • "Objects" = path, rect, circle, ellipse, polygon, polyline, text,
@@ -132,7 +132,7 @@
  *
  *   BATCH MODE:
  *   -----------
- *   node extract_svg_objects.js --export-all out-dir --batch files.txt
+ *   node sbb-extract.cjs --export-all out-dir --batch files.txt
  *     [--margin N] [--export-groups] [--json]
  *
  *   • Process multiple SVG files listed in a batch file (one path per line)
