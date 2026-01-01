@@ -356,6 +356,9 @@ browsers and Node.js (via Puppeteer).
 
 Run `npx svg-bbox` or any tool with `--help` for detailed usage.
 
+> **Note:** The `lib/cli-utils.cjs` file is a **library module**, not a CLI
+> launcher. Do not run it directly. Use the tools listed above instead.
+
 ---
 
 ## 🚀 Quickstart
