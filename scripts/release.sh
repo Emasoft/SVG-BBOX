@@ -4126,9 +4126,10 @@ set_version() {
 validate_json_files() {
     log_info "  → Validating JSON files..."
 
+    # NOTE: tsconfig.json uses JSONC (JSON with Comments) which TypeScript supports
+    # but jsonlint doesn't. Skip it from validation - tsc handles it natively.
     local JSON_FILES=(
         "package.json"
-        "tsconfig.json"
         ".eslintrc.json"
         ".prettierrc.json"
     )
