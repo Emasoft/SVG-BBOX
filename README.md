@@ -222,7 +222,7 @@ After installation, the following CLI commands are available:
 
 ```bash
 git clone https://github.com/Emasoft/SVG-BBOX.git
-cd svg-bbox
+cd SVG-BBOX
 pnpm install
 ```
 
@@ -450,10 +450,10 @@ Each object / group becomes its own SVG, with:
 #### Installation
 
 ```html
-<!-- CDN -->
-<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
+<!-- CDN (minified, recommended for production) -->
+<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
 
-<!-- Or via npm -->
+<!-- Or via npm (non-minified for debugging) -->
 <script src="./node_modules/svg-bbox/SvgVisualBBox.js"></script>
 ```
 
@@ -493,7 +493,7 @@ computation and visual debugging.
 <!DOCTYPE html>
 <html>
   <head>
-    <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
+    <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
   </head>
   <body>
     <svg viewBox="0 0 200 100" width="400">

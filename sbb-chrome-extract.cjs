@@ -587,16 +587,30 @@ function parseArgs(argv) {
           }
           useNext();
           break;
-        case 'width':
+        case 'width': {
           // WHY: parseInt needs a string, use empty string fallback (results in NaN)
-          options.width = parseInt(next || '', 10);
+          const widthVal = parseInt(next || '', 10);
+          // SECURITY FIX (2026-01-05 audit): Validate NaN to prevent silent failures
+          if (Number.isNaN(widthVal) || widthVal <= 0) {
+            printError(`Invalid width value: ${next} (must be a positive integer)`);
+            process.exit(1);
+          }
+          options.width = widthVal;
           useNext();
           break;
-        case 'height':
+        }
+        case 'height': {
           // WHY: parseInt needs a string, use empty string fallback (results in NaN)
-          options.height = parseInt(next || '', 10);
+          const heightVal = parseInt(next || '', 10);
+          // SECURITY FIX (2026-01-05 audit): Validate NaN to prevent silent failures
+          if (Number.isNaN(heightVal) || heightVal <= 0) {
+            printError(`Invalid height value: ${next} (must be a positive integer)`);
+            process.exit(1);
+          }
+          options.height = heightVal;
           useNext();
           break;
+        }
         case 'background':
           options.background = next || 'transparent';
           useNext();

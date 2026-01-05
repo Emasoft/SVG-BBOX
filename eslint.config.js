@@ -82,7 +82,8 @@ export default [
       'no-implied-eval': 'error',
       'no-new-func': 'error',
       'no-new-wrappers': 'error',
-      'no-return-await': 'error',
+      // NOTE: 'no-return-await' removed (2026-01-05 audit) - deprecated in ESLint 8.46.0+
+      // Modern JS engines optimize return await automatically
 
       // Style (minimal, Prettier handles most)
       semi: ['error', 'always'],
@@ -139,7 +140,8 @@ export default [
       'no-implied-eval': 'error',
       'no-new-func': 'error',
       'no-new-wrappers': 'error',
-      'no-return-await': 'error',
+      // NOTE: 'no-return-await' removed (2026-01-05 audit) - deprecated in ESLint 8.46.0+
+      // Modern JS engines optimize return await automatically
 
       // Style (minimal, Prettier handles most)
       semi: ['error', 'always'],

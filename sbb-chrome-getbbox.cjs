@@ -390,7 +390,14 @@ function parseArgs(argv) {
           useNext();
           break;
         case 'json':
-          options.json = next || null;
+          // BUG FIX (2026-01-05 audit): Prevent --json from consuming the input file
+          // If next value looks like an SVG file, it's likely the input, not json output
+          if (!next || next.endsWith('.svg') || next.endsWith('.SVG')) {
+            printError('Missing required argument for --json: output path (use - for stdout)');
+            console.log('  Example: sbb-chrome-getbbox drawing.svg --json results.json');
+            process.exit(1);
+          }
+          options.json = next;
           useNext();
           break;
         default:

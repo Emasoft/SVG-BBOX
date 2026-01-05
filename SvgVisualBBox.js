@@ -463,23 +463,10 @@
     }
   }
 
-  /**
-   * INTERNAL: For text-ish elements (textPath, tspan), try to get bbox from parent <text>
-   * as a fallback, since getBBox() on these child elements is unreliable in headless Chrome.
-   *
-   * @param {SVGElement} el
-   * @returns {SVGElement} - Returns the element itself, or parent <text> if appropriate
-   */
-  function _normalizeTargetForText(el) {
-    const tagName = el.tagName.toLowerCase();
-    if (tagName === 'textpath' || tagName === 'tspan') {
-      const textParent = /** @type {SVGTextElement | null} */ (el.closest('text'));
-      if (textParent) {
-        return textParent;
-      }
-    }
-    return el;
-  }
+  // NOTE: _normalizeTargetForText() was removed in v1.1.2 audit (2026-01-05)
+  // It was dead code - defined but never called. The function attempted to
+  // normalize textPath/tspan elements by returning their parent <text>,
+  // but this functionality is handled elsewhere in the codebase.
 
   /**
    * INTERNAL: Rasterize ONE element of ONE SVG into a canvas over a given
