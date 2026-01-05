@@ -435,12 +435,18 @@ ${sanitizedSvg}
 
       const full = both.full; // {x,y,width,height} in SVG user units
 
-      // 2) FORCE MODE: Delete existing attributes to ensure clean regeneration
+      // 2) FORCE MODE: Save original dimensions, then remove viewBox only
+      // WHY: Force mode should regenerate viewBox from visual content
+      // BUT preserve original width/height dimensions (important for percentage-based SVGs)
+      // Bug fix 2026-01-05: Removing width="100%" height="100%" and replacing with
+      // fixed pixel values caused 24-95% visual difference in output
+      const originalWidth = forceRegenerate ? svg.getAttribute('width') : null;
+      const originalHeight = forceRegenerate ? svg.getAttribute('height') : null;
+
       if (forceRegenerate) {
-        // Remove existing viewBox, width, height to ensure no contamination
+        // Only remove viewBox to regenerate it from visual content
+        // DO NOT remove width/height - they define display size semantics
         svg.removeAttribute('viewBox');
-        svg.removeAttribute('width');
-        svg.removeAttribute('height');
       }
 
       // 3) Ensure viewBox
@@ -476,9 +482,39 @@ ${sanitizedSvg}
       let newHeight = heightAttr;
 
       if (forceRegenerate) {
-        // Force mode: always regenerate width/height from viewBox (already deleted above)
-        newWidth = String(vb.width);
-        newHeight = String(vb.height);
+        // Force mode: PRESERVE percentage dimensions, REGENERATE fixed pixel dimensions
+        // WHY: Percentage dimensions (100%, 50%) define display scaling behavior - must preserve
+        // But fixed pixel dimensions (100, 200px) should match the regenerated viewBox
+        // Bug fix 2026-01-05: Previously replaced ALL dimensions with fixed pixels,
+        // which broke percentage-based SVGs that scale to fill containers
+        const isPercentageWidth = originalWidth !== null && originalWidth.includes('%');
+        const isPercentageHeight = originalHeight !== null && originalHeight.includes('%');
+
+        if (isPercentageWidth || isPercentageHeight) {
+          // PRESERVE percentage dimensions - they define scaling behavior
+          newWidth = originalWidth;
+          newHeight = originalHeight;
+          // Derive missing dimension from percentage if needed
+          if (newWidth === null && newHeight !== null) {
+            const h = parseFloat(newHeight);
+            if (isFinite(h) && h > 0 && vbAspect > 0) {
+              newWidth = String(h * vbAspect);
+            } else {
+              newWidth = String(vb.width || 1000);
+            }
+          } else if (newWidth !== null && newHeight === null) {
+            const w = parseFloat(newWidth);
+            if (isFinite(w) && w > 0 && vbAspect > 0) {
+              newHeight = String(w / vbAspect);
+            } else {
+              newHeight = String(vb.height || 1000);
+            }
+          }
+        } else {
+          // REGENERATE fixed pixel dimensions from viewBox
+          newWidth = String(vb.width);
+          newHeight = String(vb.height);
+        }
       } else if (!hasWidth && !hasHeight) {
         // Neither width nor height set → use viewBox width/height as px
         newWidth = String(vb.width);
