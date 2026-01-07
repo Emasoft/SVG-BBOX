@@ -435,6 +435,25 @@ ${sanitizedSvg}
 
       const full = both.full; // {x,y,width,height} in SVG user units
 
+      // IDEMPOTENCY FIX 2026-01-06: Conservative rounding for stable viewBox values
+      // WHY: The pixel-based bbox detection has sub-pixel variations (~0.01-0.1 units)
+      // caused by text rendering differences when viewBox changes.
+      // PROBLEM: Without rounding, running sbb-fix-viewbox multiple times produces
+      // diverging values: -0.0608 → -0.0679 → -0.0114 → -0.0375 (never converges)
+      // SOLUTION: Use conservative rounding to 0.5 increments that ensures content is captured:
+      //   - x,y: floor to 0.5 (round toward more negative = includes more content on left/top)
+      //   - width,height: ceil to 0.5 (round up = includes more content on right/bottom)
+      // WHY 0.5 INSTEAD OF 0.1: Rounding to 0.1 still oscillated at boundaries (e.g., 553.19↔553.25)
+      // because the sub-pixel variations (~0.06) crossed the 0.1 boundary. The 0.5 buffer absorbs this.
+      // This creates a stable "expanded envelope" that absorbs sub-pixel variations
+      // RESULT: Idempotent algorithm - same input produces same output
+      const floorHalf = (/** @type {number} */ v) => Math.floor(v * 2) / 2;
+      const ceilHalf = (/** @type {number} */ v) => Math.ceil(v * 2) / 2;
+      full.x = floorHalf(full.x);
+      full.y = floorHalf(full.y);
+      full.width = ceilHalf(full.width);
+      full.height = ceilHalf(full.height);
+
       // 2) FORCE MODE: Save original dimensions, then remove viewBox only
       // WHY: Force mode should regenerate viewBox from visual content
       // BUT preserve original width/height dimensions (important for percentage-based SVGs)

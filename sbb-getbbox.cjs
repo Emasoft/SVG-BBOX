@@ -459,19 +459,19 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
 <html>
 <head>
   <meta charset="utf-8">
-  <style>
-    body { margin: 0; padding: 20px; }
-    svg { display: block; }
-  </style>
+  <!-- CONSISTENCY FIX 2026-01-06: No CSS styling - match sbb-fix-viewbox.cjs exactly -->
+  <!-- Previously had padding and display:block which affected bbox calculations -->
 </head>
 <body>
-  ${sanitizedSvg}
+${sanitizedSvg}
 </body>
 </html>
     `;
 
+    // CONSISTENCY FIX 2026-01-06: Use 'networkidle0' like sbb-fix-viewbox.cjs
+    // for consistent font/resource loading behavior
     await page.setContent(html, {
-      waitUntil: 'load',
+      waitUntil: 'networkidle0',
       timeout: BROWSER_TIMEOUT_MS
     });
 
@@ -541,37 +541,30 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
         const output = {};
         const options = { mode, coarseFactor: 3, fineFactor: 24, useLayoutScale: true };
 
-        // If no object IDs specified, compute whole content bbox
-        if (objectIds.length === 0) {
-          const children = Array.from(rootSvg.children).filter((el) => {
-            const tag = el.tagName.toLowerCase();
-            return (
-              tag !== 'defs' &&
-              tag !== 'style' &&
-              tag !== 'script' &&
-              tag !== 'title' &&
-              tag !== 'desc' &&
-              tag !== 'metadata'
-            );
-          });
+        // IDEMPOTENCY FIX 2026-01-06: Conservative rounding for stable bbox values
+        // WHY: Absorbs sub-pixel variations from text rendering differences
+        // MATCHES: sbb-fix-viewbox.cjs rounding for consistent results
+        // x,y: floor to 0.5 (expand left/top), width/height: ceil to 0.5 (expand right/bottom)
+        // WHY 0.5: Rounding to 0.1 oscillated at boundaries; 0.5 buffer absorbs variations
+        const floorHalf = (/** @type {number} */ v) => Math.floor(v * 2) / 2;
+        const ceilHalf = (/** @type {number} */ v) => Math.ceil(v * 2) / 2;
 
-          if (children.length === 0) {
-            output['WHOLE CONTENT'] = { error: 'No renderable content found' };
-          } else if (children.length === 1) {
-            // WHY: Type guard - we know children[0] exists since length === 1
-            const firstChild = children[0];
-            if (!firstChild) {
-              output['WHOLE CONTENT'] = { error: 'No renderable content found' };
-            } else {
-              const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-                firstChild,
-                options
-              );
-              output['WHOLE CONTENT'] = bbox || { error: 'No visible pixels' };
-            }
+        // If no object IDs specified, compute whole content bbox
+        // CONSISTENCY FIX 2026-01-06: Use getSvgElementVisibleAndFullBBoxes().full
+        // to match sbb-fix-viewbox algorithm. Previously used getSvgElementsUnionVisualBBox
+        // which produced different results, causing 1-2% visual differences between tools.
+        if (objectIds.length === 0) {
+          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(rootSvg, options);
+          if (!both.full) {
+            output['WHOLE CONTENT'] = { error: 'No visible pixels' };
           } else {
-            const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox(children, options);
-            output['WHOLE CONTENT'] = union || { error: 'No visible pixels' };
+            const bbox = both.full;
+            output['WHOLE CONTENT'] = {
+              x: floorHalf(bbox.x),
+              y: floorHalf(bbox.y),
+              width: ceilHalf(bbox.width),
+              height: ceilHalf(bbox.height)
+            };
           }
         } else {
           // Compute bbox for each object ID
@@ -586,7 +579,16 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
               element,
               options
             );
-            output[id] = bbox || { error: 'No visible pixels' };
+            if (bbox) {
+              output[id] = {
+                x: floorHalf(bbox.x),
+                y: floorHalf(bbox.y),
+                width: ceilHalf(bbox.width),
+                height: ceilHalf(bbox.height)
+              };
+            } else {
+              output[id] = { error: 'No visible pixels' };
+            }
           }
         }
 

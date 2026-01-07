@@ -332,18 +332,25 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 </svg>`;
       await fs.writeFile(svgPath, svgContent, 'utf8');
 
-      // Default: Should only see the visible rectangle
-      const { stdout: visible } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
+      // 2026-01-06 ALGORITHM CONSISTENCY FIX: sbb-getbbox now uses the same
+      // algorithm as sbb-fix-viewbox (getSvgElementVisibleAndFullBBoxes().full)
+      // Default behavior now returns FULL bbox including content outside viewBox
+      const { stdout: result } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
         timeout: CLI_EXEC_TIMEOUT
       });
 
-      expect(visible).toMatch(/x:\s*10/);
-      expect(visible).toMatch(/y:\s*10/);
-      expect(visible).toMatch(/width:\s*80/);
-      expect(visible).toMatch(/height:\s*80/);
+      // Full bbox includes rect (10,10,80,80) and text at (110,-10)
+      // x: 10 (rect starts at x=10)
+      expect(result).toMatch(/x:\s*10/);
+      // y: negative (text at y=-10 with font ascent pushes it up)
+      expect(result).toMatch(/y:\s*-\d+/);
+      // width: ~155 (spans from x=10 to end of text at ~x=165)
+      expect(result).toMatch(/width:\s*1[45]\d/);
+      // height: ~105 (spans from y~=-16 to y=90)
+      expect(result).toMatch(/height:\s*10\d/);
 
-      // --ignore-vbox: Should detect hidden copyright text
+      // --ignore-vbox now produces same result (algorithm consistency)
       const { stdout: full } = await execFileAsync(
         'node',
         ['sbb-getbbox.cjs', svgPath, '--ignore-vbox'],
@@ -353,11 +360,9 @@ describe('sbb-getbbox CLI Integration Tests', () => {
         }
       );
 
-      // Full bbox should extend to include copyright text
-      // Text at (110, -10) would expand bbox
+      // Both default and --ignore-vbox should return identical FULL bbox
       expect(full).toMatch(/x:\s*10/);
-      // Y should be negative (or near zero) to include text at y=-10
-      expect(full).toMatch(/y:\s*-?\d+/);
+      expect(full).toMatch(/y:\s*-\d+/);
     });
   });
 });

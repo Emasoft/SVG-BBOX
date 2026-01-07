@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!--
+    NON-INTEGER COORDINATE TEST SVG
+
+    This SVG tests the 0.5 rounding behavior:
+    - Coordinates are NOT integers
+    - The 0.5 rounding should expand the bbox to include all content
+
+    Rectangle geometry:
+    - Position: x=10.3, y=10.7
+    - Size: width=79.4, height=59.6
+    - Stroke: width=3, centered on path
+
+    Theoretical bounding box (raw):
+    - x = 10.3 - 3/2 = 8.8
+    - y = 10.7 - 3/2 = 9.2
+    - width = 79.4 + 3 = 82.4
+    - height = 59.6 + 3 = 62.6
+
+    With 0.5 rounding (floor for x,y; ceil for width,height):
+    - x = floor(8.8 * 2) / 2 = floor(17.6) / 2 = 17 / 2 = 8.5
+    - y = floor(9.2 * 2) / 2 = floor(18.4) / 2 = 18 / 2 = 9.0
+    - width = ceil(82.4 * 2) / 2 = ceil(164.8) / 2 = 165 / 2 = 82.5
+    - height = ceil(62.6 * 2) / 2 = ceil(125.2) / 2 = 126 / 2 = 63.0
+  -->
+  <rect id="test-rect"
+        x="10.3" y="10.7"
+        width="79.4" height="59.6"
+        fill="#00ff00"
+        stroke="#ff00ff"
+        stroke-width="3"/>
+</svg>

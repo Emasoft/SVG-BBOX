@@ -190,7 +190,7 @@ OPTIONS:
                             SVGs with aspect ratios differing beyond this threshold
                             will be rejected with 100% difference
 
-  --scale <number>          Resolution multiplier for rendering (default: 4)
+  --scale <number>          Resolution multiplier for rendering (default: 8)
                             SVGs are extremely detailed - fine differences hidden at low
                             resolution become visible at higher resolution. A flower and
                             a planet may look identical at 1024px but are completely
@@ -715,8 +715,9 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
   // CRITICAL BUG FIX: Apply scale factor for detailed comparison
   // SVGs are extremely detailed - differences hidden at low resolution become visible at higher resolution
   // Example: A flower and a planet may look identical at 1024px but completely different at 4096px
-  // Default scale is 4x to ensure fine details are captured in the diff
-  const scale = args.scale || 4;
+  // Default scale is 8x to ensure fine details are captured and reduce sub-pixel variations
+  // 2026-01-06: Increased from 4x to 8x to further reduce sub-pixel rounding errors in bbox detection
+  const scale = args.scale || 8;
 
   // Determine resolution based on mode
   let width1, height1, width2, height2;

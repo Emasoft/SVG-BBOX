@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!--
+    MATHEMATICAL VERIFICATION TEST SVG
+
+    This SVG is designed for pixel-perfect bbox verification:
+    - All coordinates are integers that align to pixel boundaries
+    - Stroke width is chosen so stroke edges align to pixels
+    - No sub-pixel rendering artifacts expected
+
+    Rectangle geometry:
+    - Position: x=10, y=10
+    - Size: width=80, height=60
+    - Stroke: width=4, centered on path
+
+    Theoretical bounding box calculation:
+    - SVG stroke is centered on the path (extends stroke-width/2 on each side)
+    - bbox.x = 10 - 4/2 = 8
+    - bbox.y = 10 - 4/2 = 8
+    - bbox.width = 80 + 4 = 84
+    - bbox.height = 60 + 4 = 64
+
+    At 8x resolution (800x800 canvas):
+    - Each SVG unit = 8 pixels
+    - Stroke of 4 units = 32 pixels (no sub-pixel issues)
+  -->
+  <rect id="test-rect"
+        x="10" y="10"
+        width="80" height="60"
+        fill="#ff0000"
+        stroke="#0000ff"
+        stroke-width="4"/>
+</svg>
