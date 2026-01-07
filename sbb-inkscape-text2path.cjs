@@ -237,12 +237,18 @@ async function findInkscape() {
     );
   }
 
+  // WHY 15000ms timeout: Inkscape can take 10+ seconds to start on systems with many fonts
+  // as it needs to build/load the font cache on first run
+  const INKSCAPE_VERSION_TIMEOUT = 15000;
+
   // Check each candidate path
   for (const candidate of candidatePaths) {
     try {
       if (fs.existsSync(candidate)) {
         // Verify it's executable by trying --version
-        const { stdout } = await execFilePromise(candidate, ['--version'], { timeout: 5000 });
+        const { stdout } = await execFilePromise(candidate, ['--version'], {
+          timeout: INKSCAPE_VERSION_TIMEOUT
+        });
         if (stdout.toLowerCase().includes('inkscape')) {
           return candidate;
         }
@@ -255,7 +261,9 @@ async function findInkscape() {
 
   // Try 'inkscape' in PATH (works on all platforms)
   try {
-    const { stdout } = await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
+    const { stdout } = await execFilePromise('inkscape', ['--version'], {
+      timeout: INKSCAPE_VERSION_TIMEOUT
+    });
     if (stdout.toLowerCase().includes('inkscape')) {
       return 'inkscape'; // Found in PATH
     }
@@ -269,7 +277,7 @@ async function findInkscape() {
       const { stdout } = await execFilePromise(
         'flatpak',
         ['run', 'org.inkscape.Inkscape', '--version'],
-        { timeout: 5000 }
+        { timeout: INKSCAPE_VERSION_TIMEOUT }
       );
       if (stdout.toLowerCase().includes('inkscape')) {
         return 'flatpak run org.inkscape.Inkscape';

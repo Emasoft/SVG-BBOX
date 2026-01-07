@@ -24,6 +24,10 @@ const { validateFilePath, VALID_ID_PATTERN } = require('./lib/security-utils.cjs
 
 const execFilePromise = promisify(execFile);
 
+// WHY 15000ms timeout: Inkscape can take 10+ seconds to start on systems with many fonts
+// as it needs to build/load the font cache on first run
+const INKSCAPE_VERSION_TIMEOUT = 15000;
+
 /**
  * @typedef {Object} BBox
  * @property {number} x - X coordinate
@@ -297,7 +301,9 @@ USE CASES:
  */
 async function checkInkscapeAvailable() {
   try {
-    await execFilePromise('inkscape', ['--version']);
+    await execFilePromise('inkscape', ['--version'], {
+      timeout: INKSCAPE_VERSION_TIMEOUT
+    });
     return true;
   } catch {
     return false;

@@ -32,8 +32,9 @@ const TEMP_DIR = path.join(__dirname, '../.tmp-inkscape-text2path-tests');
 // Check if Inkscape is available
 async function checkInkscapeAvailable() {
   try {
-    // WHY CLI_TIMEOUT_MS / 6: Quick version check, but allow time for Inkscape startup
-    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 6 });
+    // WHY CLI_TIMEOUT_MS / 2: Inkscape can take 10+ seconds to start on systems with many fonts
+    // as it needs to build/load the font cache on first run
+    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 2 });
     return true;
   } catch {
     return false;

@@ -27,7 +27,9 @@ const INKSCAPE_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 // Check if Inkscape is available
 async function checkInkscapeAvailable() {
   try {
-    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 6 });
+    // WHY CLI_TIMEOUT_MS / 2: Inkscape can take 10+ seconds to start on systems with many fonts
+    // as it needs to build/load the font cache on first run
+    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 2 });
     return true;
   } catch {
     return false;
