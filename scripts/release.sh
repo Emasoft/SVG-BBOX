@@ -3561,31 +3561,55 @@ validate_prerequisites() {
 cleanup_test_artifacts() {
     log_info "Cleaning up test artifacts..."
 
-    local CLEANED=0
+    local cleaned_count=0
+    local cleaned_items=""
 
-    # Remove temp test directories (created by integration tests)
+    # Remove temp test directories and files (created by integration tests)
     # These match patterns in .gitignore: temp_*/, test_batch.txt, test_regenerated.svg
-    for pattern in "temp_*" "test_batch.txt" "test_regenerated.svg" "*-last-conversation.txt"; do
+    local patterns=("temp_*" "test_batch.txt" "test_regenerated.svg" "*-last-conversation.txt")
+
+    for pattern in "${patterns[@]}"; do
         # Use find to safely match patterns and remove
         # WHY: Using glob directly with rm can fail if no matches exist
-        local found_items
-        found_items=$(find . -maxdepth 1 -name "$pattern" 2>/dev/null | head -20)
-        if [ -n "$found_items" ]; then
-            echo "$found_items" | while read -r item; do
+        # NOTE: No head limit - clean ALL matching items to ensure clean state
+        while IFS= read -r -d '' item; do
+            if [ -n "$item" ]; then
                 if [ -d "$item" ]; then
-                    rm -rf "$item" 2>/dev/null && CLEANED=$((CLEANED + 1))
+                    if rm -rf "$item" 2>/dev/null; then
+                        cleaned_count=$((cleaned_count + 1))
+                        cleaned_items="${cleaned_items}  - ${item} (dir)\n"
+                    fi
                 elif [ -f "$item" ]; then
-                    rm -f "$item" 2>/dev/null && CLEANED=$((CLEANED + 1))
+                    if rm -f "$item" 2>/dev/null; then
+                        cleaned_count=$((cleaned_count + 1))
+                        cleaned_items="${cleaned_items}  - ${item} (file)\n"
+                    fi
                 fi
-            done
-        fi
+            fi
+        done < <(find . -maxdepth 1 -name "$pattern" -print0 2>/dev/null)
     done
 
-    # Also clean up test temp directories in tests/ folder
-    find tests/ -maxdepth 1 -type d -name ".tmp-*" -exec rm -rf {} + 2>/dev/null || true
-    find tests/ -maxdepth 1 -type d -name "test-cli-security-temp" -exec rm -rf {} + 2>/dev/null || true
+    # Also clean up test temp directories in tests/ folder (if tests/ exists)
+    # WHY: Integration tests may create temp dirs inside tests/
+    if [ -d "tests" ]; then
+        while IFS= read -r -d '' item; do
+            if [ -n "$item" ] && rm -rf "$item" 2>/dev/null; then
+                cleaned_count=$((cleaned_count + 1))
+                cleaned_items="${cleaned_items}  - ${item} (test-dir)\n"
+            fi
+        done < <(find tests/ -maxdepth 1 -type d \( -name ".tmp-*" -o -name "test-cli-security-temp" \) -print0 2>/dev/null)
+    fi
 
-    log_success "Test artifacts cleaned up"
+    # Report what was cleaned (helps debugging)
+    if [ "$cleaned_count" -gt 0 ]; then
+        log_success "Test artifacts cleaned up ($cleaned_count items removed)"
+        # Show details only in verbose mode or if few items
+        if [ "$cleaned_count" -le 5 ]; then
+            echo -e "$cleaned_items" | grep -v '^$' | head -5 >&2
+        fi
+    else
+        log_success "Test artifacts cleaned up (none found)"
+    fi
 }
 
 # Check if working directory is clean
@@ -5769,13 +5793,38 @@ EOF
 commit_version_bump() {
     local VERSION=$1
 
-    log_info "Committing version bump..."
-
-    # NOTE: Add error checking to git commands - silent failures can leave repo in bad state
-    if ! git add package.json pnpm-lock.yaml; then
-        log_error "Failed to stage version bump files"
+    # Validate VERSION parameter
+    if [ -z "$VERSION" ]; then
+        log_error "commit_version_bump called without VERSION parameter"
         return 1
     fi
+
+    log_info "Committing version bump..."
+
+    # Stage package.json (required - always modified by version bump)
+    if [ ! -f "package.json" ]; then
+        log_error "package.json not found - cannot commit version bump"
+        return 1
+    fi
+    if ! git add package.json; then
+        log_error "Failed to stage package.json"
+        return 1
+    fi
+
+    # Stage pnpm-lock.yaml only if it exists (optional - may not change)
+    # WHY: Lock file only changes if dependencies are affected by version bump
+    if [ -f "pnpm-lock.yaml" ]; then
+        git add pnpm-lock.yaml 2>/dev/null || true
+    fi
+
+    # Verify there are changes to commit
+    # WHY: Prevents "nothing to commit" errors if version was already bumped
+    if git diff --cached --quiet; then
+        log_warning "No changes staged for version bump commit"
+        log_warning "Version may have already been bumped in a previous run"
+        return 0  # Not an error - idempotent behavior
+    fi
+
     # SAFEGUARD: Use --no-verify because the release script has already run comprehensive
     # validation (linting, type checking, tests, security scans). Pre-commit hooks would be
     # redundant AND can fail due to race conditions in parallel test execution.
