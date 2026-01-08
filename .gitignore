@@ -75,6 +75,10 @@ temp/
 *$
 tests/.tmp-*/
 test-cli-security-temp/
+temp_*/
+test_batch.txt
+test_regenerated.svg
+*-last-conversation.txt
 
 # E2E test temporary directories
 tests/.tmp-e2e-*/
