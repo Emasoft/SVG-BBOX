@@ -319,7 +319,7 @@ This helps diagnose whether the issue is:
 The release script has safeguards to prevent flaky test failures from blocking
 releases after comprehensive validation has already passed.
 
-**Historical Bug (Fixed in commit after v1.1.3):**
+**Historical Bug (Fixed in commits b0296de, fb4a1f4):**
 
 Pre-commit hooks would re-run tests during the version bump commit, causing
 release failures due to race conditions in parallel test execution, even though
