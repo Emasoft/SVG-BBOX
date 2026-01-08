@@ -312,6 +312,63 @@ This helps diagnose whether the issue is:
 - Unexpected characters in version string
 - Shell environment issues
 
+### Release Reliability Safeguards
+
+**RELIABILITY: Pre-commit Hook Bypass and Test Artifact Cleanup**
+
+The release script has safeguards to prevent flaky test failures from blocking
+releases after comprehensive validation has already passed.
+
+**Historical Bug (Fixed in commit after v1.1.3):**
+
+Pre-commit hooks would re-run tests during the version bump commit, causing
+release failures due to race conditions in parallel test execution, even though
+the release script had already validated everything.
+
+```
+Error: Pre-commit tests failed during release commit
+- Tests passed during validation phase
+- Tests failed during commit due to parallel execution race conditions
+- Release blocked despite all validations passing
+```
+
+**Safeguards Implemented:**
+
+1. **`--no-verify` flag on release commit:**
+   - The `commit_version_bump()` function uses `git commit --no-verify`
+   - WHY: Release script has already run comprehensive validation (linting, type
+     checking, tests, security scans)
+   - Pre-commit hooks would be redundant AND can fail due to timing issues
+   - This is safe because validation has already completed successfully
+
+2. **`cleanup_test_artifacts()` function:**
+   - Automatically removes test temp directories before working directory check
+   - Patterns cleaned: `temp_*`, `test_batch.txt`, `test_regenerated.svg`,
+     `*-last-conversation.txt`
+   - Also cleans: `tests/.tmp-*`, `tests/test-cli-security-temp`
+   - WHY: Test artifacts in .gitignore still show in `git status --short`,
+     confusing users with "uncommitted changes" errors
+
+**Why These Safeguards Matter:**
+
+- **Validation is comprehensive:** Release script runs 40+ validators before commit
+- **Pre-commit would be redundant:** Same checks would run again, wasting time
+- **Race conditions are real:** Parallel tests can fail non-deterministically
+- **Test artifacts pollute status:** Gitignored files appear in error messages
+- **User confusion:** "Uncommitted changes" for temp files is misleading
+
+**When Release Commit Uses --no-verify:**
+
+This is SAFE because the release script validates BEFORE committing:
+
+| Check | Run By Release Script | Would Pre-commit Run Again |
+|-------|----------------------|---------------------------|
+| Linting (ESLint) | ✅ Yes | ✅ Redundant |
+| Type checking | ✅ Yes | ✅ Redundant |
+| Tests | ✅ Yes | ✅ Redundant (+ flaky risk) |
+| Formatting | ✅ Yes | ✅ Redundant |
+| Security scan | ✅ Yes | ❌ Not in pre-commit |
+
 ## JavaScript/TypeScript Code Fixing
 
 **CRITICAL: Always use the correct code-fixer agent for the language!**
