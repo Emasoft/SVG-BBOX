@@ -362,10 +362,7 @@ describe('CLI Security Integration Tests', () => {
       } catch (err) {
         // WHY: Being in catch block means command rejected the malicious input
         // The specific error code/message varies by environment, but rejection is correct
-        assert.ok(
-          err instanceof Error,
-          'Should have thrown an error for malicious batch content'
-        );
+        assert.ok(err instanceof Error, 'Should have thrown an error for malicious batch content');
       }
     });
 
