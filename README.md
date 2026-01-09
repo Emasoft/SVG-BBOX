@@ -110,6 +110,9 @@ npx sbb-extract myfile.svg --list
 ### Global Install (Recommended for Frequent Use)
 
 ```bash
+# bun (recommended - fastest)
+bun add -g svg-bbox
+
 # npm
 npm install -g svg-bbox
 
@@ -128,6 +131,9 @@ sbb-svg2png file.svg output.png
 ### Local Install (For Projects)
 
 ```bash
+# bun (recommended - fastest)
+bun add svg-bbox
+
 # npm
 npm install svg-bbox
 
@@ -137,7 +143,8 @@ pnpm add svg-bbox
 # yarn
 yarn add svg-bbox
 
-# Then use via npx or package.json scripts:
+# Then use via bunx/npx or package.json scripts:
+bunx sbb-getbbox file.svg
 npx sbb-getbbox file.svg
 ```
 
@@ -184,10 +191,12 @@ node sbb-getbbox.cjs myfile.svg
 
 > **Note:** In the documentation below, you'll see two command styles:
 >
-> - `npx sbb-getbbox` - Use this when installed via npm (recommended)
+> - `bunx sbb-getbbox` or `npx sbb-getbbox` - Use this when installed via
+>   package manager (recommended)
 > - `node sbb-getbbox.cjs` - Use this when running from cloned source
 >
-> Both are equivalent. The npx style works after `npm install svg-bbox`.
+> Both are equivalent. The bunx/npx style works after `bun add svg-bbox` or
+> `npm install svg-bbox`.
 
 After installation, the following CLI commands are available:
 
@@ -531,9 +540,10 @@ computation and visual debugging.
 </html>
 ```
 
-### Node.js (install via npm)
+### Node.js / Bun
 
 ```bash
+bun add svg-bbox    # recommended - fastest
 npm install svg-bbox
 ```
 
@@ -664,7 +674,7 @@ result.remove();
 ### In JavaScript/Node.js
 
 ```javascript
-// Install: npm install svg-bbox puppeteer
+// Install: bun add svg-bbox puppeteer (or: npm install svg-bbox puppeteer)
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -707,7 +717,7 @@ getBBoxFromSVGFile('input.svg').then((bbox) => {
 ### In TypeScript
 
 ```typescript
-// Install: npm install svg-bbox puppeteer @types/puppeteer
+// Install: bun add svg-bbox puppeteer @types/puppeteer (or: npm install ...)
 
 import puppeteer from 'puppeteer';
 import { readFileSync } from 'fs';
@@ -754,7 +764,7 @@ getBBoxFromSVGFile('input.svg').then((bbox) => {
 ### In Backend (Node.js File Processing)
 
 ```javascript
-// Install: npm install svg-bbox
+// Install: bun add svg-bbox (or: npm install svg-bbox)
 
 const { execFileSync } = require('child_process');
 const path = require('path');
