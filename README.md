@@ -1791,7 +1791,7 @@ A typical end‑to‑end workflow:
 - Make sure **Chrome** or **Chromium** is installed.
 - If Puppeteer can't find a browser:
   - Try installing the default Chromium:
-    `npx puppeteer browsers install chrome`.
+    `bunx puppeteer browsers install chrome` or `npx puppeteer browsers install chrome`.
   - Or set `PUPPETEER_EXECUTABLE_PATH` to your Chrome/Chromium binary.
 
 **Installing Chrome/Chromium:**
@@ -1811,9 +1811,10 @@ A typical end‑to‑end workflow:
 - **Linux (Debian/Ubuntu)**:
 
   ```bash
-  sudo apt install google-chrome-stable
-  # or
+  # Chromium (recommended - in official repos)
   sudo apt install chromium-browser
+  # Chrome requires adding Google's apt repository first
+  # See: https://www.google.com/chrome/ for instructions
   ```
 
 - **Linux (Fedora/RHEL)**:
@@ -1825,10 +1826,24 @@ A typical end‑to‑end workflow:
   ```
 
 - **Linux (Arch)**:
+
   ```bash
-  sudo pacman -S google-chrome
-  # or
+  # Chrome (from AUR - requires yay, paru, or similar AUR helper)
+  yay -S google-chrome
+  # or Chromium (in official repos)
   sudo pacman -S chromium
+  ```
+
+- **FreeBSD**:
+
+  ```bash
+  pkg install chromium
+  ```
+
+- **OpenBSD**:
+
+  ```bash
+  pkg_add chromium
   ```
 
 ### ⚠️ Wrong browser opened
