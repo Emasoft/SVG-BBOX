@@ -124,7 +124,8 @@ rm test.svg
 
 ### First Run is Slow
 
-On first use, puppeteer downloads Chromium (~150MB). This is normal and only happens once.
+On first use, puppeteer downloads Chromium (~150MB). This is normal and only
+happens once.
 
 ### Permission Errors (Global Install)
 
@@ -170,12 +171,12 @@ npm uninstall -g svg-bbox # global
 
 ## Cheatsheet
 
-| Action | bun | npm | pnpm |
-|--------|-----|-----|------|
-| Install | `bun add svg-bbox` | `npm i svg-bbox` | `pnpm add svg-bbox` |
+| Action      | bun                   | npm                 | pnpm                   |
+| ----------- | --------------------- | ------------------- | ---------------------- |
+| Install     | `bun add svg-bbox`    | `npm i svg-bbox`    | `pnpm add svg-bbox`    |
 | Dev install | `bun add -d svg-bbox` | `npm i -D svg-bbox` | `pnpm add -D svg-bbox` |
-| Global | `bun add -g svg-bbox` | `npm i -g svg-bbox` | `pnpm add -g svg-bbox` |
-| Remove | `bun remove svg-bbox` | `npm un svg-bbox` | `pnpm rm svg-bbox` |
+| Global      | `bun add -g svg-bbox` | `npm i -g svg-bbox` | `pnpm add -g svg-bbox` |
+| Remove      | `bun remove svg-bbox` | `npm un svg-bbox`   | `pnpm rm svg-bbox`     |
 
 ---
 
