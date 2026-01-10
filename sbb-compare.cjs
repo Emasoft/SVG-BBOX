@@ -62,7 +62,7 @@
  * @property {string} svg2 - Second SVG path
  * @property {number} [totalPixels] - Total pixels compared
  * @property {number} [differentPixels] - Number of different pixels
- * @property {number} diffPercentage - Difference percentage
+ * @property {number} diffPercentage - Difference percentage: (differentPixels / totalPixels) * 100
  * @property {number} [threshold] - Threshold used
  * @property {string} [diffImage] - Path to diff image
  * @property {SVGAnalysis} [svgAnalysis1] - Analysis of first SVG
@@ -74,9 +74,9 @@
 
 /**
  * @typedef {Object} ImageCompareResult
- * @property {number} totalPixels - Total pixels compared
+ * @property {number} totalPixels - Total pixels in the image
  * @property {number} differentPixels - Number of different pixels
- * @property {string} diffPercentage - Difference percentage as string
+ * @property {string} diffPercentage - Difference percentage: (differentPixels / totalPixels) * 100
  */
 
 /**
@@ -229,10 +229,15 @@ EXAMPLES:
 
 OUTPUT:
   Returns:
-  • Difference percentage (0-100%)
-  • Total pixels compared
-  • Number of different pixels
-  • Diff PNG image (white pixels = different, black = identical)
+  • Diff score percentage: (different pixels / total pixels) × 100
+    This is an exact calculation of how many pixels differ between the two
+    rendered PNGs. A pixel is "different" if any RGBA channel differs by
+    more than the threshold. The score ranges from 0% (identical) to 100%
+    (completely different).
+
+  • Total pixels: Total number of pixels in the rendered image (width × height)
+  • Different pixels: Count of pixels where any RGBA channel exceeds threshold
+  • Diff PNG image: Visual representation (white = different, black = identical)
 
   Exit codes:
   • 0: Comparison successful
@@ -957,7 +962,7 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
       const b2 = x < png2.width && y < png2.height ? (png2.data[idx + 2] ?? 0) : 0;
       const a2 = x < png2.width && y < png2.height ? (png2.data[idx + 3] ?? 0) : 0;
 
-      // Check if pixels are different (any channel differs by more than threshold)
+      // Check if pixels are different (any RGBA channel differs by more than threshold)
       const rDiff = Math.abs(r1 - r2);
       const gDiff = Math.abs(g1 - g2);
       const bDiff = Math.abs(b1 - b2);
@@ -990,6 +995,8 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
   const buffer = PNG.sync.write(diff);
   writeFileSafe(safeDiffPath, buffer);
 
+  // Calculate diff percentage: (different pixels / total pixels) * 100
+  // This is an exact, unambiguous calculation
   const diffPercentage = (differentPixels / totalPixels) * 100;
 
   return {
@@ -1008,7 +1015,7 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
  * @param {string} svg1Path - Path to first SVG file
  * @param {string} svg2Path - Path to second SVG file
  * @param {string} diffPngPath - Path to the diff PNG image
- * @param {{totalPixels: number, differentPixels: number, diffPercentage: string}} result - Comparison result
+ * @param {ImageCompareResult} result - Comparison result
  * @param {ComparisonArgs} args - Comparison arguments
  * @param {SVGAnalysis} svgAnalysis1 - Analysis of first SVG
  * @param {SVGAnalysis} svgAnalysis2 - Analysis of second SVG

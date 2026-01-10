@@ -1029,10 +1029,16 @@ node sbb-compare.cjs test1.svg test2.svg --json
 
 Returns:
 
-- Difference percentage (0-100%)
-- Total pixels compared
-- Number of different pixels
-- Diff PNG image (white pixels = different, black = identical)
+- **Diff score percentage**: `(different pixels / total pixels) × 100`
+
+  This is an exact calculation of how many pixels differ between the two
+  rendered PNGs. A pixel is counted as "different" if any of its RGBA channels
+  (Red, Green, Blue, or Alpha) differs by more than the threshold. The score
+  ranges from 0% (identical) to 100% (completely different).
+
+- **Total pixels**: Total number of pixels in the rendered image (width × height)
+- **Different pixels**: Count of pixels where any RGBA channel exceeds threshold
+- **Diff PNG image**: Visual representation (white = different, black = identical)
 - **HTML comparison report** (automatically generated and opened in browser)
   - Side-by-side SVG comparison with embedded images
   - ViewBox and resolution details for each SVG
