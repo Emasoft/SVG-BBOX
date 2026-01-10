@@ -1,6 +1,6 @@
 {
   "name": "svg-bbox",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "A set of tools to compute and to use a SVG bounding box you can trust (as opposed to the unreliable .getBBox() scourge)",
   "type": "module",
   "main": "./SvgVisualBBox.js",
@@ -42,7 +42,7 @@
     "config/",
     "lib/",
     "assets/",
-    "scripts/postinstall.cjs",
+    ".puppeteerrc.cjs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -82,7 +82,6 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "postinstall": "node scripts/postinstall.cjs",
     "build": "bun run build.js",
     "build:dev": "bun run build.js --dev",
     "build:watch": "bun run build.js --watch",
@@ -138,5 +137,10 @@
     "terser": "^5.44.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
-  }
+  },
+  "trustedDependencies": [
+    "puppeteer",
+    "sharp",
+    "esbuild"
+  ]
 }
