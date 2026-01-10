@@ -169,16 +169,19 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
    * REFERENCE: sbb-extract.cjs HTML generation code
    */
   describe('Real-World HTML Preview Generation', () => {
-    test('Generated HTML correctly renders text elements with parent transforms (tested with 3 fonts)', { timeout: 120000 }, async () => {
-      const fonts = getRandomFonts(3);
+    test(
+      'Generated HTML correctly renders text elements with parent transforms (tested with 3 fonts)',
+      { timeout: 120000 },
+      async () => {
+        const fonts = getRandomFonts(3);
 
-      for (const font of fonts) {
-        // Simulate sbb-extract.cjs HTML structure
-        const parentTransform = 'translate(-13.5,-10.2)';
-        const textX = -50;
-        const textY = 100;
+        for (const font of fonts) {
+          // Simulate sbb-extract.cjs HTML structure
+          const parentTransform = 'translate(-13.5,-10.2)';
+          const textX = -50;
+          const textY = 100;
 
-        const fullHtml = `
+          const fullHtml = `
           <!DOCTYPE html>
           <html><body>
             <!-- Hidden container (NO viewBox!) -->
@@ -199,35 +202,36 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
           </body></html>
         `;
 
-        await page.setContent(fullHtml);
-        await loadLibrary();
-        await page.evaluateHandle('document.fonts.ready');
+          await page.setContent(fullHtml);
+          await loadLibrary();
+          await page.evaluateHandle('document.fonts.ready');
 
-        // Use SvgVisualBBox library to measure the <use> element
-        const bbox = await page.evaluate(async () => {
-          const useElement = document.querySelector('#preview use');
-          const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-            useElement,
-            {
-              mode: 'unclipped',
-              coarseFactor: 2,
-              fineFactor: 8
-            }
-          );
-          return result;
-        });
+          // Use SvgVisualBBox library to measure the <use> element
+          const bbox = await page.evaluate(async () => {
+            const useElement = document.querySelector('#preview use');
+            const result = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+              useElement,
+              {
+                mode: 'unclipped',
+                coarseFactor: 2,
+                fineFactor: 8
+              }
+            );
+            return result;
+          });
 
-        // Should successfully measure the text
-        expect(bbox).toBeTruthy();
-        expect(bbox.width).toBeGreaterThan(0);
-        expect(bbox.height).toBeGreaterThan(0);
+          // Should successfully measure the text
+          expect(bbox).toBeTruthy();
+          expect(bbox.width).toBeGreaterThan(0);
+          expect(bbox.height).toBeGreaterThan(0);
 
-        // Position should account for parent transform
-        // Text at x=-50, parent translate(-13.5, -10.2), so final x ≈ -63.5
-        // Note: Font rendering varies across systems - verify transform is applied correctly
-        expect(Math.abs(bbox.x - (textX - 13.5))).toBeLessThan(4); // ±4px tolerance for font metrics
+          // Position should account for parent transform
+          // Text at x=-50, parent translate(-13.5, -10.2), so final x ≈ -63.5
+          // Note: Font rendering varies across systems - verify transform is applied correctly
+          expect(Math.abs(bbox.x - (textX - 13.5))).toBeLessThan(4); // ±4px tolerance for font metrics
+        }
       }
-    });
+    );
 
     test('Elements with negative coordinates work correctly in preview (tested with 3 fonts)', async () => {
       const fonts = getRandomFonts(3);
@@ -275,11 +279,14 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
       }
     });
 
-    test('Multiple elements with different parent transforms render correctly (tested with 3 fonts)', { timeout: 120000 }, async () => {
-      const fonts = getRandomFonts(3);
+    test(
+      'Multiple elements with different parent transforms render correctly (tested with 3 fonts)',
+      { timeout: 120000 },
+      async () => {
+        const fonts = getRandomFonts(3);
 
-      for (const font of fonts) {
-        const fullHtml = `
+        for (const font of fonts) {
+          const fullHtml = `
           <!DOCTYPE html>
           <html><body>
             <div style="display:none">
@@ -307,45 +314,46 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
           </body></html>
         `;
 
-        await page.setContent(fullHtml);
-        await loadLibrary();
-        await page.evaluateHandle('document.fonts.ready');
+          await page.setContent(fullHtml);
+          await loadLibrary();
+          await page.evaluateHandle('document.fonts.ready');
 
-        const results = await page.evaluate(async () => {
-          const uses = document.querySelectorAll('svg use');
+          const results = await page.evaluate(async () => {
+            const uses = document.querySelectorAll('svg use');
 
-          const bbox1 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-            uses[0],
-            {
-              mode: 'unclipped',
-              coarseFactor: 2,
-              fineFactor: 8
-            }
-          );
+            const bbox1 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+              uses[0],
+              {
+                mode: 'unclipped',
+                coarseFactor: 2,
+                fineFactor: 8
+              }
+            );
 
-          const bbox2 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-            uses[1],
-            {
-              mode: 'unclipped',
-              coarseFactor: 2,
-              fineFactor: 8
-            }
-          );
+            const bbox2 = await window.SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+              uses[1],
+              {
+                mode: 'unclipped',
+                coarseFactor: 2,
+                fineFactor: 8
+              }
+            );
 
-          return { bbox1, bbox2 };
-        });
+            return { bbox1, bbox2 };
+          });
 
-        // Both should render successfully
-        expect(results.bbox1).toBeTruthy();
-        expect(results.bbox2).toBeTruthy();
-        expect(results.bbox1.width).toBeGreaterThan(0);
-        expect(results.bbox2.width).toBeGreaterThan(0);
+          // Both should render successfully
+          expect(results.bbox1).toBeTruthy();
+          expect(results.bbox2).toBeTruthy();
+          expect(results.bbox1.width).toBeGreaterThan(0);
+          expect(results.bbox2.width).toBeGreaterThan(0);
 
-        // Positions should account for their respective parent transforms
-        expect(results.bbox1.x).toBeGreaterThan(90); // Near 100 (translate x)
-        expect(results.bbox2.x).toBeLessThan(-40); // Near -50 (translate x)
+          // Positions should account for their respective parent transforms
+          expect(results.bbox1.x).toBeGreaterThan(90); // Near 100 (translate x)
+          expect(results.bbox2.x).toBeLessThan(-40); // Near -50 (translate x)
+        }
       }
-    });
+    );
   });
 
   /**

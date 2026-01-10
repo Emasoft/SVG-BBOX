@@ -149,8 +149,9 @@ test('test1', async () => {
 
 ### Reference Renderer Tests
 
-The project includes a Python reference SVG renderer (`tests/lib/reference_renderer.py`)
-that produces byte-identical output to Chrome for testing purposes.
+The project includes a Python reference SVG renderer
+(`tests/lib/reference_renderer.py`) that produces byte-identical output to
+Chrome for testing purposes.
 
 **Setup:**
 
