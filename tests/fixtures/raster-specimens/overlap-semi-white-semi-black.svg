@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- Semi-transparent WHITE over semi-transparent BLACK -->
+  <!-- Black rect: full (50% alpha) -->
+  <!-- White rect: full (50% alpha) -->
+  <!-- Expected result: rgba(170, 170, 170, 191) - light gray -->
+  <rect x="0" y="0" width="10" height="10" fill="#000000" fill-opacity="0.5" stroke="none"/>
+  <rect x="0" y="0" width="10" height="10" fill="#ffffff" fill-opacity="0.5" stroke="none"/>
+</svg>

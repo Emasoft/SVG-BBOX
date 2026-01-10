@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- Two 50% alpha rectangles overlapping -->
+  <!-- Red rect: x=0-6, y=0-6 (36 pixels) -->
+  <!-- Blue rect: x=4-10, y=4-10 (36 pixels) -->
+  <!-- Overlap zone: x=4-6, y=4-6 (4 pixels) - tests alpha compositing -->
+  <!--
+    In overlap zone with source-over compositing:
+    - dst = red (255,0,0) at alpha 0.5 (128)
+    - src = blue (0,0,255) at alpha 0.5 (128)
+    - out_a = 0.5 + 0.5*(1-0.5) = 0.75 = 191
+    - out_r = (0*0.5 + 255*0.5*0.5) / 0.75 = 85
+    - out_g = 0
+    - out_b = (255*0.5 + 0*0.5*0.5) / 0.75 = 170
+    Expected overlap: rgba(85, 0, 170, 191)
+  -->
+  <rect x="0" y="0" width="6" height="6" fill="#ff0000" fill-opacity="0.5" stroke="none"/>
+  <rect x="4" y="4" width="6" height="6" fill="#0000ff" fill-opacity="0.5" stroke="none"/>
+</svg>

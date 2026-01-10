@@ -1036,9 +1036,11 @@ Returns:
   (Red, Green, Blue, or Alpha) differs by more than the threshold. The score
   ranges from 0% (identical) to 100% (completely different).
 
-- **Total pixels**: Total number of pixels in the rendered image (width × height)
+- **Total pixels**: Total number of pixels in the rendered image (width ×
+  height)
 - **Different pixels**: Count of pixels where any RGBA channel exceeds threshold
-- **Diff PNG image**: Visual representation (white = different, black = identical)
+- **Diff PNG image**: Visual representation (white = different, black =
+  identical)
 - **HTML comparison report** (automatically generated and opened in browser)
   - Side-by-side SVG comparison with embedded images
   - ViewBox and resolution details for each SVG

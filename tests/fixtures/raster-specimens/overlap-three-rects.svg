@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- Three overlapping semi-transparent rectangles -->
+  <!-- Red rect: x=0-5, y=0-5 (25 pixels) at 50% alpha -->
+  <!-- Green rect: x=3-8, y=0-5 (25 pixels) at 50% alpha -->
+  <!-- Blue rect: x=0-5, y=3-8 (25 pixels) at 50% alpha -->
+  <!--
+    Zones:
+    - Red only: x=0-3, y=0-3 (9 pixels) - rgba(255,0,0,128)
+    - Green only: x=5-8, y=0-3 (9 pixels) - rgba(0,255,0,128)
+    - Blue only: x=0-3, y=5-8 (9 pixels) - rgba(0,0,255,128)
+    - Red+Green overlap: x=3-5, y=0-3 (6 pixels) - computed below
+    - Red+Blue overlap: x=0-3, y=3-5 (6 pixels) - computed below
+    - Green+Blue overlap: x=3-5, y=5-8 (6 pixels) - computed below
+    - All three overlap: x=3-5, y=3-5 (4 pixels) - computed below
+
+    Red+Green (R over G, then G over result - but R is painted first):
+    Actually: Red first, then Green over Red:
+    - out_a = 0.5 + 0.5*0.5 = 0.75 = 191
+    - out_r = (0*0.5 + 255*0.5*0.5) / 0.75 = 85
+    - out_g = (255*0.5 + 0*0.5*0.5) / 0.75 = 170
+    - out_b = 0
+    Expected Red+Green: rgba(85, 170, 0, 191)
+
+    Triple overlap (Red, then Green, then Blue):
+    After Red+Green: rgba(85, 170, 0, 191)
+    Blue (0.5 alpha) over that:
+    - out_a = 0.5 + 0.75*0.5 = 0.875 = 223
+    - out_r = (0*0.5 + 85*0.75*0.5) / 0.875 = 36
+    - out_g = (0*0.5 + 170*0.75*0.5) / 0.875 = 73
+    - out_b = (255*0.5 + 0*0.75*0.5) / 0.875 = 146
+    Expected triple: rgba(36, 73, 146, 223)
+  -->
+  <rect x="0" y="0" width="5" height="5" fill="#ff0000" fill-opacity="0.5" stroke="none"/>
+  <rect x="3" y="0" width="5" height="5" fill="#00ff00" fill-opacity="0.5" stroke="none"/>
+  <rect x="0" y="3" width="5" height="5" fill="#0000ff" fill-opacity="0.5" stroke="none"/>
+</svg>

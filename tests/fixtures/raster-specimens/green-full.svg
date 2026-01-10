@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- 10x10 solid green rectangle -->
+  <!-- Expected: 100 pixels, all rgba(0,255,0,255) -->
+  <rect x="0" y="0" width="10" height="10" fill="#00ff00" stroke="none"/>
+</svg>

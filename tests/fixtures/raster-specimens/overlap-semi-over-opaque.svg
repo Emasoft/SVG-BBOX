@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- Semi-transparent rectangle over opaque rectangle -->
+  <!-- Blue rect: x=0-6, y=0-6 (36 pixels) at 100% alpha (opaque) -->
+  <!-- Red rect: x=4-10, y=4-10 (36 pixels) at 50% alpha -->
+  <!-- Overlap zone: x=4-6, y=4-6 (4 pixels) -->
+  <!--
+    In overlap zone with source-over compositing:
+    - dst = blue (0,0,255) at alpha 1.0 (255)
+    - src = red (255,0,0) at alpha 0.5 (128)
+    - out_a = 0.5 + 1.0*(1-0.5) = 1.0 = 255
+    - out_r = (255*0.5 + 0*1.0*0.5) / 1.0 = 128
+    - out_g = 0
+    - out_b = (0*0.5 + 255*1.0*0.5) / 1.0 = 128
+    Expected overlap: rgba(128, 0, 128, 255) - purple opaque
+  -->
+  <rect x="0" y="0" width="6" height="6" fill="#0000ff" fill-opacity="1.0" stroke="none"/>
+  <rect x="4" y="4" width="6" height="6" fill="#ff0000" fill-opacity="0.5" stroke="none"/>
+</svg>

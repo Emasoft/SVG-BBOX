@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- Opaque rectangle over semi-transparent rectangle -->
+  <!-- Green rect: x=0-6, y=0-6 (36 pixels) at 50% alpha -->
+  <!-- Red rect: x=4-10, y=4-10 (36 pixels) at 100% alpha (opaque) -->
+  <!-- Overlap zone: x=4-6, y=4-6 (4 pixels) -->
+  <!--
+    In overlap zone:
+    - Opaque source completely replaces destination
+    - Expected overlap: rgba(255, 0, 0, 255) - pure red opaque
+  -->
+  <rect x="0" y="0" width="6" height="6" fill="#00ff00" fill-opacity="0.5" stroke="none"/>
+  <rect x="4" y="4" width="6" height="6" fill="#ff0000" fill-opacity="1.0" stroke="none"/>
+</svg>

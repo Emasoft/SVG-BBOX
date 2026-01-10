@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- 4x4 black square centered on transparent background -->
+  <!-- Expected: 84 transparent, 16 black (rgba 0,0,0,255) -->
+  <!-- Edge case: black pixels have RGB=0 but alpha=255 -->
+  <rect x="3" y="3" width="4" height="4" fill="#000000" stroke="none"/>
+</svg>

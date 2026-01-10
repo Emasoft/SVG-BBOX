@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- 4x4 red square centered (positions 3-6 on both axes) on transparent background -->
+  <!-- Expected at 10x10 render:
+       - 64 transparent pixels (alpha=0) around edges
+       - 16 red pixels (rgba 255,0,0,255) in center at positions [3-6][3-6]
+       - 20 transparent pixels top/bottom (rows 0-2 and 7-9, all 10 cols = 60 pixels)
+       - Wait, let me recalculate:
+       - Rows 0-2: 3 rows * 10 cols = 30 transparent
+       - Rows 3-6: 4 rows with cols 0-2 and 7-9 transparent = 4 * 6 = 24 transparent
+       - Rows 7-9: 3 rows * 10 cols = 30 transparent
+       - Total transparent: 30 + 24 + 30 = 84 pixels
+       - Red center: 4x4 = 16 pixels
+       - Total: 84 + 16 = 100 pixels (correct)
+  -->
+  <rect x="3" y="3" width="4" height="4" fill="#ff0000" stroke="none"/>
+</svg>

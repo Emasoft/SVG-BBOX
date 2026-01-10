@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- Full 10x10 semi-transparent blue (50% alpha = 128/255) -->
+  <!-- Expected: 100 pixels, all rgba(0,0,255,128) approximately -->
+  <!-- Note: fill-opacity 0.5 gives alpha ~128 -->
+  <rect x="0" y="0" width="10" height="10" fill="#0000ff" fill-opacity="0.5" stroke="none"/>
+</svg>

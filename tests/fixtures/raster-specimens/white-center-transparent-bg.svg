@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- 4x4 white square centered on transparent background -->
+  <!-- Expected: 84 transparent, 16 white (rgba 255,255,255,255) -->
+  <!-- Edge case: white pixels have RGB=255 and alpha=255 (all channels maxed) -->
+  <rect x="3" y="3" width="4" height="4" fill="#ffffff" stroke="none"/>
+</svg>

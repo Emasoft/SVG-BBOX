@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+  <!-- Blue background with red 4x4 center square -->
+  <!-- Expected: 84 blue pixels (border), 16 red pixels (center) -->
+  <rect x="0" y="0" width="10" height="10" fill="#0000ff" stroke="none"/>
+  <rect x="3" y="3" width="4" height="4" fill="#ff0000" stroke="none"/>
+</svg>
