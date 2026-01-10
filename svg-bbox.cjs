@@ -172,6 +172,17 @@ ${c.yellow}${c.bold}MORE INFO:${c.reset}
   Run any command with ${c.green}--help${c.reset} for detailed usage information.
   ${c.dim}Example: npx sbb-getbbox --help${c.reset}
 
+${c.yellow}${c.bold}BROWSER REQUIREMENTS:${c.reset}
+  ${c.dim}Core and Chrome tools require Chrome or Chromium browser.${c.reset}
+  ${c.dim}Browser is auto-detected or can be configured:${c.reset}
+
+  ${c.cyan}Environment Variables:${c.reset}
+    ${c.green}SVG_BBOX_BROWSER_PATH${c.reset}           Custom browser executable path
+    ${c.green}SVG_BBOX_SKIP_BROWSER_DOWNLOAD${c.reset}  Set to '1' to disable auto-download
+    ${c.green}PUPPETEER_EXECUTABLE_PATH${c.reset}       Puppeteer's native path override
+
+  ${c.dim}Auto-download Chrome: ${c.green}npx puppeteer browsers install chrome${c.reset}
+
 ${c.yellow}${c.bold}DOCUMENTATION:${c.reset}
   ${c.blue}https://github.com/Emasoft/SVG-BBOX${c.reset}
 

@@ -176,15 +176,20 @@ jobs:
           fi
 
   # =============================================================================
-  # E2E Tests (browser tests)
+  # E2E Tests (browser tests) - Multi-platform
   # =============================================================================
-  # Single job: Node 24 on Ubuntu
+  # Tests browser detection and launch on Ubuntu, macOS, and Windows
 
   e2e:
-    name: E2E Tests
+    name: E2E Tests (${{ matrix.os }})
     needs: [build, lint, typecheck]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout code
@@ -210,7 +215,11 @@ jobs:
           path: |
             ~/.cache/ms-playwright
             ~/.cache/puppeteer
-          key: browsers-Linux-${{ hashFiles('pnpm-lock.yaml') }}
+            ~/Library/Caches/ms-playwright
+            ~/Library/Caches/puppeteer
+            ~\AppData\Local\ms-playwright
+            ~\AppData\Local\puppeteer
+          key: browsers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -294,7 +303,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.os }}
           path: playwright-report/
           retention-days: 7
 

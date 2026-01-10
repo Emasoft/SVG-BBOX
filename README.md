@@ -31,6 +31,7 @@
   - [Visual Comparison: Oval Badge with Dashed Stroke](#visual-comparison-oval-badge-with-dashed-stroke)
 - [Installation](#-installation)
 - [Platform Compatibility](#platform-compatibility)
+- [Browser Configuration](#browser-configuration)
 - [What This Package Provides](#what-this-package-provides)
   - [1. Core Library: SvgVisualBBox.js](#1-core-library-svgvisualbboxjs)
   - [2. CLI Tools](#2-cli-tools)
@@ -310,6 +311,173 @@ sbb-getbbox /home/user/drawings/test.svg
 ```
 
 </details>
+
+---
+
+## Browser Configuration
+
+svg-bbox uses Chrome/Chromium for accurate SVG measurements via Puppeteer. By default, it automatically detects and uses an available browser.
+
+### Environment Variables
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `SVG_BBOX_SKIP_BROWSER_DOWNLOAD` | Disable automatic Chrome download | `1` or `true` |
+| `SVG_BBOX_BROWSER_PATH` | Use a specific browser executable | `/path/to/chrome` |
+| `PUPPETEER_EXECUTABLE_PATH` | Puppeteer's native browser path override | `/path/to/chromium` |
+
+### Browser Detection Order
+
+svg-bbox searches for browsers in this priority order:
+
+1. **User-specified path** (`SVG_BBOX_BROWSER_PATH` or `PUPPETEER_EXECUTABLE_PATH`)
+2. **Puppeteer's bundled Chrome** (most reliable, auto-downloaded on first use)
+3. **System Chrome** (installed via package manager or download)
+4. **System Chromium** (common on Linux distros like Debian/Ubuntu)
+
+If no browser is found and auto-download is enabled, Puppeteer's Chrome is downloaded automatically.
+
+### Disabling Automatic Downloads
+
+To prevent automatic browser downloads (useful for CI/CD, air-gapped systems, or when you prefer system browsers):
+
+```bash
+# Disable auto-download
+export SVG_BBOX_SKIP_BROWSER_DOWNLOAD=1
+
+# Then install a browser manually (see below)
+```
+
+### Manual Browser Installation
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+```bash
+# Via Homebrew
+brew install --cask google-chrome
+# or
+brew install --cask chromium
+
+# Specify custom path (if needed)
+export SVG_BBOX_BROWSER_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+```
+
+</details>
+
+<details>
+<summary><strong>Linux (Debian/Ubuntu)</strong></summary>
+
+```bash
+# Chrome
+wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+sudo apt update && sudo apt install google-chrome-stable
+
+# Or Chromium (often pre-installed)
+sudo apt install chromium-browser
+
+# Specify custom path (if needed)
+export SVG_BBOX_BROWSER_PATH="/usr/bin/google-chrome"
+```
+
+</details>
+
+<details>
+<summary><strong>Linux (Fedora/RHEL)</strong></summary>
+
+```bash
+# Chrome
+sudo dnf install google-chrome-stable
+
+# Or Chromium
+sudo dnf install chromium
+
+# Specify custom path (if needed)
+export SVG_BBOX_BROWSER_PATH="/usr/bin/google-chrome"
+```
+
+</details>
+
+<details>
+<summary><strong>Linux (Arch)</strong></summary>
+
+```bash
+# Chrome (AUR)
+yay -S google-chrome
+
+# Or Chromium
+sudo pacman -S chromium
+
+# Specify custom path (if needed)
+export SVG_BBOX_BROWSER_PATH="/usr/bin/chromium"
+```
+
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+```powershell
+# Via Chocolatey
+choco install googlechrome
+# or
+choco install chromium
+
+# Via winget
+winget install Google.Chrome
+
+# Specify custom path (if needed)
+$env:SVG_BBOX_BROWSER_PATH = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+```
+
+Or download directly from https://www.google.com/chrome/
+
+</details>
+
+<details>
+<summary><strong>FreeBSD/OpenBSD</strong></summary>
+
+```bash
+# FreeBSD
+pkg install chromium
+
+# OpenBSD
+pkg_add chromium
+
+# Specify custom path
+export SVG_BBOX_BROWSER_PATH="/usr/local/bin/chromium"
+```
+
+</details>
+
+### Using Puppeteer's Browser Installer
+
+If you prefer Puppeteer's bundled browser (recommended for consistency):
+
+```bash
+# Download Chrome for Puppeteer
+npx puppeteer browsers install chrome
+
+# This installs to ~/.cache/puppeteer/ and is auto-detected
+```
+
+### Checking Browser Status
+
+```bash
+# Check which browser svg-bbox will use
+node -e "console.log(require('svg-bbox/lib/ensure-browser.cjs').getBrowserStatus())"
+```
+
+Output example:
+```json
+{
+  "installed": true,
+  "path": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "source": "system-chrome",
+  "downloadDisabled": false
+}
+```
 
 ---
 
