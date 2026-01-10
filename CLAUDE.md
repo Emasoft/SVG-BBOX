@@ -583,7 +583,7 @@ environments.
 ### CI/CD
 
 - **GitHub Actions** for all automation
-- **pnpm** for fast dependency management
+- **bun** for fast dependency management (preferred over pnpm)
 - **npm trusted publishing** for releases (Node.js 24 required)
 - Tests run in parallel for speed
 
