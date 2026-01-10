@@ -12,7 +12,6 @@ permissions:
 
 # Centralized configuration - Single source of truth for versions
 env:
-  PNPM_VERSION: '10'
   NODE_VERSION: '24'
   BUN_VERSION: '1.1.42' # Pinned Bun version for reproducible builds
 
@@ -26,24 +25,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js 24 (npm 11.6.2 with OIDC support)
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup Node.js 24 (npm 11.6.2 with OIDC support)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Install dependencies (for prepublishOnly script)
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Verify toolchain versions
         run: |
@@ -75,7 +68,7 @@ jobs:
           echo "::notice::Toolchain versions verified for publishing"
 
       - name: Install Puppeteer Chrome for verification
-        run: pnpm exec puppeteer browsers install chrome
+        run: bunx puppeteer browsers install chrome
 
       - name: Verify browser detection before publish
         run: |

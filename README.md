@@ -184,7 +184,7 @@ For direct browser usage, use the minified UMD build from a CDN:
 ```bash
 git clone https://github.com/Emasoft/SVG-BBOX.git
 cd SVG-BBOX
-pnpm install
+bun install
 
 # Run tools directly from source
 node sbb-getbbox.cjs myfile.svg
@@ -233,7 +233,7 @@ After installation, the following CLI commands are available:
 ```bash
 git clone https://github.com/Emasoft/SVG-BBOX.git
 cd SVG-BBOX
-pnpm install
+bun install
 ```
 
 ### Requirements
@@ -316,30 +316,34 @@ sbb-getbbox /home/user/drawings/test.svg
 
 ## Browser Configuration
 
-svg-bbox uses Chrome/Chromium for accurate SVG measurements via Puppeteer. By default, it automatically detects and uses an available browser.
+svg-bbox uses Chrome/Chromium for accurate SVG measurements via Puppeteer. By
+default, it automatically detects and uses an available browser.
 
 ### Environment Variables
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `SVG_BBOX_SKIP_BROWSER_DOWNLOAD` | Disable automatic Chrome download | `1` or `true` |
-| `SVG_BBOX_BROWSER_PATH` | Use a specific browser executable | `/path/to/chrome` |
-| `PUPPETEER_EXECUTABLE_PATH` | Puppeteer's native browser path override | `/path/to/chromium` |
+| Variable                         | Purpose                                  | Example             |
+| -------------------------------- | ---------------------------------------- | ------------------- |
+| `SVG_BBOX_SKIP_BROWSER_DOWNLOAD` | Disable automatic Chrome download        | `1` or `true`       |
+| `SVG_BBOX_BROWSER_PATH`          | Use a specific browser executable        | `/path/to/chrome`   |
+| `PUPPETEER_EXECUTABLE_PATH`      | Puppeteer's native browser path override | `/path/to/chromium` |
 
 ### Browser Detection Order
 
 svg-bbox searches for browsers in this priority order:
 
-1. **User-specified path** (`SVG_BBOX_BROWSER_PATH` or `PUPPETEER_EXECUTABLE_PATH`)
+1. **User-specified path** (`SVG_BBOX_BROWSER_PATH` or
+   `PUPPETEER_EXECUTABLE_PATH`)
 2. **Puppeteer's bundled Chrome** (most reliable, auto-downloaded on first use)
 3. **System Chrome** (installed via package manager or download)
 4. **System Chromium** (common on Linux distros like Debian/Ubuntu)
 
-If no browser is found and auto-download is enabled, Puppeteer's Chrome is downloaded automatically.
+If no browser is found and auto-download is enabled, Puppeteer's Chrome is
+downloaded automatically.
 
 ### Disabling Automatic Downloads
 
-To prevent automatic browser downloads (useful for CI/CD, air-gapped systems, or when you prefer system browsers):
+To prevent automatic browser downloads (useful for CI/CD, air-gapped systems, or
+when you prefer system browsers):
 
 ```bash
 # Disable auto-download
@@ -470,6 +474,7 @@ node -e "console.log(require('svg-bbox/lib/ensure-browser.cjs').getBrowserStatus
 ```
 
 Output example:
+
 ```json
 {
   "installed": true,

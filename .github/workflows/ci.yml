@@ -15,7 +15,6 @@ concurrency:
 # Centralized configuration - Single source of truth for versions and settings
 # Only support latest Node.js version for faster CI/CD
 env:
-  PNPM_VERSION: '10'
   NODE_VERSION: '24' # Only support Node.js 24 (latest)
   BUN_VERSION: '1.1.42' # Pinned Bun version for reproducible builds
   GIT_FETCH_DEPTH: '10' # Increased from 1 to support selective testing
@@ -36,24 +35,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Build with Bun
         run: bun run build.js
@@ -77,22 +70,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Run ESLint
-        run: pnpm run lint
+        run: bun run lint
 
   typecheck:
     name: Type Check
@@ -103,22 +95,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Run TypeScript type checker
-        run: pnpm run typecheck
+        run: bun run typecheck
 
   # =============================================================================
   # STAGE 2: Tests (only run if lint + typecheck pass)
@@ -138,19 +129,18 @@ jobs:
         with:
           fetch-depth: ${{ env.GIT_FETCH_DEPTH }}
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Cache browser binaries
         uses: actions/cache@v4
@@ -158,10 +148,10 @@ jobs:
           path: |
             ~/.cache/ms-playwright
             ~/.cache/puppeteer
-          key: browsers-Linux-${{ hashFiles('pnpm-lock.yaml') }}
+          key: browsers-Linux-${{ hashFiles('bun.lock') }}
 
       - name: Install browser dependencies
-        run: pnpm run install-browsers
+        run: bun run install-browsers
 
       - name: Run selective tests based on changed files
         shell: bash
@@ -195,19 +185,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -219,13 +208,13 @@ jobs:
             ~/Library/Caches/puppeteer
             ~\AppData\Local\ms-playwright
             ~\AppData\Local\puppeteer
-          key: browsers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: browsers-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Install Puppeteer Chrome
-        run: pnpm exec puppeteer browsers install chrome
+        run: bunx puppeteer browsers install chrome
 
       - name: Verify browser detection
         run: |
@@ -297,7 +286,7 @@ jobs:
           "
 
       - name: Run E2E tests
-        run: pnpm run test:e2e
+        run: bun run test:e2e
 
       - name: Upload test results
         if: failure()
@@ -321,19 +310,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Cache browser binaries
         uses: actions/cache@v4
@@ -341,13 +329,13 @@ jobs:
           path: |
             ~/.cache/ms-playwright
             ~/.cache/puppeteer
-          key: browsers-Linux-${{ hashFiles('pnpm-lock.yaml') }}
+          key: browsers-Linux-${{ hashFiles('bun.lock') }}
 
       - name: Install browser dependencies
-        run: pnpm run install-browsers
+        run: bun run install-browsers
 
       - name: Run tests with coverage
-        run: pnpm run test:coverage
+        run: bun run test:coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
