@@ -218,6 +218,75 @@ jobs:
       - name: Install Puppeteer Chrome
         run: pnpm exec puppeteer browsers install chrome
 
+      - name: Verify browser detection
+        run: |
+          echo "=== Browser Detection Verification ==="
+          node -e "
+            const { findBrowser, findSystemChrome, findSystemChromium, getPuppeteerBrowserPath, isBrowserInstalled } = require('./lib/ensure-browser.cjs');
+
+            console.log('Platform:', process.platform);
+            console.log('');
+
+            // Check puppeteer's bundled browser
+            const puppeteerPath = getPuppeteerBrowserPath();
+            console.log('Puppeteer browser:', puppeteerPath ? '✓ Found' : '✗ Not found');
+            if (puppeteerPath) console.log('  Path:', puppeteerPath);
+
+            // Check system Chrome
+            const chromePath = findSystemChrome();
+            console.log('System Chrome:', chromePath ? '✓ Found' : '✗ Not found');
+            if (chromePath) console.log('  Path:', chromePath);
+
+            // Check system Chromium
+            const chromiumPath = findSystemChromium();
+            console.log('System Chromium:', chromiumPath ? '✓ Found' : '✗ Not found');
+            if (chromiumPath) console.log('  Path:', chromiumPath);
+
+            // Check overall browser detection
+            const browser = findBrowser();
+            console.log('');
+            console.log('Selected browser:', browser ? browser.source : 'NONE');
+            if (browser) console.log('  Path:', browser.path);
+
+            // Verify at least one browser is available
+            if (!isBrowserInstalled()) {
+              console.error('');
+              console.error('ERROR: No Chrome or Chromium browser detected!');
+              process.exit(1);
+            }
+
+            console.log('');
+            console.log('✓ Browser detection verification passed');
+          "
+
+      - name: Verify browser launch works
+        run: |
+          echo "=== Browser Launch Verification ==="
+          node -e "
+            const { launchSecureBrowser, closeBrowserSafely, createPageWithTimeout } = require('./lib/puppeteer-utils.cjs');
+
+            (async () => {
+              console.log('Launching browser...');
+              const browser = await launchSecureBrowser();
+              console.log('✓ Browser launched successfully');
+
+              const page = await createPageWithTimeout(browser);
+              console.log('✓ Page created');
+
+              await page.setContent('<svg viewBox=\"0 0 100 100\"><circle cx=\"50\" cy=\"50\" r=\"40\"/></svg>');
+              console.log('✓ SVG content loaded');
+
+              const title = await page.title();
+              console.log('✓ Page accessible (title:', title || 'empty', ')');
+
+              await closeBrowserSafely(browser);
+              console.log('✓ Browser closed successfully');
+
+              console.log('');
+              console.log('✓ Browser launch verification passed');
+            })();
+          "
+
       - name: Run E2E tests
         run: pnpm run test:e2e
 

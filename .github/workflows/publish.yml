@@ -74,5 +74,46 @@ jobs:
           fi
           echo "::notice::Toolchain versions verified for publishing"
 
+      - name: Install Puppeteer Chrome for verification
+        run: pnpm exec puppeteer browsers install chrome
+
+      - name: Verify browser detection before publish
+        run: |
+          echo "=== Pre-publish Browser Detection Verification ==="
+          node -e "
+            const { findBrowser, isBrowserInstalled, CHROME_PATHS, CHROMIUM_PATHS } = require('./lib/ensure-browser.cjs');
+
+            console.log('Platform:', process.platform);
+            console.log('Supported Chrome paths:', CHROME_PATHS[process.platform]?.length || 0);
+            console.log('Supported Chromium paths:', CHROMIUM_PATHS[process.platform]?.length || 0);
+
+            const browser = findBrowser();
+            if (!browser) {
+              console.error('ERROR: No browser detected - package would fail at runtime!');
+              process.exit(1);
+            }
+
+            console.log('');
+            console.log('Detected browser:', browser.source);
+            console.log('Browser path:', browser.path);
+            console.log('');
+            console.log('✓ Browser detection verified for publishing');
+          "
+
+      - name: Verify browser launch before publish
+        run: |
+          echo "=== Pre-publish Browser Launch Verification ==="
+          node -e "
+            const { launchSecureBrowser, closeBrowserSafely } = require('./lib/puppeteer-utils.cjs');
+
+            (async () => {
+              const browser = await launchSecureBrowser();
+              const page = await browser.newPage();
+              await page.setContent('<svg><rect width=\"10\" height=\"10\"/></svg>');
+              await closeBrowserSafely(browser);
+              console.log('✓ Browser launch verified for publishing');
+            })();
+          "
+
       - name: Publish to npm (using OIDC trusted publishing)
         run: npm publish --access public
