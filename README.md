@@ -461,6 +461,8 @@ If you prefer Puppeteer's bundled browser (recommended for consistency):
 
 ```bash
 # Download Chrome for Puppeteer
+bunx puppeteer browsers install chrome
+# or with npx:
 npx puppeteer browsers install chrome
 
 # This installs to ~/.cache/puppeteer/ and is auto-detected
