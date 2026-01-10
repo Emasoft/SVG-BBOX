@@ -147,6 +147,38 @@ test('test1', async () => {
 });
 ```
 
+### Reference Renderer Tests
+
+The project includes a Python reference SVG renderer (`tests/lib/reference_renderer.py`)
+that produces byte-identical output to Chrome for testing purposes.
+
+**Setup:**
+
+```bash
+cd tests
+python3 -m venv .venv
+source .venv/bin/activate
+pip install Pillow lxml
+```
+
+**Test Fixtures:**
+
+- `tests/fixtures/raster-specimens/` - SVG specimens for alpha/color testing
+- `tests/fixtures/diff-specimens/` - SVG specimens for diff score verification
+
+**Key Test Files:**
+
+- `reference-renderer-comparison.test.js` - Compares Chrome vs Python rendering
+- `diff-score-accuracy.test.js` - Verifies diff score formula accuracy
+- `rasterization-pipeline.test.js` - Tests RGBA value accuracy
+
+**What These Tests Catch:**
+
+- Changes in Chrome's SVG rendering (alpha compositing, color accuracy)
+- Regressions in diff score calculation formula
+- Alpha channel handling errors (transparent/opaque/semi-transparent)
+- Black/white edge cases with special alpha treatment
+
 ## Documentation
 
 ### Code Comments

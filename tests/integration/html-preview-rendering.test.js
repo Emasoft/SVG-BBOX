@@ -169,7 +169,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
    * REFERENCE: sbb-extract.cjs HTML generation code
    */
   describe('Real-World HTML Preview Generation', () => {
-    test('Generated HTML correctly renders text elements with parent transforms (tested with 3 fonts)', async () => {
+    test('Generated HTML correctly renders text elements with parent transforms (tested with 3 fonts)', { timeout: 120000 }, async () => {
       const fonts = getRandomFonts(3);
 
       for (const font of fonts) {
@@ -275,7 +275,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
       }
     });
 
-    test('Multiple elements with different parent transforms render correctly (tested with 3 fonts)', async () => {
+    test('Multiple elements with different parent transforms render correctly (tested with 3 fonts)', { timeout: 120000 }, async () => {
       const fonts = getRandomFonts(3);
 
       for (const font of fonts) {

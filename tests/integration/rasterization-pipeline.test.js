@@ -24,12 +24,12 @@ import { PNG } from 'pngjs';
 
 const execFilePromise = promisify(execFile);
 
-const FIXTURES_DIR = path.join(process.cwd(), 'tests/fixtures/raster-specimens');
-const DIFF_FIXTURES_DIR = path.join(
-  process.cwd(),
-  'tests/fixtures/diff-specimens'
-);
-const TEMP_DIR = path.join(process.cwd(), 'tests/.tmp-raster-pipeline');
+const PROJECT_ROOT = process.cwd();
+const FIXTURES_DIR = path.join(PROJECT_ROOT, 'tests/fixtures/raster-specimens');
+const DIFF_FIXTURES_DIR = path.join(PROJECT_ROOT, 'tests/fixtures/diff-specimens');
+const TEMP_DIR = path.join(PROJECT_ROOT, 'tests/.tmp-raster-pipeline');
+const SBB_SVG2PNG = path.join(PROJECT_ROOT, 'sbb-svg2png.cjs');
+const SBB_COMPARE = path.join(PROJECT_ROOT, 'sbb-compare.cjs');
 
 /**
  * Analyze PNG pixel data and return counts by type
@@ -54,7 +54,7 @@ function analyzePixels(pngPath) {
     white: 0, // rgba(255,255,255,255)
     other: 0,
     pixels: [], // Store first few pixels for debugging
-    rawPng: png, // Store png object for direct pixel inspection
+    rawPng: png // Store png object for direct pixel inspection
   };
 
   for (let y = 0; y < png.height; y++) {
@@ -101,8 +101,25 @@ function analyzePixels(pngPath) {
 
 describe('Rasterization Pipeline Tests', () => {
   beforeAll(() => {
+    // Create temp directory
     if (!fs.existsSync(TEMP_DIR)) {
       fs.mkdirSync(TEMP_DIR, { recursive: true });
+    }
+
+    // Validate fixture directories exist
+    if (!fs.existsSync(FIXTURES_DIR)) {
+      throw new Error(`Raster fixtures directory not found: ${FIXTURES_DIR}`);
+    }
+    if (!fs.existsSync(DIFF_FIXTURES_DIR)) {
+      throw new Error(`Diff fixtures directory not found: ${DIFF_FIXTURES_DIR}`);
+    }
+
+    // Validate CLI tools exist
+    if (!fs.existsSync(SBB_SVG2PNG)) {
+      throw new Error(`sbb-svg2png.cjs not found: ${SBB_SVG2PNG}`);
+    }
+    if (!fs.existsSync(SBB_COMPARE)) {
+      throw new Error(`sbb-compare.cjs not found: ${SBB_COMPARE}`);
     }
   });
 
@@ -119,7 +136,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'transparent-bg-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -127,7 +144,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -152,7 +169,7 @@ describe('Rasterization Pipeline Tests', () => {
       // This should fail with "Visible bbox is empty" error
       await expect(
         execFilePromise('node', [
-          'sbb-svg2png.cjs',
+          SBB_SVG2PNG,
           svgPath,
           pngPath,
           '--width',
@@ -160,7 +177,7 @@ describe('Rasterization Pipeline Tests', () => {
           '--height',
           '10',
           '--background',
-          'transparent',
+          'transparent'
         ])
       ).rejects.toThrow(/Visible bbox is empty/);
     }, 30000);
@@ -173,7 +190,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'opaque-alpha-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -181,7 +198,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -201,7 +218,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'semi-transparent-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -209,7 +226,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -238,7 +255,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'alpha-zero-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -246,7 +263,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const data = fs.readFileSync(pngPath);
@@ -267,7 +284,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'alpha-255-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -275,7 +292,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const data = fs.readFileSync(pngPath);
@@ -294,7 +311,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'pure-red-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -302,7 +319,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const data = fs.readFileSync(pngPath);
@@ -320,7 +337,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'pure-blue-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -328,7 +345,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const data = fs.readFileSync(pngPath);
@@ -347,7 +364,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'pixel-alignment-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -355,7 +372,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -378,7 +395,7 @@ describe('Rasterization Pipeline Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'alpha-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -386,7 +403,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -406,7 +423,7 @@ describe('Rasterization Pipeline Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'transparent-region-self-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg,
         svg,
         '--out-diff',
@@ -414,7 +431,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -432,7 +449,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'pure-black-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -440,7 +457,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -464,7 +481,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'pure-white-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -472,7 +489,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -496,7 +513,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'pure-green-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -504,7 +521,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -529,7 +546,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'blue-red-layered-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -537,7 +554,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -556,7 +573,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'black-center-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -564,7 +581,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -582,7 +599,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'white-center-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -590,7 +607,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -609,7 +626,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'alpha-25-red-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -617,7 +634,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -644,7 +661,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'alpha-50-green-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -652,7 +669,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -679,7 +696,7 @@ describe('Rasterization Pipeline Tests', () => {
       const pngPath = path.join(TEMP_DIR, 'alpha-75-blue-test.png');
 
       await execFilePromise('node', [
-        'sbb-svg2png.cjs',
+        SBB_SVG2PNG,
         svgPath,
         pngPath,
         '--width',
@@ -687,7 +704,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--height',
         '10',
         '--background',
-        'transparent',
+        'transparent'
       ]);
 
       const analysis = analyzePixels(pngPath);
@@ -718,7 +735,7 @@ describe('Rasterization Pipeline Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'black-vs-white-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -726,7 +743,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -744,7 +761,7 @@ describe('Rasterization Pipeline Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'red-vs-green-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -752,7 +769,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -770,7 +787,7 @@ describe('Rasterization Pipeline Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'alpha-only-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -778,7 +795,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -796,7 +813,7 @@ describe('Rasterization Pipeline Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'layered-vs-solid-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -804,7 +821,7 @@ describe('Rasterization Pipeline Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);

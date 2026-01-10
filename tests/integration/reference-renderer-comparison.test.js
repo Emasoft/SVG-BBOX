@@ -56,7 +56,7 @@ async function renderWithPython(svgPath, pngPath, width, height) {
  */
 async function renderWithChrome(svgPath, pngPath, width, height) {
   await execFilePromise('node', [
-    'sbb-svg2png.cjs',
+    path.join(PROJECT_ROOT, 'sbb-svg2png.cjs'),
     svgPath,
     pngPath,
     '--width',
@@ -135,6 +135,19 @@ describe('Reference Renderer Comparison Tests', () => {
       throw new Error(
         `Python venv not found at ${PYTHON_VENV}. Run: cd tests && python3 -m venv .venv && source .venv/bin/activate && pip install Pillow lxml`
       );
+    }
+
+    // Validate fixture directories exist
+    if (!fs.existsSync(RASTER_FIXTURES_DIR)) {
+      throw new Error(`Raster fixtures directory not found: ${RASTER_FIXTURES_DIR}`);
+    }
+    if (!fs.existsSync(DIFF_FIXTURES_DIR)) {
+      throw new Error(`Diff fixtures directory not found: ${DIFF_FIXTURES_DIR}`);
+    }
+
+    // Validate reference renderer script exists
+    if (!fs.existsSync(REFERENCE_RENDERER)) {
+      throw new Error(`Reference renderer not found: ${REFERENCE_RENDERER}`);
     }
   });
 

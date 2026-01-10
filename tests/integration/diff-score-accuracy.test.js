@@ -19,14 +19,26 @@ import * as path from 'path';
 
 const execFilePromise = promisify(execFile);
 
-const FIXTURES_DIR = path.join(process.cwd(), 'tests/fixtures/diff-specimens');
-const TEMP_DIR = path.join(process.cwd(), 'tests/.tmp-diff-accuracy');
+const PROJECT_ROOT = process.cwd();
+const FIXTURES_DIR = path.join(PROJECT_ROOT, 'tests/fixtures/diff-specimens');
+const TEMP_DIR = path.join(PROJECT_ROOT, 'tests/.tmp-diff-accuracy');
+const SBB_COMPARE = path.join(PROJECT_ROOT, 'sbb-compare.cjs');
 
 describe('Diff Score Accuracy Tests', () => {
   beforeAll(() => {
     // Create temp directory for test outputs
     if (!fs.existsSync(TEMP_DIR)) {
       fs.mkdirSync(TEMP_DIR, { recursive: true });
+    }
+
+    // Validate fixture directory exists
+    if (!fs.existsSync(FIXTURES_DIR)) {
+      throw new Error(`Diff fixtures directory not found: ${FIXTURES_DIR}`);
+    }
+
+    // Validate CLI tool exists
+    if (!fs.existsSync(SBB_COMPARE)) {
+      throw new Error(`sbb-compare.cjs not found: ${SBB_COMPARE}`);
     }
   });
 
@@ -45,7 +57,7 @@ describe('Diff Score Accuracy Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'identical-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg1, // Same file = identical
         '--out-diff',
@@ -53,7 +65,7 @@ describe('Diff Score Accuracy Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1', // Use scale 1 to get 10x10 output
+        '1' // Use scale 1 to get 10x10 output
       ]);
 
       const result = JSON.parse(stdout);
@@ -72,7 +84,7 @@ describe('Diff Score Accuracy Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'red-vs-blue-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -80,7 +92,7 @@ describe('Diff Score Accuracy Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -100,7 +112,7 @@ describe('Diff Score Accuracy Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'red-vs-half-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -108,7 +120,7 @@ describe('Diff Score Accuracy Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -128,7 +140,7 @@ describe('Diff Score Accuracy Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'blue-vs-half-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -136,7 +148,7 @@ describe('Diff Score Accuracy Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
@@ -156,7 +168,7 @@ describe('Diff Score Accuracy Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'formula-test-diff.png');
 
       const { stdout } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -164,14 +176,13 @@ describe('Diff Score Accuracy Tests', () => {
         '--json',
         '--no-html',
         '--scale',
-        '1',
+        '1'
       ]);
 
       const result = JSON.parse(stdout);
 
       // Calculate expected percentage from pixels
-      const calculatedPercentage =
-        (result.differentPixels / result.totalPixels) * 100;
+      const calculatedPercentage = (result.differentPixels / result.totalPixels) * 100;
 
       // The stored diffPercentage should match the calculated value
       expect(result.diffPercentage).toBeCloseTo(calculatedPercentage, 2);
@@ -186,7 +197,7 @@ describe('Diff Score Accuracy Tests', () => {
 
       // Test with default threshold (1)
       const { stdout: stdout1 } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -196,7 +207,7 @@ describe('Diff Score Accuracy Tests', () => {
         '--scale',
         '1',
         '--threshold',
-        '1',
+        '1'
       ]);
 
       const result1 = JSON.parse(stdout1);
@@ -206,7 +217,7 @@ describe('Diff Score Accuracy Tests', () => {
       // Red (255,0,0) vs Blue (0,0,255): R differs by 255, B differs by 255
       // With threshold=254, differences of 255 still exceed threshold, so still 100%
       const { stdout: stdout2 } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -216,7 +227,7 @@ describe('Diff Score Accuracy Tests', () => {
         '--scale',
         '1',
         '--threshold',
-        '254',
+        '254'
       ]);
 
       const result2 = JSON.parse(stdout2);
@@ -225,7 +236,7 @@ describe('Diff Score Accuracy Tests', () => {
       // Test with threshold=255 (maximum)
       // No difference can exceed 255, so all pixels should be "identical"
       const { stdout: stdout3 } = await execFilePromise('node', [
-        'sbb-compare.cjs',
+        SBB_COMPARE,
         svg1,
         svg2,
         '--out-diff',
@@ -235,7 +246,7 @@ describe('Diff Score Accuracy Tests', () => {
         '--scale',
         '1',
         '--threshold',
-        '255',
+        '255'
       ]);
 
       const result3 = JSON.parse(stdout3);

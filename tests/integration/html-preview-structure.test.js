@@ -69,7 +69,7 @@ if (nodeVersion === 18) {
         '--out-html',
         TEST_HTML
       ]);
-    }, 180000); // WHY 180s: execFilePromise spawns sbb-extract which uses Puppeteer internally
+    }, 300000); // WHY 300s: Under heavy parallelism (10 concurrent tests), subprocess may wait for resources
 
     afterAll(async () => {
       // Clean up temp directory
