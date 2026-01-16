@@ -172,7 +172,13 @@ const argParser = createArgParser({
     {
       name: 'sprite',
       alias: 's',
-      description: 'Auto-detect sprite sheets and process all sprites',
+      // WHY: Detailed description helps users understand sprite detection requirements
+      // Detection triggers: 3+ similar-sized children, common ID patterns, or grid arrangement
+      description:
+        'Auto-detect sprite sheets and process all sprites. ' +
+        'Detection requires: (1) 3+ direct children in root <svg>, ' +
+        '(2) similar sizes (CV < 0.3), OR (3) common ID patterns (icon-, sprite-, symbol-, glyph-), ' +
+        'OR (4) grid arrangement. Use --ignore-vbox with sprites that extend beyond viewBox.',
       type: 'boolean'
     },
     {

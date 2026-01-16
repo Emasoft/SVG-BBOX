@@ -12,12 +12,34 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execFile } from 'child_process';
+import { execFile, spawnSync } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const execFilePromise = promisify(execFile);
+
+// WHY: Helper that handles exit code 1 (files differ) without throwing
+// sbb-compare exit codes: 0 = match, 1 = differ (success), 2 = error
+function runCommandWithExitCode(cmd, args) {
+  const result = spawnSync(cmd, args, { encoding: 'utf8' });
+  if (result.error) {
+    throw result.error;
+  }
+  // Exit code 2 means error, throw with stderr
+  if (result.status === 2) {
+    const err = new Error(result.stderr || 'Command failed with exit code 2');
+    err.stderr = result.stderr;
+    err.stdout = result.stdout;
+    err.exitCode = result.status;
+    throw err;
+  }
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.status
+  };
+}
 
 const PROJECT_ROOT = process.cwd();
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'tests/fixtures/diff-specimens');
@@ -83,7 +105,8 @@ describe('Diff Score Accuracy Tests', () => {
       const svg2 = path.join(FIXTURES_DIR, 'blue-full.svg');
       const diffOutput = path.join(TEMP_DIR, 'red-vs-blue-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      // WHY: Use runCommandWithExitCode because sbb-compare returns exit code 1 for different files
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -111,7 +134,8 @@ describe('Diff Score Accuracy Tests', () => {
       const svg2 = path.join(FIXTURES_DIR, 'half-red-half-blue.svg');
       const diffOutput = path.join(TEMP_DIR, 'red-vs-half-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      // WHY: Use runCommandWithExitCode because sbb-compare returns exit code 1 for different files
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -139,7 +163,8 @@ describe('Diff Score Accuracy Tests', () => {
       const svg2 = path.join(FIXTURES_DIR, 'half-red-half-blue.svg');
       const diffOutput = path.join(TEMP_DIR, 'blue-vs-half-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      // WHY: Use runCommandWithExitCode because sbb-compare returns exit code 1 for different files
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -167,7 +192,8 @@ describe('Diff Score Accuracy Tests', () => {
       const svg2 = path.join(FIXTURES_DIR, 'half-red-half-blue.svg');
       const diffOutput = path.join(TEMP_DIR, 'formula-test-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      // WHY: Use runCommandWithExitCode because sbb-compare returns exit code 1 for different files
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -196,7 +222,8 @@ describe('Diff Score Accuracy Tests', () => {
       const diffOutput = path.join(TEMP_DIR, 'threshold-test-diff.png');
 
       // Test with default threshold (1)
-      const { stdout: stdout1 } = await execFilePromise('node', [
+      // WHY: Use runCommandWithExitCode because sbb-compare returns exit code 1 for different files
+      const { stdout: stdout1 } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -216,7 +243,8 @@ describe('Diff Score Accuracy Tests', () => {
       // Test with very high threshold (254)
       // Red (255,0,0) vs Blue (0,0,255): R differs by 255, B differs by 255
       // With threshold=254, differences of 255 still exceed threshold, so still 100%
-      const { stdout: stdout2 } = await execFilePromise('node', [
+      // WHY: Use runCommandWithExitCode because sbb-compare returns exit code 1 for different files
+      const { stdout: stdout2 } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -235,6 +263,7 @@ describe('Diff Score Accuracy Tests', () => {
 
       // Test with threshold=255 (maximum)
       // No difference can exceed 255, so all pixels should be "identical"
+      // WHY: This returns exit code 0 (files match with threshold=255), so execFilePromise is fine
       const { stdout: stdout3 } = await execFilePromise('node', [
         SBB_COMPARE,
         svg1,

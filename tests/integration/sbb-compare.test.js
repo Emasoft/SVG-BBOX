@@ -5,13 +5,35 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execFile } from 'child_process';
+import { execFile, spawnSync } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const execFilePromise = promisify(execFile);
+
+// WHY: Helper that handles exit code 1 (files differ) without throwing
+// sbb-compare exit codes: 0 = match, 1 = differ (success), 2 = error
+function runCommandWithExitCode(cmd, args) {
+  const result = spawnSync(cmd, args, { encoding: 'utf8' });
+  if (result.error) {
+    throw result.error;
+  }
+  // Exit code 2 means error, throw with stderr
+  if (result.status === 2) {
+    const err = new Error(result.stderr || 'Command failed with exit code 2');
+    err.stderr = result.stderr;
+    err.stdout = result.stdout;
+    err.exitCode = result.status;
+    throw err;
+  }
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.status
+  };
+}
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -20,6 +42,7 @@ const FIXTURES_DIR = path.join(__dirname, '../fixtures');
 const TEMP_DIR = path.join(__dirname, '../.tmp-comparer-tests');
 
 // Helper to run sbb-compare
+// WHY: Uses runCommandWithExitCode because sbb-compare returns exit 1 for different files (expected)
 async function runComparer(svg1, svg2, args = []) {
   const svg1Path = path.join(FIXTURES_DIR, svg1);
   const svg2Path = path.join(FIXTURES_DIR, svg2);
@@ -37,7 +60,8 @@ async function runComparer(svg1, svg2, args = []) {
         )
       ];
 
-  const { stdout, stderr: _stderr } = await execFilePromise('node', [
+  // WHY: Use runCommandWithExitCode to handle exit code 1 (files differ) without throwing
+  const { stdout } = runCommandWithExitCode('node', [
     COMPARER_PATH,
     svg1Path,
     svg2Path,
@@ -254,6 +278,7 @@ describe('sbb-compare Integration Tests', () => {
 const DIFF_SPECIMENS_DIR = path.join(__dirname, '../fixtures/diff-specimens');
 
 // Helper to run sbb-compare with PNG files
+// WHY: Uses runCommandWithExitCode because sbb-compare returns exit 1 for different files (expected)
 async function runComparerWithPng(file1, file2, args = []) {
   const file1Path = path.join(DIFF_SPECIMENS_DIR, file1);
   const file2Path = path.join(DIFF_SPECIMENS_DIR, file2);
@@ -269,7 +294,8 @@ async function runComparerWithPng(file1, file2, args = []) {
     ? []
     : ['--out-diff', path.join(TEMP_DIR, `${base1}_${ext1}_vs_${base2}_${ext2}_diff.png`)];
 
-  const { stdout, stderr: _stderr } = await execFilePromise('node', [
+  // WHY: Use runCommandWithExitCode to handle exit code 1 (files differ) without throwing
+  const { stdout } = runCommandWithExitCode('node', [
     COMPARER_PATH,
     file1Path,
     file2Path,
@@ -450,9 +476,9 @@ describe('sbb-compare PNG Comparison Tests', () => {
       fs.writeFileSync(transparentPng, PNG.sync.write(png));
 
       // Compare semi-transparent red with solid red - should show differences
-      // Use direct execFilePromise since file is in TEMP_DIR, not DIFF_SPECIMENS_DIR
+      // WHY: Use runCommandWithExitCode to handle exit code 1 (files differ) without throwing
       const diffPath = path.join(TEMP_DIR, 'transparency_diff.png');
-      const { stdout } = await execFilePromise('node', [
+      const { stdout } = runCommandWithExitCode('node', [
         COMPARER_PATH,
         path.join(DIFF_SPECIMENS_DIR, 'red-full.png'),
         transparentPng,

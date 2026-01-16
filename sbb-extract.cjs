@@ -271,11 +271,17 @@ function parseArgs(argv) {
             validator: /** @param {number} v */ (v) => v >= 0,
             validationError: 'Margin must be >= 0'
           },
-          { name: 'include-context', type: 'boolean', description: 'Include context elements' }
+          { name: 'include-context', type: 'boolean', description: 'Include context elements' },
+          {
+            name: 'output',
+            alias: 'o',
+            type: 'string',
+            description: 'Output SVG file (alternative to positional)'
+          }
         ],
         positional: [
           { name: 'input', required: true, description: 'Input SVG file' },
-          { name: 'output', required: true, description: 'Output SVG file' }
+          { name: 'output', required: false, description: 'Output SVG file' }
         ]
       },
       exportAll: {
@@ -297,9 +303,17 @@ function parseArgs(argv) {
       },
       rename: {
         description: 'Rename objects according to a JSON mapping',
+        flags: [
+          {
+            name: 'output',
+            alias: 'o',
+            type: 'string',
+            description: 'Output SVG file (alternative to positional)'
+          }
+        ],
         positional: [
           { name: 'input', required: true, description: 'Input SVG file' },
-          { name: 'output', required: true, description: 'Output SVG file' }
+          { name: 'output', required: false, description: 'Output SVG file' }
         ]
       }
     }
@@ -331,12 +345,41 @@ function parseArgs(argv) {
   };
 
   // Mode-specific positional argument handling
+  // Support both positional output and -o/--output flag (flag takes precedence)
   if (result.mode === 'extract') {
-    options.outSvg = result.positional[1] || null;
+    // Use -o/--output flag if provided, otherwise fall back to positional
+    options.outSvg = result.flags.output || result.positional[1] || null;
+    // Validate that output is provided (either via flag or positional)
+    if (!options.outSvg) {
+      // WHY: ValidationError already imported at top of file, no need to re-require
+      throw new ValidationError(
+        `Missing output file.\n\n` +
+          `Usage:\n` +
+          `  sbb-extract <input.svg> --extract <element-id> <output.svg>\n` +
+          `  sbb-extract <input.svg> --extract <element-id> -o <output.svg>\n\n` +
+          `Example:\n` +
+          `  sbb-extract drawing.svg --extract myIcon icon.svg\n` +
+          `  sbb-extract drawing.svg --extract myIcon -o icon.svg`
+      );
+    }
   }
 
   if (result.mode === 'rename') {
-    options.renameOut = result.positional[1] || null;
+    // Use -o/--output flag if provided, otherwise fall back to positional
+    options.renameOut = result.flags.output || result.positional[1] || null;
+    // Validate that output is provided (either via flag or positional)
+    if (!options.renameOut) {
+      // WHY: ValidationError already imported at top of file, no need to re-require
+      throw new ValidationError(
+        `Missing output file.\n\n` +
+          `Usage:\n` +
+          `  sbb-extract <input.svg> --rename <mapping.json> <output.svg>\n` +
+          `  sbb-extract <input.svg> --rename <mapping.json> -o <output.svg>\n\n` +
+          `Example:\n` +
+          `  sbb-extract drawing.svg --rename ids.json renamed.svg\n` +
+          `  sbb-extract drawing.svg --rename ids.json -o renamed.svg`
+      );
+    }
   }
 
   // Apply default values for list mode (only if input is not null)

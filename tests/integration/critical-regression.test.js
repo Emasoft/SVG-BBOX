@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFile } from 'child_process';
+import { execFile, spawnSync } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
@@ -23,6 +23,32 @@ import { PNG } from 'pngjs';
 import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFileAsync = promisify(execFile);
+
+// WHY: Helper that handles exit code 1 (files differ) without throwing
+// sbb-compare exit codes: 0 = match, 1 = differ (success), 2 = error
+function runCompareCommand(args, cwd, timeout) {
+  const result = spawnSync('node', args, {
+    encoding: 'utf8',
+    cwd,
+    timeout
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  // Exit code 2 means error, throw with stderr
+  if (result.status === 2) {
+    const err = new Error(result.stderr || 'Command failed with exit code 2');
+    err.stderr = result.stderr;
+    err.stdout = result.stdout;
+    err.exitCode = result.status;
+    throw err;
+  }
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.status
+  };
+}
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
@@ -334,13 +360,11 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
     await fs.writeFile(svg2Path, svg2Content, 'utf8');
 
     // Run comparer with default settings (4x scale)
-    await execFileAsync(
-      'node',
+    // WHY: Use runCompareCommand because sbb-compare returns exit code 1 for different files
+    runCompareCommand(
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
-      {
-        cwd: projectRoot,
-        timeout: CLI_EXEC_TIMEOUT
-      }
+      projectRoot,
+      CLI_EXEC_TIMEOUT
     );
 
     // Parse the diff PNG
@@ -372,13 +396,11 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
     await fs.writeFile(svg2Path, svg2Content, 'utf8');
 
     // Run with explicit 2x scale
-    await execFileAsync(
-      'node',
+    // WHY: Use runCompareCommand because sbb-compare returns exit code 1 for different files
+    runCompareCommand(
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--scale', '2', '--out-diff', diffPath],
-      {
-        cwd: projectRoot,
-        timeout: CLI_EXEC_TIMEOUT
-      }
+      projectRoot,
+      CLI_EXEC_TIMEOUT
     );
 
     const png = await parsePng(diffPath);
@@ -410,13 +432,11 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
     await fs.writeFile(svg2Path, svg2Content, 'utf8');
 
     // Run with 8x scale for high-resolution comparison
-    await execFileAsync(
-      'node',
+    // WHY: Use runCompareCommand because sbb-compare returns exit code 1 for different files
+    runCompareCommand(
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--scale', '8', '--out-diff', diffPath],
-      {
-        cwd: projectRoot,
-        timeout: CLI_EXEC_TIMEOUT
-      }
+      projectRoot,
+      CLI_EXEC_TIMEOUT
     );
 
     const png = await parsePng(diffPath);
@@ -448,13 +468,11 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
     await fs.writeFile(svg2Path, svg2Content, 'utf8');
 
     // Default 4x scale
-    await execFileAsync(
-      'node',
+    // WHY: Use runCompareCommand because sbb-compare returns exit code 1 for different files
+    runCompareCommand(
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
-      {
-        cwd: projectRoot,
-        timeout: CLI_EXEC_TIMEOUT
-      }
+      projectRoot,
+      CLI_EXEC_TIMEOUT
     );
 
     const png = await parsePng(diffPath);
@@ -485,8 +503,8 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
     await fs.writeFile(svg2Path, svg2Content, 'utf8');
 
     // Use viewbox resolution mode with default 4x scale
-    await execFileAsync(
-      'node',
+    // WHY: Use runCompareCommand because sbb-compare returns exit code 1 for different files
+    runCompareCommand(
       [
         'sbb-compare.cjs',
         svg1Path,
@@ -497,10 +515,8 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
         '--out-diff',
         diffPath
       ],
-      {
-        cwd: projectRoot,
-        timeout: CLI_EXEC_TIMEOUT
-      }
+      projectRoot,
+      CLI_EXEC_TIMEOUT
     );
 
     const png = await parsePng(diffPath);

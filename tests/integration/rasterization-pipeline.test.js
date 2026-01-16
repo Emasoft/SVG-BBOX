@@ -16,13 +16,35 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execFile } from 'child_process';
+import { execFile, spawnSync } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PNG } from 'pngjs';
 
 const execFilePromise = promisify(execFile);
+
+// WHY: Helper that handles exit code 1 (files differ) without throwing
+// sbb-compare exit codes: 0 = match, 1 = differ (success), 2 = error
+function runCommandWithExitCode(cmd, args) {
+  const result = spawnSync(cmd, args, { encoding: 'utf8' });
+  if (result.error) {
+    throw result.error;
+  }
+  // Exit code 2 means error, throw with stderr
+  if (result.status === 2) {
+    const err = new Error(result.stderr || 'Command failed with exit code 2');
+    err.stderr = result.stderr;
+    err.stdout = result.stdout;
+    err.exitCode = result.status;
+    throw err;
+  }
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.status
+  };
+}
 
 const PROJECT_ROOT = process.cwd();
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'tests/fixtures/raster-specimens');
@@ -394,7 +416,7 @@ describe('Rasterization Pipeline Tests', () => {
       const svg2 = path.join(DIFF_FIXTURES_DIR, 'red-full.svg');
       const diffOutput = path.join(TEMP_DIR, 'alpha-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -422,7 +444,7 @@ describe('Rasterization Pipeline Tests', () => {
       const svg = path.join(FIXTURES_DIR, 'red-center-transparent-bg.svg');
       const diffOutput = path.join(TEMP_DIR, 'transparent-region-self-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg,
         svg,
@@ -734,7 +756,7 @@ describe('Rasterization Pipeline Tests', () => {
       const svg2 = path.join(FIXTURES_DIR, 'white-full.svg');
       const diffOutput = path.join(TEMP_DIR, 'black-vs-white-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -760,7 +782,7 @@ describe('Rasterization Pipeline Tests', () => {
       const svg2 = path.join(FIXTURES_DIR, 'green-full.svg');
       const diffOutput = path.join(TEMP_DIR, 'red-vs-green-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -786,7 +808,7 @@ describe('Rasterization Pipeline Tests', () => {
       const svg2 = path.join(DIFF_FIXTURES_DIR, 'blue-full.svg');
       const diffOutput = path.join(TEMP_DIR, 'alpha-only-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,
@@ -812,7 +834,7 @@ describe('Rasterization Pipeline Tests', () => {
       const svg2 = path.join(DIFF_FIXTURES_DIR, 'red-full.svg');
       const diffOutput = path.join(TEMP_DIR, 'layered-vs-solid-diff.png');
 
-      const { stdout } = await execFilePromise('node', [
+      const { stdout } = runCommandWithExitCode('node', [
         SBB_COMPARE,
         svg1,
         svg2,

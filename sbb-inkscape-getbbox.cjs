@@ -28,6 +28,22 @@ const execFilePromise = promisify(execFile);
 // as it needs to build/load the font cache on first run
 const INKSCAPE_VERSION_TIMEOUT = 15000;
 
+// WHY: Common installation paths for Inkscape across different platforms
+// Users may have Inkscape installed in non-PATH locations
+const INKSCAPE_COMMON_PATHS = [
+  'inkscape', // PATH lookup
+  '/opt/homebrew/bin/inkscape', // macOS Homebrew ARM
+  '/usr/local/bin/inkscape', // macOS Homebrew Intel
+  '/usr/bin/inkscape', // Linux
+  '/Applications/Inkscape.app/Contents/MacOS/inkscape', // macOS app bundle
+  'C:\\Program Files\\Inkscape\\bin\\inkscape.exe' // Windows
+];
+
+// Module-level variable to store discovered Inkscape path
+// WHY: Avoids re-discovering path for each operation
+/** @type {string | null} */
+let discoveredInkscapePath = null;
+
 /**
  * @typedef {Object} BBox
  * @property {number} x - X coordinate
@@ -62,6 +78,7 @@ const INKSCAPE_VERSION_TIMEOUT = 15000;
  * @property {string | null} json - JSON output path or null
  * @property {string} input - Input SVG file path
  * @property {string[]} elementIds - Element IDs to query
+ * @property {string | null} inkscapePath - Custom Inkscape executable path
  */
 
 /**
@@ -81,11 +98,14 @@ async function getBBoxWithInkscape(options) {
   /** @type {Record<string, BBoxResult>} */
   const results = {};
 
+  // WHY: Use discovered path instead of hardcoded 'inkscape' for cross-platform compatibility
+  const inkscapeCmd = discoveredInkscapePath || 'inkscape';
+
   // If no element IDs specified, get whole document bbox
   if (elementIds.length === 0) {
     try {
       // Query all objects in the file
-      const { stdout } = await execFilePromise('inkscape', ['--query-all', safePath]);
+      const { stdout } = await execFilePromise(inkscapeCmd, ['--query-all', safePath]);
 
       const lines = stdout.trim().split('\n');
       if (lines.length === 0 || !lines[0]) {
@@ -129,7 +149,7 @@ async function getBBoxWithInkscape(options) {
       }
 
       try {
-        const { stdout } = await execFilePromise('inkscape', [
+        const { stdout } = await execFilePromise(inkscapeCmd, [
           `--query-id=${id}`,
           '--query-x',
           '--query-y',
@@ -259,6 +279,7 @@ OPTIONAL ARGUMENTS:
 
 OPTIONS:
   --json <path>           Save results as JSON to specified file (use - for stdout)
+  --inkscape-path <path>  Specify custom Inkscape executable path
   --help, -h              Show this help message
   --version, -v           Show version number
 
@@ -274,6 +295,12 @@ EXAMPLES:
 
   # Save results as JSON
   sbb-inkscape-getbbox drawing.svg --json results.json
+
+  # Specify custom Inkscape path (macOS Homebrew ARM)
+  sbb-inkscape-getbbox drawing.svg --inkscape-path /opt/homebrew/bin/inkscape
+
+  # Specify custom Inkscape path (macOS app bundle)
+  sbb-inkscape-getbbox drawing.svg --inkscape-path /Applications/Inkscape.app/Contents/MacOS/inkscape
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -297,17 +324,48 @@ USE CASES:
 }
 
 /**
- * Check if Inkscape is available
+ * Check if Inkscape is available and return the working path
+ * WHY: Inkscape may be installed in non-PATH locations depending on platform/installation method
+ *
+ * @param {string | null} customPath - Custom Inkscape path specified by user
+ * @returns {Promise<{found: boolean, path: string | null, checkedPaths: Array<{path: string, status: string}>}>}
+ *          Result object with found status, working path, and list of checked paths with their status
  */
-async function checkInkscapeAvailable() {
-  try {
-    await execFilePromise('inkscape', ['--version'], {
-      timeout: INKSCAPE_VERSION_TIMEOUT
-    });
-    return true;
-  } catch {
-    return false;
+async function checkInkscapeAvailable(customPath = null) {
+  /** @type {Array<{path: string, status: string}>} */
+  const checkedPaths = [];
+
+  // If custom path provided, only check that path
+  if (customPath) {
+    try {
+      await execFilePromise(customPath, ['--version'], {
+        timeout: INKSCAPE_VERSION_TIMEOUT
+      });
+      checkedPaths.push({ path: customPath, status: 'found' });
+      return { found: true, path: customPath, checkedPaths };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      checkedPaths.push({ path: customPath, status: `not found (${message})` });
+      return { found: false, path: null, checkedPaths };
+    }
   }
+
+  // Try each common path
+  for (const inkscapePath of INKSCAPE_COMMON_PATHS) {
+    try {
+      await execFilePromise(inkscapePath, ['--version'], {
+        timeout: INKSCAPE_VERSION_TIMEOUT
+      });
+      // WHY: Mark as found and return immediately on success
+      checkedPaths.push({ path: inkscapePath, status: 'found' });
+      return { found: true, path: inkscapePath, checkedPaths };
+    } catch {
+      // WHY: Track failed paths for detailed error message
+      checkedPaths.push({ path: inkscapePath, status: 'not found' });
+    }
+  }
+
+  return { found: false, path: null, checkedPaths };
 }
 
 /**
@@ -336,7 +394,8 @@ function parseArgs(argv) {
   const options = {
     json: null,
     input: '',
-    elementIds: []
+    elementIds: [],
+    inkscapePath: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -361,6 +420,10 @@ function parseArgs(argv) {
       switch (name) {
         case 'json':
           options.json = next ?? null;
+          useNext();
+          break;
+        case 'inkscape-path':
+          options.inkscapePath = next ?? null;
           useNext();
           break;
         default:
@@ -403,14 +466,24 @@ function parseArgs(argv) {
 async function main() {
   printInfo(`sbb-inkscape-getbbox v${getVersion()} | svg-bbox toolkit\n`);
 
-  // Check if Inkscape is available
-  const inkscapeAvailable = await checkInkscapeAvailable();
-  if (!inkscapeAvailable) {
-    printError('Inkscape not found. Please install Inkscape and ensure it is in your PATH.');
+  // Parse args first to get custom inkscape path if provided
+  const options = parseArgs(process.argv);
+
+  // Check if Inkscape is available (with optional custom path)
+  const inkscapeCheck = await checkInkscapeAvailable(options.inkscapePath);
+  if (!inkscapeCheck.found) {
+    // WHY: Detailed error message helps users diagnose installation issues
+    printError('Inkscape not found. Checked:');
+    for (const check of inkscapeCheck.checkedPaths) {
+      console.log(`  - ${check.path}: ${check.status}`);
+    }
+    console.log('');
+    console.log('Install Inkscape or specify path with --inkscape-path <path>');
     process.exit(1);
   }
 
-  const options = parseArgs(process.argv);
+  // WHY: Store discovered path for use by getBBoxWithInkscape
+  discoveredInkscapePath = inkscapeCheck.path;
 
   // Get bbox using Inkscape
   const result = await getBBoxWithInkscape({

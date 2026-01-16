@@ -57,6 +57,8 @@ const sharp = require('sharp');
  * @property {string | null} batch - Batch file path
  * @property {boolean} jpg - Also produce a JPEG version at 100% quality
  * @property {boolean} deletePngAfter - Delete PNG after creating JPG (requires --jpg)
+ * @property {string | null} allowPaths - Comma-separated allowed directory paths
+ * @property {boolean} trustedMode - Disable all path security restrictions
  * @property {string} [input] - Input SVG file path (single file mode)
  * @property {string} [output] - Output PNG file path (single file mode)
  */
@@ -74,7 +76,6 @@ const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs')
 const {
   validateFilePath,
   validateOutputPath,
-  readSVGFileSafe,
   sanitizeSVGContent,
   SHELL_METACHARACTERS,
   SVGBBoxError: _SVGBBoxError,
@@ -89,6 +90,39 @@ const {
   printInfo,
   printWarning
 } = require('./lib/cli-utils.cjs');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODULE-LEVEL STATE FOR PATH VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * WHY: Module-level variable for allowed directories
+ * This is set by main() based on --allow-paths and --trusted-mode flags
+ * Used by validation functions throughout the module
+ * @type {string[]|null}
+ */
+let MODULE_ALLOWED_DIRS = null;
+
+/**
+ * WHY: Module-level variable for trusted mode
+ * When true, all path security restrictions are disabled
+ * @type {boolean}
+ */
+let MODULE_TRUSTED_MODE = false;
+
+/**
+ * Get the allowed directories for path validation
+ * @returns {string[]|null} Array of allowed directories, or null for trusted mode
+ */
+function getAllowedDirs() {
+  // WHY: If trusted mode, return null to skip all directory checks
+  if (MODULE_TRUSTED_MODE) {
+    return null;
+  }
+  // WHY: If allow-paths is set, use the configured dirs
+  // Otherwise fall back to just CWD
+  return MODULE_ALLOWED_DIRS || [process.cwd()];
+}
 
 // ---------- CLI parsing ----------
 
@@ -183,6 +217,16 @@ OPTIONS:
       Lines starting with # are comments
       All rendering options apply to each file
 
+  --allow-paths <dirs>
+      Allow files in additional directories (comma-separated)
+      By default, only files in the current working directory are allowed.
+      Example: --allow-paths /tmp,/var/artifacts
+
+  --trusted-mode
+      Disable all path security restrictions
+      USE WITH CAUTION - only for trusted inputs
+      Allows reading/writing files anywhere on the filesystem
+
   --help, -h
       Show this help message
 
@@ -272,7 +316,9 @@ function parseArgs(argv) {
     autoOpen: false,
     batch: null,
     jpg: false,
-    deletePngAfter: false
+    deletePngAfter: false,
+    allowPaths: null,
+    trustedMode: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -343,6 +389,15 @@ function parseArgs(argv) {
           // WHY: Delete PNG after JPG creation to save disk space in batch processing
           options.deletePngAfter = true;
           break;
+        case 'allow-paths':
+          // WHY: Allow files in additional directories beyond CWD
+          options.allowPaths = next || null;
+          useNext();
+          break;
+        case 'trusted-mode':
+          // WHY: Disable all path security restrictions (use with caution)
+          options.trustedMode = true;
+          break;
         default:
           console.warn('Unknown option:', key);
       }
@@ -398,7 +453,9 @@ function parseArgs(argv) {
  */
 function readBatchFile(batchFilePath) {
   // SECURITY: Validate batch file path
+  // WHY: Use getAllowedDirs() to respect --allow-paths and --trusted-mode flags
   const safeBatchPath = validateFilePath(batchFilePath, {
+    allowedDirs: getAllowedDirs(),
     requiredExtensions: ['.txt'],
     mustExist: true
   });
@@ -520,13 +577,27 @@ async function renderSvgWithModes(opts) {
   const { input, output } = opts;
 
   // SECURITY: Validate and sanitize input path
+  // WHY: Use getAllowedDirs() to respect --allow-paths and --trusted-mode flags
   const safePath = validateFilePath(input, {
+    allowedDirs: getAllowedDirs(),
     requiredExtensions: ['.svg'],
     mustExist: true
   });
 
-  // SECURITY: Read SVG with size limit and validation
-  const svgContent = readSVGFileSafe(safePath);
+  // SECURITY: Read SVG with size limit (50MB max)
+  // WHY: We already validated the path above, so we read directly to avoid
+  // readSVGFileSafe re-validating with default allowedDirs (which ignores our flags)
+  const MAX_SVG_SIZE = 50 * 1024 * 1024;
+  const stats = fs.statSync(safePath);
+  if (stats.size > MAX_SVG_SIZE) {
+    throw new FileSystemError(
+      `SVG file too large: ${stats.size} bytes (maximum: ${MAX_SVG_SIZE} bytes)`
+    );
+  }
+  const svgContent = fs.readFileSync(safePath, 'utf8');
+  if (!svgContent.trim().startsWith('<') || !svgContent.includes('<svg')) {
+    throw new _ValidationError('File does not appear to be valid SVG');
+  }
 
   // SECURITY: Sanitize SVG content (remove scripts, event handlers)
   const sanitizedSvg = sanitizeSVGContent(svgContent);
@@ -594,250 +665,281 @@ ${sanitizedSvg}
     //  - apply margin in SVG units
     //  - optionally hide other elements (element mode)
     //  - compute suggested pixel width/height if not given
-    const measure = await page.evaluate(
-      async (optsInPage) => {
-        /* eslint-disable no-undef */
-        const SvgVisualBBoxLib = window.SvgVisualBBox;
-        if (!SvgVisualBBoxLib) {
-          throw new Error('SvgVisualBBox not found on window. Did the script load?');
-        }
-        // WHY: Store in const after null check for TypeScript narrowing
-        const SvgVisualBBox = SvgVisualBBoxLib;
-
-        const svgElement = document.querySelector('svg');
-        if (!svgElement) {
-          throw new Error('No <svg> element found in the document.');
-        }
-        // WHY: Store in const after null check for TypeScript narrowing
-        const svg = svgElement;
-
-        // Ensure fonts are loaded as best as we can (with timeout)
-        await SvgVisualBBox.waitForDocumentFonts(document, optsInPage.fontTimeout || 8000);
-
-        const mode = (optsInPage.mode || 'visible').toLowerCase();
-        const marginUser =
-          typeof optsInPage.margin === 'number' && optsInPage.margin > 0 ? optsInPage.margin : 0;
-
-        // Helper: ensure the root <svg> has a reasonable viewBox.
-        // If missing, we use the full drawing bbox (unclipped).
-        async function ensureViewBox() {
-          const vb = svg.viewBox && svg.viewBox.baseVal;
-          if (vb && vb.width && vb.height) {
-            return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
+    let measure;
+    try {
+      measure = await page.evaluate(
+        async (optsInPage) => {
+          /* eslint-disable no-undef */
+          const SvgVisualBBoxLib = window.SvgVisualBBox;
+          if (!SvgVisualBBoxLib) {
+            throw new Error('SvgVisualBBox not found on window. Did the script load?');
           }
-          // No viewBox → use full drawing bbox (unclipped)
-          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
-            coarseFactor: 3,
-            fineFactor: 24,
-            useLayoutScale: true
-          });
-          const full = both.full;
-          if (!full) {
-            throw new Error('Cannot determine full drawing bbox for SVG without a viewBox.');
-          }
-          const newVB = {
-            x: full.x,
-            y: full.y,
-            width: full.width,
-            height: full.height
-          };
-          svg.setAttribute('viewBox', `${newVB.x} ${newVB.y} ${newVB.width} ${newVB.height}`);
-          return newVB;
-        }
+          // WHY: Store in const after null check for TypeScript narrowing
+          const SvgVisualBBox = SvgVisualBBoxLib;
 
-        const originalViewBox = await ensureViewBox(); // used for clamping in "visible" mode
-        let targetBBox = null;
+          const svgElement = document.querySelector('svg');
+          if (!svgElement) {
+            throw new Error('No <svg> element found in the document.');
+          }
+          // WHY: Store in const after null check for TypeScript narrowing
+          const svg = svgElement;
 
-        if (mode === 'full') {
-          // Full drawing, ignoring current viewBox
-          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
-            coarseFactor: 3,
-            fineFactor: 24,
-            useLayoutScale: true
-          });
-          if (!both.full) {
-            throw new Error('Full drawing bbox is empty (nothing to render).');
-          }
-          targetBBox = {
-            x: both.full.x,
-            y: both.full.y,
-            width: both.full.width,
-            height: both.full.height
-          };
-        } else if (mode === 'element') {
-          const id = optsInPage.elementId;
-          if (!id) {
-            throw new Error('--mode element requires --element-id');
-          }
-          const el = svg.ownerDocument.getElementById(id);
-          if (!el) {
-            throw new Error('No element found with id="' + id + '"');
-          }
+          // Ensure fonts are loaded as best as we can (with timeout)
+          await SvgVisualBBox.waitForDocumentFonts(document, optsInPage.fontTimeout || 8000);
 
-          const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-            mode: 'unclipped',
-            coarseFactor: 3,
-            fineFactor: 24,
-            useLayoutScale: true
-          });
-          if (!bbox) {
-            throw new Error('Element with id="' + id + '" has no visible pixels.');
-          }
-          targetBBox = {
-            x: bbox.x,
-            y: bbox.y,
-            width: bbox.width,
-            height: bbox.height
-          };
+          const mode = (optsInPage.mode || 'visible').toLowerCase();
+          const marginUser =
+            typeof optsInPage.margin === 'number' && optsInPage.margin > 0 ? optsInPage.margin : 0;
 
-          // Hide everything except this element (and <defs>)
-          const allowed = new Set();
-          /** @type {Element | ParentNode | null} */
-          let node = el;
-          while (node) {
-            allowed.add(node);
-            // Type assertion: we know svg is an Element and node is Element | ParentNode
-            if (/** @type {Element} */ (node) === svg) {
-              break;
+          // Helper: ensure the root <svg> has a reasonable viewBox.
+          // If missing, we use the full drawing bbox (unclipped).
+          async function ensureViewBox() {
+            const vb = svg.viewBox && svg.viewBox.baseVal;
+            if (vb && vb.width && vb.height) {
+              return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
             }
-            node = /** @type {Element | null} */ (node.parentNode);
+            // No viewBox → use full drawing bbox (unclipped)
+            const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
+              coarseFactor: 3,
+              fineFactor: 24,
+              useLayoutScale: true
+            });
+            const full = both.full;
+            if (!full) {
+              throw new Error('Cannot determine full drawing bbox for SVG without a viewBox.');
+            }
+            const newVB = {
+              x: full.x,
+              y: full.y,
+              width: full.width,
+              height: full.height
+            };
+            svg.setAttribute('viewBox', `${newVB.x} ${newVB.y} ${newVB.width} ${newVB.height}`);
+            return newVB;
           }
 
-          // Add all descendants of the target element
-          // CRITICAL: Without this, child elements like <textPath> inside <text>
-          // would get display="none" and render as invisible/empty
-          /**
-           * Recursively add element and all descendants to allowed set
-           * @param {HTMLElement} n - Element to process
-           * @returns {void}
-           */
-          (function addDescendants(n) {
-            allowed.add(n);
-            const children = n.children;
-            for (let i = 0; i < children.length; i++) {
-              // @ts-ignore - children[i] is Element in browser context, HTMLElement in type system
-              addDescendants(children[i]);
-            }
-          })(el);
+          const originalViewBox = await ensureViewBox(); // used for clamping in "visible" mode
+          let targetBBox = null;
 
-          const all = Array.from(svg.querySelectorAll('*'));
-          for (const child of all) {
-            const tag = child.tagName && child.tagName.toLowerCase();
-            if (tag === 'defs') {
-              continue;
+          if (mode === 'full') {
+            // Full drawing, ignoring current viewBox
+            const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
+              coarseFactor: 3,
+              fineFactor: 24,
+              useLayoutScale: true
+            });
+            if (!both.full) {
+              throw new Error('Full drawing bbox is empty (nothing to render).');
             }
-            if (!allowed.has(child) && !child.contains(el)) {
-              child.setAttribute('display', 'none');
+            targetBBox = {
+              x: both.full.x,
+              y: both.full.y,
+              width: both.full.width,
+              height: both.full.height
+            };
+          } else if (mode === 'element') {
+            const id = optsInPage.elementId;
+            if (!id) {
+              throw new Error('--mode element requires --element-id');
             }
+            const el = svg.ownerDocument.getElementById(id);
+            if (!el) {
+              throw new Error('No element found with id="' + id + '"');
+            }
+
+            const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+              mode: 'unclipped',
+              coarseFactor: 3,
+              fineFactor: 24,
+              useLayoutScale: true
+            });
+            if (!bbox) {
+              throw new Error('Element with id="' + id + '" has no visible pixels.');
+            }
+            targetBBox = {
+              x: bbox.x,
+              y: bbox.y,
+              width: bbox.width,
+              height: bbox.height
+            };
+
+            // Hide everything except this element (and <defs>)
+            const allowed = new Set();
+            /** @type {Element | ParentNode | null} */
+            let node = el;
+            while (node) {
+              allowed.add(node);
+              // Type assertion: we know svg is an Element and node is Element | ParentNode
+              if (/** @type {Element} */ (node) === svg) {
+                break;
+              }
+              node = /** @type {Element | null} */ (node.parentNode);
+            }
+
+            // Add all descendants of the target element
+            // CRITICAL: Without this, child elements like <textPath> inside <text>
+            // would get display="none" and render as invisible/empty
+            /**
+             * Recursively add element and all descendants to allowed set
+             * @param {HTMLElement} n - Element to process
+             * @returns {void}
+             */
+            (function addDescendants(n) {
+              allowed.add(n);
+              const children = n.children;
+              for (let i = 0; i < children.length; i++) {
+                // @ts-ignore - children[i] is Element in browser context, HTMLElement in type system
+                addDescendants(children[i]);
+              }
+            })(el);
+
+            const all = Array.from(svg.querySelectorAll('*'));
+            for (const child of all) {
+              const tag = child.tagName && child.tagName.toLowerCase();
+              if (tag === 'defs') {
+                continue;
+              }
+              if (!allowed.has(child) && !child.contains(el)) {
+                child.setAttribute('display', 'none');
+              }
+            }
+          } else {
+            // "visible" → content actually inside the current viewBox
+            const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
+              coarseFactor: 3,
+              fineFactor: 24,
+              useLayoutScale: true
+            });
+            if (!both.visible) {
+              throw new Error('Visible bbox is empty (nothing inside viewBox).');
+            }
+            targetBBox = {
+              x: both.visible.x,
+              y: both.visible.y,
+              width: both.visible.width,
+              height: both.visible.height
+            };
           }
-        } else {
-          // "visible" → content actually inside the current viewBox
-          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(svg, {
-            coarseFactor: 3,
-            fineFactor: 24,
-            useLayoutScale: true
-          });
-          if (!both.visible) {
-            throw new Error('Visible bbox is empty (nothing inside viewBox).');
+
+          if (!targetBBox) {
+            throw new Error('No target bounding box could be computed.');
           }
-          targetBBox = {
-            x: both.visible.x,
-            y: both.visible.y,
-            width: both.visible.width,
-            height: both.visible.height
+
+          // Apply margin in SVG units
+          const expanded = {
+            x: targetBBox.x,
+            y: targetBBox.y,
+            width: targetBBox.width,
+            height: targetBBox.height
           };
+
+          if (marginUser > 0) {
+            expanded.x -= marginUser;
+            expanded.y -= marginUser;
+            expanded.width += marginUser * 2;
+            expanded.height += marginUser * 2;
+          }
+
+          // For "visible" mode, clamp the expanded bbox to the original viewBox
+          if (mode === 'visible' && expanded.width > 0 && expanded.height > 0) {
+            const ov = originalViewBox;
+            const bx0 = expanded.x;
+            const by0 = expanded.y;
+            const bx1 = expanded.x + expanded.width;
+            const by1 = expanded.y + expanded.height;
+
+            const clampedX0 = Math.max(ov.x, bx0);
+            const clampedY0 = Math.max(ov.y, by0);
+            const clampedX1 = Math.min(ov.x + ov.width, bx1);
+            const clampedY1 = Math.min(ov.y + ov.height, by1);
+
+            expanded.x = clampedX0;
+            expanded.y = clampedY0;
+            expanded.width = Math.max(0, clampedX1 - clampedX0);
+            expanded.height = Math.max(0, clampedY1 - clampedY0);
+          }
+
+          // Now set the viewBox to the expanded bbox
+          if (expanded.width <= 0 || expanded.height <= 0) {
+            throw new Error('Expanded bbox is empty after clamping/margin.');
+          }
+
+          // CRITICAL BUG FIX: Only modify viewBox in "full" or "element" mode
+          // In "visible" mode, the viewBox should remain UNCHANGED (unless it was missing)
+          // Modifying the viewBox in visible mode corrupts the SVG and produces wrong PNG output
+          // This was causing sbb-svg2png to systematically produce incorrect renderings
+          if (mode === 'full' || mode === 'element') {
+            svg.setAttribute(
+              'viewBox',
+              `${expanded.x} ${expanded.y} ${expanded.width} ${expanded.height}`
+            );
+          }
+          // In "visible" mode, we keep the original viewBox - just render what's inside it
+
+          // Compute suggested pixel size
+          const scale =
+            typeof optsInPage.scale === 'number' &&
+            isFinite(optsInPage.scale) &&
+            optsInPage.scale > 0
+              ? optsInPage.scale
+              : 4;
+
+          const pixelWidth = optsInPage.width || Math.max(1, Math.round(expanded.width * scale));
+          const pixelHeight = optsInPage.height || Math.max(1, Math.round(expanded.height * scale));
+
+          // Update SVG sizing in the DOM
+          svg.removeAttribute('width');
+          svg.removeAttribute('height');
+          svg.style.width = pixelWidth + 'px';
+          svg.style.height = pixelHeight + 'px';
+
+          return {
+            mode,
+            targetBBox,
+            expandedBBox: expanded,
+            viewBox: svg.getAttribute('viewBox'),
+            pixelWidth,
+            pixelHeight
+          };
+          /* eslint-enable no-undef */
+        },
+        {
+          mode: opts.mode,
+          elementId: opts.elementId,
+          scale: opts.scale,
+          width: opts.width,
+          height: opts.height,
+          margin: opts.margin,
+          fontTimeout: FONT_TIMEOUT_MS
         }
+      );
+    } catch (evalError) {
+      // WHY: Catch errors from page.evaluate() and provide clean error messages
+      // instead of showing full stack traces for user-facing errors
+      const errMsg = evalError instanceof Error ? evalError.message : String(evalError);
 
-        if (!targetBBox) {
-          throw new Error('No target bounding box could be computed.');
-        }
-
-        // Apply margin in SVG units
-        const expanded = {
-          x: targetBBox.x,
-          y: targetBBox.y,
-          width: targetBBox.width,
-          height: targetBBox.height
-        };
-
-        if (marginUser > 0) {
-          expanded.x -= marginUser;
-          expanded.y -= marginUser;
-          expanded.width += marginUser * 2;
-          expanded.height += marginUser * 2;
-        }
-
-        // For "visible" mode, clamp the expanded bbox to the original viewBox
-        if (mode === 'visible' && expanded.width > 0 && expanded.height > 0) {
-          const ov = originalViewBox;
-          const bx0 = expanded.x;
-          const by0 = expanded.y;
-          const bx1 = expanded.x + expanded.width;
-          const by1 = expanded.y + expanded.height;
-
-          const clampedX0 = Math.max(ov.x, bx0);
-          const clampedY0 = Math.max(ov.y, by0);
-          const clampedX1 = Math.min(ov.x + ov.width, bx1);
-          const clampedY1 = Math.min(ov.y + ov.height, by1);
-
-          expanded.x = clampedX0;
-          expanded.y = clampedY0;
-          expanded.width = Math.max(0, clampedX1 - clampedX0);
-          expanded.height = Math.max(0, clampedY1 - clampedY0);
-        }
-
-        // Now set the viewBox to the expanded bbox
-        if (expanded.width <= 0 || expanded.height <= 0) {
-          throw new Error('Expanded bbox is empty after clamping/margin.');
-        }
-
-        // CRITICAL BUG FIX: Only modify viewBox in "full" or "element" mode
-        // In "visible" mode, the viewBox should remain UNCHANGED (unless it was missing)
-        // Modifying the viewBox in visible mode corrupts the SVG and produces wrong PNG output
-        // This was causing sbb-svg2png to systematically produce incorrect renderings
-        if (mode === 'full' || mode === 'element') {
-          svg.setAttribute(
-            'viewBox',
-            `${expanded.x} ${expanded.y} ${expanded.width} ${expanded.height}`
-          );
-        }
-        // In "visible" mode, we keep the original viewBox - just render what's inside it
-
-        // Compute suggested pixel size
-        const scale =
-          typeof optsInPage.scale === 'number' && isFinite(optsInPage.scale) && optsInPage.scale > 0
-            ? optsInPage.scale
-            : 4;
-
-        const pixelWidth = optsInPage.width || Math.max(1, Math.round(expanded.width * scale));
-        const pixelHeight = optsInPage.height || Math.max(1, Math.round(expanded.height * scale));
-
-        // Update SVG sizing in the DOM
-        svg.removeAttribute('width');
-        svg.removeAttribute('height');
-        svg.style.width = pixelWidth + 'px';
-        svg.style.height = pixelHeight + 'px';
-
-        return {
-          mode,
-          targetBBox,
-          expandedBBox: expanded,
-          viewBox: svg.getAttribute('viewBox'),
-          pixelWidth,
-          pixelHeight
-        };
-        /* eslint-enable no-undef */
-      },
-      {
-        mode: opts.mode,
-        elementId: opts.elementId,
-        scale: opts.scale,
-        width: opts.width,
-        height: opts.height,
-        margin: opts.margin,
-        fontTimeout: FONT_TIMEOUT_MS
+      // Check for element not found error
+      const elementNotFoundMatch = errMsg.match(/No element found with id="([^"]+)"/);
+      if (elementNotFoundMatch && elementNotFoundMatch[1]) {
+        _printError(`Element not found: ${elementNotFoundMatch[1]}`);
+        process.exit(1);
       }
-    );
+
+      // Check for other known errors and show clean messages
+      if (errMsg.includes('--mode element requires --element-id')) {
+        _printError('--mode element requires --element-id');
+        process.exit(1);
+      }
+      if (errMsg.includes('has no visible pixels')) {
+        const idMatch = errMsg.match(/id="([^"]+)"/);
+        const elementId = idMatch && idMatch[1] ? idMatch[1] : 'unknown';
+        _printError(`Element "${elementId}" has no visible pixels`);
+        process.exit(1);
+      }
+
+      // For other errors, re-throw to be handled by outer catch
+      throw evalError;
+    }
 
     // Now set the Puppeteer viewport to match the chosen PNG size
     await page.setViewport({
@@ -850,7 +952,21 @@ ${sanitizedSvg}
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // SECURITY: Validate output path
-    const safeOutPath = validateOutputPath(output, {
+    // WHY: Use getAllowedDirs() to respect --allow-paths and --trusted-mode flags
+    // WHY: Resolve parent directory symlinks (e.g., /tmp -> /private/tmp on macOS)
+    // This ensures the comparison works correctly with symlinked directories
+    let resolvedOutput = output;
+    try {
+      const parentDir = path.dirname(path.resolve(output));
+      if (fs.existsSync(parentDir)) {
+        const realParent = fs.realpathSync(parentDir);
+        resolvedOutput = path.join(realParent, path.basename(output));
+      }
+    } catch {
+      // If parent doesn't exist, use original path
+    }
+    const safeOutPath = validateOutputPath(resolvedOutput, {
+      allowedDirs: getAllowedDirs(),
       requiredExtensions: ['.png', '.jpg', '.jpeg']
     });
 
@@ -941,6 +1057,43 @@ async function main() {
   printInfo(`sbb-svg2png v${getVersion()} | svg-bbox toolkit\n`);
 
   const opts = parseArgs(process.argv);
+
+  // WHY: Initialize module-level path security from args
+  // --trusted-mode allows ALL paths (disables all restrictions)
+  // --allow-paths allows specific comma-separated directories
+  if (opts.trustedMode) {
+    // WHY: Trusted mode disables all path restrictions
+    MODULE_TRUSTED_MODE = true;
+    printWarning('Trusted mode enabled - path restrictions disabled');
+  } else if (opts.allowPaths) {
+    // WHY: Parse comma-separated list of allowed directories
+    // Also resolve symlinks to handle macOS /tmp -> /private/tmp
+    const extraPaths = opts.allowPaths
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    // WHY: Include both original paths and their real paths to handle symlinks
+    // On macOS, /tmp is a symlink to /private/tmp, so we need both
+    const resolvedPaths = new Set([process.cwd()]);
+    for (const p of extraPaths) {
+      resolvedPaths.add(p);
+      try {
+        // Also add the realpath if it's different (symlink resolution)
+        const realPath = fs.realpathSync(p);
+        if (realPath !== p) {
+          resolvedPaths.add(realPath);
+        }
+      } catch {
+        // Directory doesn't exist yet, just use original path
+      }
+    }
+    MODULE_ALLOWED_DIRS = Array.from(resolvedPaths);
+    printInfo(`Allowed paths: ${MODULE_ALLOWED_DIRS.join(', ')}`);
+  } else {
+    // WHY: Default to CWD only (most secure)
+    MODULE_ALLOWED_DIRS = [process.cwd()];
+  }
 
   // BATCH MODE: Render multiple SVG files
   if (opts.batch) {
