@@ -164,7 +164,8 @@ describe('CLI Security Integration Tests', () => {
         assert.ok(
           err.stderr.includes('outside allowed directories') ||
             err.stderr.includes('File not found') ||
-            err.stderr.includes('Invalid file extension'),
+            err.stderr.includes('Invalid file extension') ||
+            err.stderr.includes('Unsupported file type'),
           'Should reject with security or validation error'
         );
       }

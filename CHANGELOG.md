@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ★ New Features
+
+- **sbb-compare**: Add PNG comparison support
+  - PNG vs PNG: Direct pixel comparison (dimensions must match)
+  - SVG vs PNG: Renders SVG at PNG's exact resolution for comparison
+  - PNG vs SVG: Same as above (order doesn't matter)
+
+### ◆ Documentation
+
+- **README**: Update sbb-compare documentation with PNG comparison examples
+- **tests**: Add comprehensive PNG comparison test suite
+
 ## [1.1.2] - 2026-01-02
 
 ### ★ New Features

@@ -41,9 +41,9 @@ Enhancement suggestions are welcome! Please:
 1. **Fork and Clone**
 
    ```bash
-   git clone https://github.com/YOUR_Emasoft/SVG-BBOX.git
+   git clone https://github.com/YOUR_USERNAME/SVG-BBOX.git
    cd svg-bbox
-   pnpm install
+   bun install
    ```
 
 2. **Create a Branch**
@@ -64,19 +64,19 @@ Enhancement suggestions are welcome! Please:
 
    ```bash
    # Run all tests
-   pnpm test
+   bun run test
 
    # Run specific test suites
-   pnpm test:unit
-   pnpm test:integration
-   pnpm test:e2e
+   bun run test:unit
+   bun run test:integration
+   bun run test:e2e
 
    # Check coverage
-   pnpm test:coverage
+   bun run test:coverage
 
    # Lint and format
-   pnpm lint
-   pnpm format
+   bun run lint
+   bun run format
    ```
 
 5. **Commit Guidelines**

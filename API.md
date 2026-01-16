@@ -39,10 +39,14 @@ Complete API reference for using `SvgVisualBBox.js` in web browsers.
 <script src="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js"></script>
 ```
 
-### Via npm
+### Via npm / bun
 
 ```bash
+# Using npm
 npm install svg-bbox
+
+# Using bun (recommended)
+bun add svg-bbox
 ```
 
 Then in your HTML:

@@ -20,10 +20,12 @@
  */
 
 import { test, describe, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// WHY use shared browser: Prevents multiple Chrome instances when tests run in parallel.
+// The shared browser is managed by browser-test.js and cleaned up by global-teardown.js.
+import { getBrowser } from '../helpers/browser-test.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,13 +37,12 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
   /** @type {string[]} */
   let availableFonts;
 
-  // WHY: 120 second timeout for beforeAll - Puppeteer launch can be slow when
+  // WHY: 120 second timeout for beforeAll - Browser acquisition can be slow when
   // running full test suite in parallel due to resource contention
   beforeAll(async () => {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    // WHY use getBrowser(): Uses shared browser instance managed by browser-test.js
+    // This prevents launching multiple Chrome instances when tests run in parallel
+    browser = await getBrowser();
     const testPage = await browser.newPage();
 
     // Discover fonts available on this system
@@ -118,7 +119,9 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
   }, 180000); // WHY 180s: Puppeteer launch extremely slow when running full suite in parallel with many browser instances
 
   afterAll(async () => {
-    await browser.close();
+    // WHY NOT close browser: The shared browser is managed by browser-test.js
+    // and cleaned up automatically by global-teardown.js when all tests complete.
+    // Closing here would break other tests that share the same browser instance.
   });
 
   beforeEach(async () => {

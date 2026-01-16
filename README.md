@@ -215,7 +215,7 @@ After installation, the following CLI commands are available:
 - `sbb-extract` - List, extract, and export SVG objects
 - `sbb-fix-viewbox` - Fix missing viewBox/dimensions
 - `sbb-svg2png` - Render SVG to PNG
-- `sbb-compare` - Compare two SVGs visually (pixel-by-pixel)
+- `sbb-compare` - Compare images visually (SVG/PNG, pixel-by-pixel)
 - `sbb-test` - Test library functions
 
 **Inkscape Integration Tools** ⚠️ _(For comparison only - see warnings below)_:
@@ -521,7 +521,7 @@ browsers and Node.js (via Puppeteer).
 | `sbb-extract`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-extract.cjs)</div>            | List/rename/extract/export SVG objects with visual catalog | `sbb-extract sprites.svg --list`                         |
 | `sbb-svg2png`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-svg2png.cjs)</div>            | Render SVG to PNG with accurate bbox                       | `sbb-svg2png input.svg output.png`                       |
 | `sbb-fix-viewbox`                                 | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-fix-viewbox.cjs)</div>        | Repair missing/broken viewBox using visual bbox            | `sbb-fix-viewbox broken.svg fixed.svg`                   |
-| `sbb-compare`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-compare.cjs)</div>            | Visual diff between SVGs (pixel comparison)                | `sbb-compare a.svg b.svg diff.png`                       |
+| `sbb-compare`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-compare.cjs)</div>            | Visual diff between images (SVG/PNG pixel comparison)      | `sbb-compare a.svg b.png --out-diff diff.png`            |
 | `sbb-test`                                        | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-test.cjs)</div>               | Test bbox accuracy across methods                          | `sbb-test sample.svg`                                    |
 | **Chrome Comparison Tools (Chrome's .getBBox())** |                                                                                                                         |                                                            |                                                          |
 | `sbb-chrome-getbbox`                              | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-chrome-getbbox.cjs)</div>     | Get bbox info using Chrome's .getBBox()                    | `sbb-chrome-getbbox drawing.svg`                         |
@@ -1003,11 +1003,11 @@ async function extractObject(inputSvg, objectId, outputSvg) {
   return { stdout, stderr };
 }
 
-// Example: Compare SVGs
-async function compareSVGs(svg1, svg2) {
+// Example: Compare images (SVG or PNG)
+async function compareImages(file1, file2) {
   const { stdout } = await execFilePromise('sbb-compare', [
-    svg1,
-    svg2,
+    file1,
+    file2,
     '--json'
   ]);
   return JSON.parse(stdout);
@@ -1018,8 +1018,13 @@ extractObject('sprites.svg', 'icon_home', 'home.svg').then(() =>
   console.log('Extracted!')
 );
 
-compareSVGs('v1.svg', 'v2.svg').then((result) =>
+compareImages('v1.svg', 'v2.svg').then((result) =>
   console.log('Difference:', result.diffPercentage + '%')
+);
+
+// Compare SVG against reference PNG
+compareImages('output.svg', 'reference.png').then((result) =>
+  console.log('Matches reference:', result.diffPercentage === 0)
 );
 ```
 
@@ -1132,14 +1137,20 @@ node sbb-svg2png.cjs map.svg map.png \
 
 ### Comparer: `sbb-compare.cjs`
 
-Compare two SVGs visually by rendering them to PNG and performing pixel-by-pixel
-comparison.
+Compare images visually using pixel-by-pixel comparison. Supports:
+
+- **SVG vs SVG**: Renders both to PNG and compares
+- **PNG vs PNG**: Direct pixel comparison (dimensions must match)
+- **SVG vs PNG**: Renders SVG at PNG's exact resolution, then compares
+- **PNG vs SVG**: Same as above (order doesn't matter)
 
 #### Syntax
 
 ```bash
-node sbb-compare.cjs svg1.svg svg2.svg [options]
+node sbb-compare.cjs file1 file2 [options]
 ```
+
+Where `file1` and `file2` can be `.svg` or `.png` files.
 
 #### Options
 
@@ -1163,6 +1174,8 @@ node sbb-compare.cjs svg1.svg svg2.svg [options]
 - `--slice-rule <rule>` - Aspect ratio rule for 'clip' mode (default: xMidYMid)
 - `--json` - Output results as JSON
 - `--verbose` - Show detailed progress
+- `--help` - Display help text with usage examples
+- `--version` - Display version number
 
 #### Understanding preserveAspectRatio Values
 
@@ -1171,7 +1184,7 @@ alignment values. This diagram illustrates how different values affect
 alignment:
 
 <div align="center">
-  <img src="./assets/alignement_table_svg_presrveAspectRatio_attribute_diagram.svg" alt="preserveAspectRatio Alignment Diagram" width="100%">
+  <img src="./assets/alignment_table_svg_preserveAspectRatio_attribute_diagram.svg" alt="preserveAspectRatio Alignment Diagram" width="100%">
 </div>
 
 - **meet mode**: Scales content to fit entirely within viewport (may have empty
@@ -1185,13 +1198,19 @@ alignment:
 #### Examples
 
 ```bash
-# Basic comparison
+# SVG vs SVG comparison
 node sbb-compare.cjs original.svg modified.svg
+
+# PNG vs PNG comparison (dimensions must match exactly)
+node sbb-compare.cjs screenshot1.png screenshot2.png --out-diff diff.png
+
+# SVG vs PNG comparison (SVG rendered at PNG's resolution)
+node sbb-compare.cjs design.svg reference.png --out-diff diff.png
 
 # Compare with custom threshold (more tolerant)
 node sbb-compare.cjs v1.svg v2.svg --threshold 5 --out-diff changes.png
 
-# Align by viewBox centers, scale to match
+# Align by viewBox centers, scale to match (SVG only)
 node sbb-compare.cjs icon1.svg icon2.svg \
   --alignment viewbox-center \
   --resolution scale
@@ -1199,6 +1218,10 @@ node sbb-compare.cjs icon1.svg icon2.svg \
 # JSON output for automation
 node sbb-compare.cjs test1.svg test2.svg --json
 ```
+
+**Note:** For PNG vs PNG comparison, both images must have identical dimensions.
+For SVG vs PNG comparison, the SVG is automatically rendered at the PNG's exact
+resolution to ensure accurate pixel-by-pixel comparison.
 
 #### Output
 
@@ -1791,7 +1814,8 @@ A typical end‑to‑end workflow:
 - Make sure **Chrome** or **Chromium** is installed.
 - If Puppeteer can't find a browser:
   - Try installing the default Chromium:
-    `bunx puppeteer browsers install chrome` or `npx puppeteer browsers install chrome`.
+    `bunx puppeteer browsers install chrome` or
+    `npx puppeteer browsers install chrome`.
   - Or set `PUPPETEER_EXECUTABLE_PATH` to your Chrome/Chromium binary.
 
 **Installing Chrome/Chromium:**
@@ -1884,7 +1908,7 @@ engine.
   - Running on a powerful machine.
   - Splitting SVGs into smaller logical parts.
 
-### 📐 Bbox doesn’t match your expectations
+### 📐 BBox doesn't match your expectations
 
 - Double-check whether you want:
   - **Full drawing** (ignore viewBox) → use “full” mode.

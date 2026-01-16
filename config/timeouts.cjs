@@ -212,6 +212,77 @@ const VITEST_RUN_TIMEOUT_MS = 600000;
 const LOCK_TIMEOUT_SECONDS = 300;
 
 // ============================================================================
+// Chrome Pool Configuration
+// ============================================================================
+
+/**
+ * MAX_CONCURRENT_BROWSERS: Maximum simultaneous Chrome instances
+ *
+ * WHY 3 for local, 2 for CI:
+ * - Each Chrome instance: 100-300MB RAM
+ * - Local dev machines: 8-16GB RAM typical, can handle 3 instances
+ * - CI runners: 4-8GB RAM typical, more constrained
+ * - Diminishing returns above 3 (disk I/O becomes bottleneck)
+ *
+ * Override with: SVG_BBOX_MAX_BROWSERS environment variable
+ *
+ * Used for:
+ * - Chrome pool manager concurrent limit
+ * - Test parallelism throttling
+ *
+ * WHAT NOT TO DO:
+ * - Don't set >5 (memory exhaustion likely)
+ * - Don't set to 1 (tests become very slow)
+ * - Don't ignore CI constraints (will cause OOM kills)
+ */
+const MAX_CONCURRENT_BROWSERS = parseInt(process.env.SVG_BBOX_MAX_BROWSERS || '3', 10);
+
+/**
+ * MAX_CONCURRENT_BROWSERS_CI: Maximum for CI environments
+ *
+ * WHY 2:
+ * - GitHub Actions runners: 7GB RAM, shared with other processes
+ * - More conservative to prevent resource exhaustion
+ * - CI jobs run in isolation, can't recover from OOM
+ */
+const MAX_CONCURRENT_BROWSERS_CI = 2;
+
+/**
+ * BROWSER_IDLE_TIMEOUT_MS: How long idle browsers live before cleanup
+ *
+ * WHY 30 seconds:
+ * - Long enough to reuse between related tests
+ * - Short enough to free resources when not needed
+ * - Balance between startup cost and memory usage
+ *
+ * Override with: SVG_BBOX_BROWSER_IDLE_TIMEOUT environment variable
+ */
+const BROWSER_IDLE_TIMEOUT_MS = parseInt(process.env.SVG_BBOX_BROWSER_IDLE_TIMEOUT || '30000', 10);
+
+/**
+ * BROWSER_MAX_USE_TIME_MS: Maximum time a browser can be held
+ *
+ * WHY 5 minutes:
+ * - No single test should take >5 minutes
+ * - Prevents runaway tests from hogging browsers
+ * - Safety valve for stuck operations
+ *
+ * Override with: SVG_BBOX_BROWSER_MAX_USE_TIME environment variable
+ */
+const BROWSER_MAX_USE_TIME_MS = parseInt(process.env.SVG_BBOX_BROWSER_MAX_USE_TIME || '300000', 10);
+
+/**
+ * GUARDIAN_INTERVAL_MS: How often pool guardian runs
+ *
+ * WHY 5 seconds:
+ * - Frequent enough to catch stuck browsers quickly
+ * - Rare enough to not waste CPU cycles
+ *
+ * Override with: SVG_BBOX_GUARDIAN_INTERVAL environment variable
+ */
+const GUARDIAN_INTERVAL_MS = parseInt(process.env.SVG_BBOX_GUARDIAN_INTERVAL || '5000', 10);
+
+// ============================================================================
 // Exports
 // ============================================================================
 
@@ -232,5 +303,12 @@ module.exports = {
   VITEST_RUN_TIMEOUT_MS,
 
   // File locking
-  LOCK_TIMEOUT_SECONDS
+  LOCK_TIMEOUT_SECONDS,
+
+  // Chrome pool
+  MAX_CONCURRENT_BROWSERS,
+  MAX_CONCURRENT_BROWSERS_CI,
+  BROWSER_IDLE_TIMEOUT_MS,
+  BROWSER_MAX_USE_TIME_MS,
+  GUARDIAN_INTERVAL_MS
 };

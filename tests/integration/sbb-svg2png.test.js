@@ -159,7 +159,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       });
 
       const png = await parsePng(pngPath);
-      // Bbox of rect (20,20,60,60) at 1x scale = 60x60
+      // BBox of rect (20,20,60,60) at 1x scale = 60x60
       expect(png.width).toBe(60);
       expect(png.height).toBe(60);
     });
@@ -182,7 +182,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       });
 
       const png = await parsePng(pngPath);
-      // Bbox of circle (5,5,40,40) at 2x scale = 80x80
+      // BBox of circle (5,5,40,40) at 2x scale = 80x80
       expect(png.width).toBe(80);
       expect(png.height).toBe(80);
     });
@@ -205,7 +205,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       });
 
       const png = await parsePng(pngPath);
-      // Bbox of rect (10,10,60,60) at 4x scale = 240x240
+      // BBox of rect (10,10,60,60) at 4x scale = 240x240
       expect(png.width).toBe(240);
       expect(png.height).toBe(240);
     });
@@ -228,7 +228,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       });
 
       const png = await parsePng(pngPath);
-      // Bbox of ellipse (5,10,30,20) at 8x scale = 240x160
+      // BBox of ellipse (5,10,30,20) at 8x scale = 240x160
       expect(png.width).toBe(240);
       expect(png.height).toBe(160);
     });
@@ -497,7 +497,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       });
 
       const png = await parsePng(pngPath);
-      // Bbox of rect (20,20,60,60) with 10 unit margin = (10,10,80,80)
+      // BBox of rect (20,20,60,60) with 10 unit margin = (10,10,80,80)
       // At 4x scale: 320x320
       expect(png.width).toBe(320);
       expect(png.height).toBe(320);
@@ -527,7 +527,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       const png = await parsePng(pngPath);
       // Margin clamped to viewBox (0,0,100,100)
-      // Bbox of rect (10,10,80,80) clamped to viewBox = (0,0,100,100) at 4x
+      // BBox of rect (10,10,80,80) clamped to viewBox = (0,0,100,100) at 4x
       expect(png.width).toBe(400); // 100 * 4
       expect(png.height).toBe(400);
     });
@@ -760,7 +760,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       );
 
       const png = await parsePng(pngPath);
-      // Bbox of circle and cross (approximately 56x56) at 4x scale = 224x224
+      // BBox of circle and cross (approximately 56x56) at 4x scale = 224x224
       expect(png.width).toBe(224);
       expect(png.height).toBe(224);
       expect(hasTransparentPixels(png)).toBe(true);
@@ -921,7 +921,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       });
 
       const png = await parsePng(pngPath);
-      // Bbox of rect (10,10,80,180) = aspect ratio 80:180 = 0.444...
+      // BBox of rect (10,10,80,180) = aspect ratio 80:180 = 0.444...
       expect(png.width / png.height).toBeCloseTo(0.444, 1); // Slightly less than 1:2 due to bbox
     });
   });

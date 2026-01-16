@@ -18,6 +18,12 @@ env:
   NODE_VERSION: '24' # Only support Node.js 24 (latest)
   BUN_VERSION: '1.1.42' # Pinned Bun version for reproducible builds
   GIT_FETCH_DEPTH: '10' # Increased from 1 to support selective testing
+  # Chrome Pool Configuration (conservative for CI - less RAM than local dev)
+  # See config/timeouts.cjs for documentation on these values
+  SVG_BBOX_MAX_BROWSERS: '2' # Max 2 concurrent Chrome instances (CI has ~7GB RAM)
+  SVG_BBOX_BROWSER_IDLE_TIMEOUT: '15000' # 15s idle timeout (faster cleanup in CI)
+  SVG_BBOX_BROWSER_MAX_USE_TIME: '180000' # 3 min max use (shorter than local)
+  SVG_BBOX_GUARDIAN_INTERVAL: '3000' # 3s guardian check (more aggressive in CI)
 
 jobs:
   # =============================================================================

@@ -981,7 +981,7 @@ async function listAndAssignIds(
         // 1. Initial hypothesis: bbox calculation wrong
         //    TEST: Extracted text8 to individual SVG file with --extract --margin 0
         //    RESULT: Extracted SVG rendered PERFECTLY in browser! ✓
-        //    CONCLUSION: Bbox calculations are correct, bug is HTML-specific ✓
+        //    CONCLUSION: BBox calculations are correct, bug is HTML-specific ✓
         //
         // 2. Second hypothesis: viewBox constraining coordinates
         //    TEST: Removed viewBox from hidden container SVG

@@ -37,8 +37,10 @@
 
 /**
  * @typedef {Object} ComparisonArgs
- * @property {string|null} svg1 - First SVG file path
- * @property {string|null} svg2 - Second SVG file path
+ * @property {string|null} file1 - First file path (SVG or PNG)
+ * @property {string|null} file2 - Second file path (SVG or PNG)
+ * @property {string|null} svg1 - Alias for file1 (backward compat)
+ * @property {string|null} svg2 - Alias for file2 (backward compat)
  * @property {string|null} outDiff - Output diff PNG file path
  * @property {number} threshold - Pixel difference threshold (1-255)
  * @property {string} alignment - Alignment mode
@@ -48,12 +50,27 @@
  * @property {string} sliceRule - Slice rule for clipping
  * @property {boolean} json - Output as JSON
  * @property {boolean} verbose - Verbose output
+ * @property {boolean} quiet - Minimal output mode
  * @property {string|null} batch - Batch file path
  * @property {boolean} addMissingViewbox - Force regenerate viewBox
  * @property {number} aspectRatioThreshold - Max aspect ratio difference
  * @property {number} scale - Resolution multiplier
+ * @property {number} timeout - Browser operation timeout in milliseconds
+ * @property {string|null} allowPaths - Comma-separated allowed directory paths
+ * @property {boolean} trustedMode - Trust all file paths without CWD restriction
  * @property {boolean} [headless] - Alias for no-html
  * @property {boolean} [noHtml] - Do not open HTML report
+ */
+
+/**
+ * @typedef {'svg'|'png'} FileType
+ */
+
+/**
+ * @typedef {Object} PNGInfo
+ * @property {number} width - PNG width in pixels
+ * @property {number} height - PNG height in pixels
+ * @property {number} aspectRatio - Width / height ratio
  */
 
 /**
@@ -131,22 +148,76 @@ const {
   printWarning
 } = require('./lib/cli-utils.cjs');
 
+// Import EXIT_CODES for distinct exit codes (0=success, 1=differ, 2=error)
+const { EXIT_CODES } = require('./lib/security-utils.cjs');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODULE-LEVEL STATE FOR PATH VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * WHY: Module-level variable for allowed directories
+ * This is set by main() based on --allow-paths and --trusted-mode flags
+ * Used by validation functions throughout the module
+ * @type {string[]|null}
+ */
+let MODULE_ALLOWED_DIRS = null;
+
+/**
+ * WHY: Module-level variable for custom timeout
+ * This is set by main() based on --timeout flag
+ * Used by browser operations throughout the module
+ * @type {number}
+ */
+let MODULE_TIMEOUT_MS = BROWSER_TIMEOUT_MS;
+
+/**
+ * Get the allowed directories for path validation
+ * @returns {string[]} Array of allowed directories
+ */
+function getAllowedDirs() {
+  // WHY: If trusted mode or allow-paths is set, use the configured dirs
+  // Otherwise fall back to just CWD
+  return MODULE_ALLOWED_DIRS || [process.cwd()];
+}
+
+/**
+ * Get the configured timeout for browser operations
+ * @returns {number} Timeout in milliseconds
+ */
+function getTimeoutMs() {
+  return MODULE_TIMEOUT_MS;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Print help text with usage instructions, options, and examples.
+ * Called when --help flag is passed or when required arguments are missing.
+ * @returns {void}
+ */
 function _printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-compare.cjs - SVG Visual Comparison Tool                        ║
+║ sbb-compare.cjs - SVG/PNG Visual Comparison Tool                           ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
-  Compares two SVG files by rendering them to PNG and performing pixel-by-pixel
+  Compares two image files (SVG and/or PNG) by performing pixel-by-pixel
   comparison. Returns difference percentage and generates a visual diff image.
 
+  Supported comparison modes:
+  • SVG vs SVG: Both rendered to PNG at specified resolution, then compared
+  • PNG vs PNG: Direct pixel comparison (must have same dimensions)
+  • SVG vs PNG: SVG rendered to match PNG resolution exactly, then compared
+  • PNG vs SVG: Same as above (order doesn't matter)
+
 USAGE:
-  node sbb-compare.cjs svg1.svg svg2.svg [options]
+  node sbb-compare.cjs file1 file2 [options]
+
+  Where file1 and file2 can be .svg or .png files.
 
 OPTIONS:
   --out-diff <file>         Output diff PNG file (white=different, black=same)
@@ -196,6 +267,19 @@ OPTIONS:
                             a planet may look identical at 1024px but are completely
                             different at 4096px. Use higher values for more precision.
 
+  --timeout <ms>            Timeout for browser operations in milliseconds
+                            Default: 30000 (30 seconds). Increase for complex SVGs.
+
+  --quiet                   Minimal output mode - only prints diff percentage
+                            Useful for scripting and automation
+
+  --allow-paths <paths>     Allow file paths outside the current working directory
+                            Comma-separated list of allowed directory paths
+                            Security feature: by default only CWD files are accessible
+
+  --trusted-mode            Trust all file paths without CWD restriction
+                            WARNING: Use only in controlled environments
+
   --json                    Output results as JSON
   --verbose                 Show detailed progress information
   --no-html                 Do not open HTML report in browser (report is still generated)
@@ -227,6 +311,15 @@ EXAMPLES:
   # Batch comparison from tab-separated file
   node sbb-compare.cjs --batch comparisons.txt
 
+  # Compare two PNG files directly
+  node sbb-compare.cjs render1.png render2.png
+
+  # Compare SVG against reference PNG (SVG scaled to match PNG resolution)
+  node sbb-compare.cjs design.svg reference.png
+
+  # Compare PNG against SVG (order doesn't matter)
+  node sbb-compare.cjs screenshot.png expected.svg --threshold 5
+
 OUTPUT:
   Returns:
   • Diff score percentage: (different pixels / total pixels) × 100
@@ -239,10 +332,10 @@ OUTPUT:
   • Different pixels: Count of pixels where any RGBA channel exceeds threshold
   • Diff PNG image: Visual representation (white = different, black = identical)
 
-  Exit codes:
-  • 0: Comparison successful
-  • 1: Error occurred
-  • 2: Invalid arguments
+  Exit codes (follows Unix diff convention):
+  • 0: Comparison successful - files are identical (0% difference)
+  • 1: Comparison successful - files differ (>0% difference)
+  • 2: Error occurred (file not found, browser error, invalid arguments, etc.)
 `);
 }
 
@@ -271,7 +364,7 @@ function parseArgs(argv) {
   // Create the mode-aware parser with flag-based mode triggers
   const parser = createModeArgParser({
     name: 'sbb-compare',
-    description: 'Compare two SVG files visually',
+    description: 'Compare two image files visually (SVG and/or PNG)',
     defaultMode: 'normal',
     modeFlags: {
       '--batch': { mode: 'batch', consumesValue: true, valueTarget: 'batchFile' }
@@ -336,18 +429,39 @@ function parseArgs(argv) {
         type: 'number',
         default: 4,
         description: 'Resolution multiplier for rendering (default: 4x for detailed comparison)'
+      },
+      {
+        name: 'timeout',
+        type: 'number',
+        default: 30000,
+        description: 'Browser operation timeout in milliseconds (default: 30000)'
+      },
+      {
+        name: 'quiet',
+        type: 'boolean',
+        description: 'Minimal output - only prints diff percentage'
+      },
+      {
+        name: 'allow-paths',
+        type: 'string',
+        description: 'Comma-separated list of allowed directory paths outside CWD'
+      },
+      {
+        name: 'trusted-mode',
+        type: 'boolean',
+        description: 'Trust all file paths without CWD restriction (WARNING: security risk)'
       }
     ],
     modes: {
       normal: {
-        description: 'Compare two SVG files',
+        description: 'Compare two image files (SVG or PNG)',
         positional: [
-          { name: 'svg1', required: true, description: 'First SVG file' },
-          { name: 'svg2', required: true, description: 'Second SVG file' }
+          { name: 'svg1', required: true, description: 'First file (SVG or PNG)' },
+          { name: 'svg2', required: true, description: 'Second file (SVG or PNG)' }
         ]
       },
       batch: {
-        description: 'Compare multiple SVG pairs from a file',
+        description: 'Compare multiple file pairs from a file',
         positional: [] // No positional args, uses batchFile from modeFlag
       }
     }
@@ -359,6 +473,10 @@ function parseArgs(argv) {
   // Map parser output to the expected legacy format for backward compatibility
   /** @type {ComparisonArgs} */
   const args = {
+    // Primary file properties (support both SVG and PNG)
+    file1: result.positional[0] || null,
+    file2: result.positional[1] || null,
+    // Backward compatibility aliases
     svg1: result.positional[0] || null,
     svg2: result.positional[1] || null,
     outDiff: result.flags['out-diff'] || null,
@@ -378,6 +496,14 @@ function parseArgs(argv) {
     // SVGs are extremely detailed - differences hidden at low resolution become visible at 4x
     // A flower and a planet may look identical at 1024px but completely different at 4096px
     scale: result.flags.scale || 4,
+    // WHY: Configurable timeout for complex SVGs that take longer to render
+    timeout: result.flags.timeout || 30000,
+    // WHY: Quiet mode for scripting - only outputs diff percentage
+    quiet: result.flags.quiet || false,
+    // WHY: Security feature - allow specific paths outside CWD
+    allowPaths: result.flags['allow-paths'] || null,
+    // WHY: Trusted mode disables path restrictions (use with caution)
+    trustedMode: result.flags['trusted-mode'] || false,
     headless: result.flags.headless || false,
     noHtml: result.flags['no-html'] || false
   };
@@ -438,8 +564,9 @@ function parseArgs(argv) {
  * @returns {SVGPair[]} Array of SVG pairs
  */
 function readBatchFile(batchFilePath) {
-  // SECURITY: Validate batch file path
+  // SECURITY: Validate batch file path with module-level allowed dirs
   const safeBatchPath = validateFilePath(batchFilePath, {
+    allowedDirs: getAllowedDirs(),
     requiredExtensions: ['.txt'],
     mustExist: true
   });
@@ -495,8 +622,9 @@ function readBatchFile(batchFilePath) {
  * @returns {Promise<SVGAnalysis|null>} Analysis result or null if SVG not found
  */
 async function analyzeSvg(svgPath, browser) {
-  // SECURITY: Read and sanitize SVG
+  // SECURITY: Read and sanitize SVG with module-level allowed dirs
   const safePath = validateFilePath(svgPath, {
+    allowedDirs: getAllowedDirs(),
     requiredExtensions: ['.svg'],
     mustExist: true
   });
@@ -505,8 +633,8 @@ async function analyzeSvg(svgPath, browser) {
 
   const page = await browser.newPage();
 
-  // SECURITY: Set page timeout
-  page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
+  // SECURITY: Set page timeout (uses configurable timeout from --timeout flag)
+  page.setDefaultTimeout(getTimeoutMs());
 
   await page.setContent(`
     <!DOCTYPE html>
@@ -592,8 +720,9 @@ async function analyzeSvg(svgPath, browser) {
  * @returns {Promise<{x: number, y: number}|null>} Center coordinates or null
  */
 async function getObjectBBox(svgPath, objectId, browser) {
-  // SECURITY: Read and sanitize SVG
+  // SECURITY: Read and sanitize SVG with module-level allowed dirs
   const safePath = validateFilePath(svgPath, {
+    allowedDirs: getAllowedDirs(),
     requiredExtensions: ['.svg'],
     mustExist: true
   });
@@ -602,8 +731,8 @@ async function getObjectBBox(svgPath, objectId, browser) {
 
   const page = await browser.newPage();
 
-  // SECURITY: Set page timeout
-  page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
+  // SECURITY: Set page timeout (uses configurable timeout from --timeout flag)
+  page.setDefaultTimeout(getTimeoutMs());
 
   await page.setContent(`
     <!DOCTYPE html>
@@ -638,6 +767,230 @@ async function getObjectBBox(svgPath, objectId, browser) {
 
   await page.close();
   return bbox;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILE TYPE DETECTION AND PNG ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detect file type based on extension
+ * @param {string} filePath - Path to the file
+ * @returns {FileType} File type ('svg' or 'png')
+ */
+function getFileType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.svg') return 'svg';
+  if (ext === '.png') return 'png';
+  throw new ValidationError(
+    `Unsupported file type: ${ext}. Only .svg and .png files are supported.`
+  );
+}
+
+/**
+ * Get PNG image dimensions
+ * @param {string} pngPath - Path to the PNG file
+ * @returns {PNGInfo} PNG dimensions and aspect ratio
+ */
+function getPngInfo(pngPath) {
+  // SECURITY: Validate PNG path
+  const safePath = validateFilePath(pngPath, {
+    allowedDirs: getAllowedDirs(),
+    requiredExtensions: ['.png'],
+    mustExist: true
+  });
+
+  const { PNG } = require('pngjs');
+  const pngData = fs.readFileSync(safePath);
+  const png = PNG.sync.read(pngData);
+
+  return {
+    width: png.width,
+    height: png.height,
+    aspectRatio: png.width / png.height
+  };
+}
+
+/**
+ * Compare two PNG files directly (no rendering needed)
+ * @param {string} png1Path - Path to first PNG file
+ * @param {string} png2Path - Path to second PNG file
+ * @param {ComparisonArgs} args - Comparison arguments
+ * @returns {Promise<ComparisonResult>} Comparison result
+ */
+async function comparePngToPng(png1Path, png2Path, args) {
+  // SECURITY: Validate PNG paths with allowed directories
+  const safePng1Path = validateFilePath(png1Path, {
+    requiredExtensions: ['.png'],
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
+  });
+  const safePng2Path = validateFilePath(png2Path, {
+    requiredExtensions: ['.png'],
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
+  });
+
+  // Get PNG dimensions and validate they match
+  const pngInfo1 = getPngInfo(safePng1Path);
+  const pngInfo2 = getPngInfo(safePng2Path);
+
+  if (pngInfo1.width !== pngInfo2.width || pngInfo1.height !== pngInfo2.height) {
+    throw new ValidationError(
+      `PNG files have different dimensions: ${pngInfo1.width}x${pngInfo1.height} vs ${pngInfo2.width}x${pngInfo2.height}. ` +
+        `For PNG-to-PNG comparison, images must have identical dimensions.`
+    );
+  }
+
+  if (args.verbose && !args.json) {
+    console.log(`PNG 1: ${safePng1Path} (${pngInfo1.width}x${pngInfo1.height})`);
+    console.log(`PNG 2: ${safePng2Path} (${pngInfo2.width}x${pngInfo2.height})`);
+  }
+
+  // Set default output diff file if not provided
+  let outDiff = args.outDiff;
+  if (!outDiff) {
+    const base1 = path.basename(png1Path, '.png');
+    const base2 = path.basename(png2Path, '.png');
+    outDiff = `${base1}_vs_${base2}_diff.png`;
+  }
+
+  // Compare images directly
+  const result = await compareImages(safePng1Path, safePng2Path, outDiff, args.threshold);
+
+  return {
+    svg1: png1Path, // Using svg1/svg2 keys for backward compat with result type
+    svg2: png2Path,
+    totalPixels: result.totalPixels,
+    differentPixels: result.differentPixels,
+    diffPercentage: parseFloat(result.diffPercentage),
+    threshold: args.threshold,
+    diffImage: outDiff
+  };
+}
+
+/**
+ * Compare an SVG file to a PNG file by rendering SVG at PNG's resolution
+ * @param {string} svgPath - Path to SVG file
+ * @param {string} pngPath - Path to PNG file (reference)
+ * @param {ComparisonArgs} args - Comparison arguments
+ * @param {import('puppeteer').Browser} browser - Puppeteer browser instance
+ * @param {boolean} svgFirst - True if SVG is the first file, false if second
+ * @returns {Promise<ComparisonResult>} Comparison result
+ */
+async function compareSvgToPng(svgPath, pngPath, args, browser, svgFirst) {
+  // SECURITY: Validate file paths with allowed directories
+  const safeSvgPath = validateFilePath(svgPath, {
+    requiredExtensions: ['.svg'],
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
+  });
+  const safePngPath = validateFilePath(pngPath, {
+    requiredExtensions: ['.png'],
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
+  });
+
+  // Get PNG dimensions - this is the target resolution
+  const pngInfo = getPngInfo(safePngPath);
+
+  if (args.verbose && !args.json) {
+    console.log(`SVG: ${safeSvgPath}`);
+    console.log(`PNG: ${safePngPath} (${pngInfo.width}x${pngInfo.height})`);
+    console.log(`Rendering SVG at ${pngInfo.width}x${pngInfo.height} to match PNG resolution`);
+  }
+
+  // Set default output diff file if not provided
+  let outDiff = args.outDiff;
+  if (!outDiff) {
+    const baseSvg = path.basename(svgPath, '.svg');
+    const basePng = path.basename(pngPath, '.png');
+    outDiff = svgFirst ? `${baseSvg}_vs_${basePng}_diff.png` : `${basePng}_vs_${baseSvg}_diff.png`;
+  }
+
+  // Create temp directory for rendered SVG
+  const tempDir = path.join(process.cwd(), '.tmp-compare');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+
+  const renderedSvgPath = path.join(
+    tempDir,
+    `svg_rendered_${Date.now()}_${Math.random().toString(36).slice(2, 11)}.png`
+  );
+
+  try {
+    // Render SVG at exactly the PNG's resolution
+    await renderSvgToPng(safeSvgPath, renderedSvgPath, pngInfo.width, pngInfo.height, browser);
+
+    // Compare the rendered SVG with the reference PNG
+    const result = await compareImages(renderedSvgPath, safePngPath, outDiff, args.threshold);
+
+    // Clean up temp file
+    fs.unlinkSync(renderedSvgPath);
+
+    return {
+      svg1: svgFirst ? svgPath : pngPath,
+      svg2: svgFirst ? pngPath : svgPath,
+      totalPixels: result.totalPixels,
+      differentPixels: result.differentPixels,
+      diffPercentage: parseFloat(result.diffPercentage),
+      threshold: args.threshold,
+      diffImage: outDiff
+    };
+  } catch (error) {
+    // Clean up temp file on error
+    try {
+      if (fs.existsSync(renderedSvgPath)) {
+        fs.unlinkSync(renderedSvgPath);
+      }
+      // eslint-disable-next-line no-unused-vars
+    } catch (_err) {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
+}
+
+/**
+ * Main comparison function that handles all file type combinations
+ * Routes to appropriate comparison logic based on input file types:
+ * - SVG vs SVG: Full SVG comparison with alignment, resolution modes, aspect ratio checking
+ * - PNG vs PNG: Direct pixel comparison (dimensions must match)
+ * - SVG vs PNG: Render SVG to match PNG resolution, then compare
+ *
+ * @param {string} file1Path - Path to first file (SVG or PNG)
+ * @param {string} file2Path - Path to second file (SVG or PNG)
+ * @param {ComparisonArgs} args - Comparison arguments
+ * @param {import('puppeteer').Browser} browser - Puppeteer browser instance
+ * @returns {Promise<ComparisonResult>} Comparison result
+ */
+async function performFileComparison(file1Path, file2Path, args, browser) {
+  // Detect file types
+  const type1 = getFileType(file1Path);
+  const type2 = getFileType(file2Path);
+
+  if (args.verbose && !args.json) {
+    console.log(`File 1: ${file1Path} (${type1})`);
+    console.log(`File 2: ${file2Path} (${type2})`);
+  }
+
+  // Route to appropriate comparison function
+  if (type1 === 'svg' && type2 === 'svg') {
+    // SVG vs SVG: Use full SVG comparison with all features
+    return performSingleComparison(file1Path, file2Path, args, browser);
+  } else if (type1 === 'png' && type2 === 'png') {
+    // PNG vs PNG: Direct comparison (dimensions must match)
+    return comparePngToPng(file1Path, file2Path, args);
+  } else if (type1 === 'svg' && type2 === 'png') {
+    // SVG vs PNG: Render SVG at PNG resolution
+    return compareSvgToPng(file1Path, file2Path, args, browser, true);
+  } else if (type1 === 'png' && type2 === 'svg') {
+    // PNG vs SVG: Render SVG at PNG resolution (order flipped)
+    return compareSvgToPng(file2Path, file1Path, args, browser, false);
+  } else {
+    throw new ValidationError(`Unsupported file type combination: ${type1} vs ${type2}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -837,23 +1190,26 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
  * @returns {Promise<void>}
  */
 async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
-  // SECURITY: Read and sanitize SVG
+  // SECURITY: Read and sanitize SVG with allowed directories
   const safePath = validateFilePath(svgPath, {
     requiredExtensions: ['.svg'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
   const svgContent = readSVGFileSafe(safePath);
   const sanitizedSvg = sanitizeSVGContent(svgContent);
 
-  // SECURITY: Validate output path
+  // SECURITY: Validate output path (no allowedDirs - output can go anywhere user specifies)
+  // WHY: Output paths are less risky than input paths (writing vs reading)
+  // The user specifies where they want the output, we should respect that
   const safeOutputPath = validateOutputPath(outputPath, {
     requiredExtensions: ['.png']
   });
 
   const page = await browser.newPage();
 
-  // SECURITY: Set page timeout
-  page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
+  // SECURITY: Set page timeout (uses configurable timeout from --timeout flag)
+  page.setDefaultTimeout(getTimeoutMs());
 
   await page.setViewport({ width: Math.ceil(width), height: Math.ceil(height) });
 
@@ -910,17 +1266,21 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
  * @returns {Promise<ImageCompareResult>} Comparison result
  */
 async function compareImages(png1Path, png2Path, diffPath, threshold) {
-  // SECURITY: Validate PNG input paths
+  // SECURITY: Validate PNG input paths with allowed directories
   const safePng1Path = validateFilePath(png1Path, {
     requiredExtensions: ['.png'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
   const safePng2Path = validateFilePath(png2Path, {
     requiredExtensions: ['.png'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
 
-  // SECURITY: Validate diff output path
+  // SECURITY: Validate diff output path (no allowedDirs - output can go anywhere)
+  // WHY no allowedDirs: Output paths are less risky than input paths
+  // The user specifies where they want the diff image, we respect that
   const safeDiffPath = validateOutputPath(diffPath, {
     requiredExtensions: ['.png']
   });
@@ -1030,14 +1390,16 @@ async function generateHtmlReport(
   svgAnalysis1,
   svgAnalysis2
 ) {
-  // SECURITY: Validate and read SVG files
+  // SECURITY: Validate and read SVG files with allowed directories
   const safeSvg1Path = validateFilePath(svg1Path, {
     requiredExtensions: ['.svg'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
   const safeSvg2Path = validateFilePath(svg2Path, {
     requiredExtensions: ['.svg'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
   const svg1Content = readSVGFileSafe(safeSvg1Path);
   const svg2Content = readSVGFileSafe(safeSvg2Path);
@@ -1046,10 +1408,11 @@ async function generateHtmlReport(
   const sanitizedSvg1 = sanitizeSVGContent(svg1Content);
   const sanitizedSvg2 = sanitizeSVGContent(svg2Content);
 
-  // SECURITY: Validate diff PNG path
+  // SECURITY: Validate diff PNG path with allowed directories
   const safeDiffPngPath = validateFilePath(diffPngPath, {
     requiredExtensions: ['.png'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
   const diffPngBuffer = fs.readFileSync(safeDiffPngPath);
   const diffPngBase64 = diffPngBuffer.toString('base64');
@@ -1775,8 +2138,9 @@ async function regenerateViewBox(svgPath) {
   const fixViewboxScript = path.join(__dirname, 'sbb-fix-viewbox.cjs');
 
   try {
+    // WHY getTimeoutMs(): Use configurable timeout from --timeout flag
     await execFilePromise('node', [fixViewboxScript, svgPath, outputPath, '--force'], {
-      timeout: BROWSER_TIMEOUT_MS
+      timeout: getTimeoutMs()
     });
     return outputPath;
   } catch (error) {
@@ -1851,14 +2215,16 @@ function getAspectRatioInfo(analysis, addMissingViewbox) {
  * @returns {Promise<ComparisonResult>}
  */
 async function performSingleComparison(svg1Path, svg2Path, args, browser) {
-  // SECURITY: Validate input SVG files
+  // SECURITY: Validate input SVG files with allowed directories
   const safeSvg1Path = validateFilePath(svg1Path, {
     requiredExtensions: ['.svg'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
   const safeSvg2Path = validateFilePath(svg2Path, {
     requiredExtensions: ['.svg'],
-    mustExist: true
+    mustExist: true,
+    allowedDirs: getAllowedDirs()
   });
 
   // Set default output diff file if not provided
@@ -2120,21 +2486,67 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Main entry point for the sbb-compare CLI tool.
+ * Parses command-line arguments, launches browser, and performs image comparison.
+ * Supports single comparison mode and batch mode (via --batch flag).
+ *
+ * @returns {Promise<void>} Resolves when comparison is complete
+ * @throws {ValidationError} If arguments are invalid or files don't exist
+ * @throws {SecurityError} If file paths fail security validation
+ * @throws {Error} If browser launch fails or comparison encounters errors
+ *
+ * @example
+ * // CLI usage (single comparison):
+ * // node sbb-compare.cjs input1.svg input2.svg --out-diff diff.png
+ *
+ * @example
+ * // CLI usage (batch mode):
+ * // node sbb-compare.cjs --batch pairs.txt --json
+ */
 async function main() {
   const args = parseArgs(process.argv);
 
-  // Display version (but not in JSON mode or batch mode)
-  if (!args.json && !args.batch) {
+  // WHY: Initialize module-level timeout from args (configurable via --timeout)
+  MODULE_TIMEOUT_MS = args.timeout || BROWSER_TIMEOUT_MS;
+
+  // WHY: Initialize module-level allowed directories from args
+  // --trusted-mode allows ALL paths (uses root filesystem as allowed)
+  // --allow-paths allows specific comma-separated directories
+  if (args.trustedMode) {
+    // WHY: Trusted mode allows access to all paths (for CI/testing)
+    // Use root path to effectively disable path restrictions
+    MODULE_ALLOWED_DIRS = ['/'];
+    if (args.verbose && !args.quiet) {
+      printWarning('Trusted mode enabled - path restrictions disabled');
+    }
+  } else if (args.allowPaths) {
+    // WHY: Parse comma-separated list of allowed directories
+    const extraPaths = args.allowPaths
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    MODULE_ALLOWED_DIRS = [process.cwd(), ...extraPaths];
+    if (args.verbose && !args.quiet) {
+      printInfo(`Allowed paths: ${MODULE_ALLOWED_DIRS.join(', ')}`);
+    }
+  } else {
+    // WHY: Default to CWD only (most secure)
+    MODULE_ALLOWED_DIRS = [process.cwd()];
+  }
+
+  // Display version (but not in JSON mode, batch mode, or quiet mode)
+  if (!args.json && !args.batch && !args.quiet) {
     printInfo(`sbb-compare v${getVersion()} | svg-bbox toolkit\n`);
   }
 
   let browser = null;
   try {
-    // SECURITY: Launch browser with security args and timeout
+    // SECURITY: Launch browser with security args and configurable timeout
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      timeout: BROWSER_TIMEOUT_MS
+      timeout: MODULE_TIMEOUT_MS
     });
 
     // BATCH MODE: Process multiple comparisons from file
@@ -2157,7 +2569,7 @@ async function main() {
         }
 
         try {
-          const result = await performSingleComparison(svg1, svg2, args, browser);
+          const result = await performFileComparison(svg1, svg2, args, browser);
           results.push(result);
         } catch (error) {
           // In batch mode, continue processing other pairs even if one fails
@@ -2205,21 +2617,30 @@ async function main() {
     }
 
     // SINGLE COMPARISON MODE
-    // Validate that SVG paths are provided
+    // Validate that file paths are provided
     if (!args.svg1 || !args.svg2) {
-      throw new ValidationError('Both SVG file paths are required for comparison');
+      throw new ValidationError('Both file paths are required for comparison (SVG or PNG)');
     }
 
-    if (args.verbose && !args.json) {
-      console.log('Starting SVG comparison...');
-      console.log(`SVG 1: ${args.svg1}`);
-      console.log(`SVG 2: ${args.svg2}`);
-      console.log(`Alignment: ${args.alignment}`);
-      console.log(`Resolution: ${args.resolution}`);
+    // Detect file types for verbose output
+    const type1 = getFileType(args.svg1);
+    const type2 = getFileType(args.svg2);
+    const isAllSvg = type1 === 'svg' && type2 === 'svg';
+
+    // WHY: Respect quiet mode - suppress verbose output in quiet mode
+    if (args.verbose && !args.json && !args.quiet) {
+      console.log('Starting comparison...');
+      console.log(`File 1: ${args.svg1} (${type1})`);
+      console.log(`File 2: ${args.svg2} (${type2})`);
+      // Only show alignment/resolution for SVG vs SVG (they don't apply to PNG comparison)
+      if (isAllSvg) {
+        console.log(`Alignment: ${args.alignment}`);
+        console.log(`Resolution: ${args.resolution}`);
+      }
       console.log(`Threshold: ${args.threshold}/256`);
     }
 
-    const result = await performSingleComparison(args.svg1, args.svg2, args, browser);
+    const result = await performFileComparison(args.svg1, args.svg2, args, browser);
 
     // Clean up temp directory if it exists and is empty
     const tempDir = path.join(process.cwd(), '.tmp-compare');
@@ -2232,7 +2653,21 @@ async function main() {
       }
     }
 
-    // Output results
+    // WHY: Determine exit code based on comparison result
+    // 0 = files identical (0% difference)
+    // 1 = files differ (>0% difference)
+    // 2 = error (handled in catch block)
+    const filesAreDifferent = result.diffPercentage > 0;
+    const exitCode = filesAreDifferent ? EXIT_CODES.FILES_DIFFER : EXIT_CODES.SUCCESS;
+
+    // Output results based on mode (JSON, quiet, or normal)
+    if (args.quiet) {
+      // WHY: Quiet mode - only output diff percentage (for scripting)
+      console.log(result.diffPercentage);
+      process.exitCode = exitCode;
+      return;
+    }
+
     if (args.json) {
       console.log(
         JSON.stringify(
@@ -2243,64 +2678,76 @@ async function main() {
             differentPixels: result.differentPixels,
             diffPercentage: result.diffPercentage,
             threshold: result.threshold,
-            diffImage: result.diffImage
+            diffImage: result.diffImage,
+            // WHY: Include exit code in JSON output for scripting
+            exitCode: exitCode,
+            filesAreDifferent: filesAreDifferent
           },
           null,
           2
         )
       );
-    } else {
-      console.log('\n╔════════════════════════════════════════════════════════════════════════╗');
-      console.log('║ COMPARISON RESULTS                                                     ║');
-      console.log('╚════════════════════════════════════════════════════════════════════════╝\n');
-      console.log(`  SVG 1:              ${result.svg1}`);
-      console.log(`  SVG 2:              ${result.svg2}`);
+      process.exitCode = exitCode;
+      return;
+    }
 
-      // Check if we have full comparison results (not an aspect ratio mismatch)
-      const totalPixels = result.totalPixels ?? 0;
-      const differentPixels = result.differentPixels ?? 0;
-      console.log(`  Total pixels:       ${totalPixels.toLocaleString()}`);
-      console.log(`  Different pixels:   ${differentPixels.toLocaleString()}`);
-      console.log(`  Difference:         ${result.diffPercentage}%`);
-      console.log(`  Threshold:          ${result.threshold ?? args.threshold}/256`);
-      console.log(`  Diff image:         ${result.diffImage ?? 'N/A'}\n`);
+    // Normal output mode
+    console.log('\n╔════════════════════════════════════════════════════════════════════════╗');
+    console.log('║ COMPARISON RESULTS                                                     ║');
+    console.log('╚════════════════════════════════════════════════════════════════════════╝\n');
+    console.log(`  File 1:             ${result.svg1}`);
+    console.log(`  File 2:             ${result.svg2}`);
 
-      // Generate HTML report only if we have full results
-      if (result.diffImage && result.svgAnalysis1 && result.svgAnalysis2) {
+    // Check if we have full comparison results (not an aspect ratio mismatch)
+    const totalPixels = result.totalPixels ?? 0;
+    const differentPixels = result.differentPixels ?? 0;
+    console.log(`  Total pixels:       ${totalPixels.toLocaleString()}`);
+    console.log(`  Different pixels:   ${differentPixels.toLocaleString()}`);
+    console.log(`  Difference:         ${result.diffPercentage}%`);
+    console.log(`  Threshold:          ${result.threshold ?? args.threshold}/256`);
+    console.log(`  Diff image:         ${result.diffImage ?? 'N/A'}\n`);
+
+    // Generate HTML report only if we have full results (SVG analysis present for SVG comparisons)
+    // For PNG-only comparisons, we skip the HTML report as it requires SVG-specific analysis
+    if (result.diffImage && result.svgAnalysis1 && result.svgAnalysis2) {
+      if (args.verbose) {
+        console.log('Generating HTML report...');
+      }
+      const htmlPath = await generateHtmlReport(
+        result.svg1,
+        result.svg2,
+        result.diffImage,
+        {
+          totalPixels,
+          differentPixels,
+          diffPercentage: result.diffPercentage.toFixed(2)
+        },
+        args,
+        result.svgAnalysis1,
+        result.svgAnalysis2
+      );
+
+      printSuccess(`HTML report: ${htmlPath}`);
+
+      // Auto-open in browser (unless --no-html or --headless is set)
+      // NOTE: HTML report is ALWAYS generated; these flags only suppress browser opening
+      const suppressBrowser = args.noHtml || args.headless;
+      if (!suppressBrowser) {
         if (args.verbose) {
-          console.log('Generating HTML report...');
+          console.log('Opening HTML report in browser...');
         }
-        const htmlPath = await generateHtmlReport(
-          result.svg1,
-          result.svg2,
-          result.diffImage,
-          {
-            totalPixels,
-            differentPixels,
-            diffPercentage: result.diffPercentage.toFixed(2)
-          },
-          args,
-          result.svgAnalysis1,
-          result.svgAnalysis2
-        );
-
-        printSuccess(`HTML report: ${htmlPath}`);
-
-        // Auto-open in browser (unless --no-html or --headless is set)
-        // NOTE: HTML report is ALWAYS generated; these flags only suppress browser opening
-        const suppressBrowser = args.noHtml || args.headless;
-        if (!suppressBrowser) {
-          if (args.verbose) {
-            console.log('Opening HTML report in browser...');
-          }
-          const { openInChrome } = require('./browser-utils.cjs');
-          await openInChrome(htmlPath);
-        } else if (args.verbose) {
-          console.log('Skipping browser open (--no-html or --headless mode)');
-        }
+        const { openInChrome } = require('./browser-utils.cjs');
+        await openInChrome(htmlPath);
+      } else if (args.verbose) {
+        console.log('Skipping browser open (--no-html or --headless mode)');
       }
     }
+
+    // WHY: Set exit code based on comparison result (0=identical, 1=differ)
+    process.exitCode = exitCode;
   } catch (error) {
+    // WHY: Set exit code 2 for errors (follows Unix diff convention)
+    process.exitCode = EXIT_CODES.COMPARISON_ERROR;
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new SVGBBoxError(`Comparison failed: ${errorMessage}`, 'COMPARISON_FAILED');
   } finally {

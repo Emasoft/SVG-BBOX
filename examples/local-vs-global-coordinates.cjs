@@ -473,7 +473,7 @@ async function waitForFontsWithRetry(page, maxRetries = CONFIG.FONT_RETRY_MAX) {
 }
 
 // ============================================================================
-// OUTPUT FORMATTING - Bbox comparison display
+// OUTPUT FORMATTING - BBox comparison display
 // ============================================================================
 
 /**

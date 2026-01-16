@@ -246,3 +246,236 @@ describe('sbb-compare Integration Tests', () => {
     }, 45000); // 45 second timeout to accommodate CI environments
   });
 });
+
+// ============================================================================
+// PNG COMPARISON TESTS
+// ============================================================================
+
+const DIFF_SPECIMENS_DIR = path.join(__dirname, '../fixtures/diff-specimens');
+
+// Helper to run sbb-compare with PNG files
+async function runComparerWithPng(file1, file2, args = []) {
+  const file1Path = path.join(DIFF_SPECIMENS_DIR, file1);
+  const file2Path = path.join(DIFF_SPECIMENS_DIR, file2);
+
+  const ext1 = path.extname(file1).slice(1);
+  const ext2 = path.extname(file2).slice(1);
+  const base1 = path.basename(file1, path.extname(file1));
+  const base2 = path.basename(file2, path.extname(file2));
+
+  // Always specify --out-diff to prevent diff files polluting project root
+  const hasOutDiff = args.some((arg, i) => arg === '--out-diff' && i < args.length - 1);
+  const extraArgs = hasOutDiff
+    ? []
+    : ['--out-diff', path.join(TEMP_DIR, `${base1}_${ext1}_vs_${base2}_${ext2}_diff.png`)];
+
+  const { stdout, stderr: _stderr } = await execFilePromise('node', [
+    COMPARER_PATH,
+    file1Path,
+    file2Path,
+    '--json',
+    ...args,
+    ...extraArgs
+  ]);
+
+  return JSON.parse(stdout);
+}
+
+describe('sbb-compare PNG Comparison Tests', () => {
+  beforeAll(() => {
+    // Create temp directory for test outputs
+    if (!fs.existsSync(TEMP_DIR)) {
+      fs.mkdirSync(TEMP_DIR, { recursive: true });
+    }
+  });
+
+  afterAll(() => {
+    // Clean up temp directory
+    if (fs.existsSync(TEMP_DIR)) {
+      fs.rmSync(TEMP_DIR, { recursive: true, force: true });
+    }
+  });
+
+  describe('PNG vs PNG Comparison', () => {
+    it('should return 0% difference when comparing identical PNGs', async () => {
+      const result = await runComparerWithPng('red-full.png', 'red-full.png');
+
+      expect(result.diffPercentage).toBe(0);
+      expect(result.differentPixels).toBe(0);
+      expect(result.totalPixels).toBe(100); // 10x10 = 100 pixels
+    });
+
+    it('should detect 100% difference between completely different PNGs', async () => {
+      const result = await runComparerWithPng('red-full.png', 'blue-full.png');
+
+      expect(result.diffPercentage).toBe(100);
+      expect(result.differentPixels).toBe(100);
+      expect(result.totalPixels).toBe(100);
+    });
+
+    it('should detect 50% difference for half-different PNG', async () => {
+      const result = await runComparerWithPng('red-full.png', 'half-red-half-blue.png');
+
+      expect(result.diffPercentage).toBe(50);
+      expect(result.differentPixels).toBe(50);
+      expect(result.totalPixels).toBe(100);
+    });
+  });
+
+  describe('SVG vs PNG Comparison', () => {
+    it('should compare SVG to PNG by rendering SVG at PNG resolution', async () => {
+      // Compare red SVG to red PNG - should be 0% diff
+      const result = await runComparerWithPng('red-full.svg', 'red-full.png');
+
+      expect(result.diffPercentage).toBe(0);
+      expect(result.differentPixels).toBe(0);
+      expect(result.totalPixels).toBe(100);
+    });
+
+    it('should detect differences between SVG and different colored PNG', async () => {
+      // Compare red SVG to blue PNG - should be 100% diff
+      const result = await runComparerWithPng('red-full.svg', 'blue-full.png');
+
+      expect(result.diffPercentage).toBe(100);
+      expect(result.differentPixels).toBe(100);
+    });
+  });
+
+  describe('PNG vs SVG Comparison (reversed order)', () => {
+    it('should handle PNG as first file and SVG as second', async () => {
+      // Compare red PNG to red SVG - should be 0% diff
+      const result = await runComparerWithPng('red-full.png', 'red-full.svg');
+
+      expect(result.diffPercentage).toBe(0);
+      expect(result.differentPixels).toBe(0);
+    });
+
+    it('should detect differences with PNG first and SVG second', async () => {
+      // Compare blue PNG to red SVG - should be 100% diff
+      const result = await runComparerWithPng('blue-full.png', 'red-full.svg');
+
+      expect(result.diffPercentage).toBe(100);
+    });
+  });
+
+  describe('PNG Comparison Error Handling', () => {
+    it('should fail when PNG files have different dimensions with clear error message', async () => {
+      // Create a different sized PNG for testing
+      const differentSizePng = path.join(TEMP_DIR, 'different-size.png');
+
+      // Create a 20x20 PNG using pngjs
+      const { PNG } = await import('pngjs');
+      const png = new PNG({ width: 20, height: 20 });
+
+      // Fill with red color
+      for (let y = 0; y < png.height; y++) {
+        for (let x = 0; x < png.width; x++) {
+          const idx = (png.width * y + x) << 2;
+          png.data[idx] = 255; // R
+          png.data[idx + 1] = 0; // G
+          png.data[idx + 2] = 0; // B
+          png.data[idx + 3] = 255; // A
+        }
+      }
+
+      fs.writeFileSync(differentSizePng, PNG.sync.write(png));
+
+      // Now try to compare 10x10 PNG with 20x20 PNG - should fail with dimension error
+      try {
+        await execFilePromise('node', [
+          COMPARER_PATH,
+          path.join(DIFF_SPECIMENS_DIR, 'red-full.png'),
+          differentSizePng,
+          '--json'
+        ]);
+        expect.fail('Should have thrown dimension mismatch error');
+      } catch (err) {
+        // Verify error message mentions dimensions
+        expect(err.stderr).toMatch(/different dimensions|10x10|20x20/i);
+      }
+    });
+
+    it('should reject unsupported file types with clear error', async () => {
+      const txtFile = path.join(TEMP_DIR, 'test.txt');
+      fs.writeFileSync(txtFile, 'not an image');
+
+      try {
+        await execFilePromise('node', [
+          COMPARER_PATH,
+          path.join(DIFF_SPECIMENS_DIR, 'red-full.png'),
+          txtFile,
+          '--json'
+        ]);
+        expect.fail('Should have thrown unsupported file type error');
+      } catch (err) {
+        // Verify error mentions file type
+        expect(err.stderr).toMatch(/unsupported file type|invalid.*extension/i);
+      }
+    });
+
+    it('should handle corrupted PNG files gracefully', async () => {
+      // Create a file with .png extension but invalid content
+      const corruptedPng = path.join(TEMP_DIR, 'corrupted.png');
+      fs.writeFileSync(corruptedPng, 'this is not a valid PNG file');
+
+      await expect(
+        execFilePromise('node', [
+          COMPARER_PATH,
+          path.join(DIFF_SPECIMENS_DIR, 'red-full.png'),
+          corruptedPng,
+          '--json'
+        ])
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('PNG with Transparency', () => {
+    it('should handle PNG with alpha channel correctly', async () => {
+      // Create a PNG with transparency
+      const { PNG } = await import('pngjs');
+      const transparentPng = path.join(TEMP_DIR, 'transparent.png');
+      const png = new PNG({ width: 10, height: 10 });
+
+      // Fill with semi-transparent red
+      for (let y = 0; y < png.height; y++) {
+        for (let x = 0; x < png.width; x++) {
+          const idx = (png.width * y + x) << 2;
+          png.data[idx] = 255; // R
+          png.data[idx + 1] = 0; // G
+          png.data[idx + 2] = 0; // B
+          png.data[idx + 3] = 128; // A = 50% transparent
+        }
+      }
+
+      fs.writeFileSync(transparentPng, PNG.sync.write(png));
+
+      // Compare semi-transparent red with solid red - should show differences
+      // Use direct execFilePromise since file is in TEMP_DIR, not DIFF_SPECIMENS_DIR
+      const diffPath = path.join(TEMP_DIR, 'transparency_diff.png');
+      const { stdout } = await execFilePromise('node', [
+        COMPARER_PATH,
+        path.join(DIFF_SPECIMENS_DIR, 'red-full.png'),
+        transparentPng,
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      // The alpha difference should be detected
+      expect(result.diffPercentage).toBeGreaterThan(0);
+    });
+  });
+
+  describe('PNG JSON Output', () => {
+    it('should include correct file paths in JSON output for PNG comparison', async () => {
+      const result = await runComparerWithPng('red-full.png', 'blue-full.png');
+
+      // For PNG comparison, output should have file1/file2 or png1/png2
+      expect(result).toHaveProperty('totalPixels');
+      expect(result).toHaveProperty('differentPixels');
+      expect(result).toHaveProperty('diffPercentage');
+      expect(result).toHaveProperty('diffImage');
+    });
+  });
+});

@@ -842,7 +842,7 @@ async function processList(listPath) {
 /**
  * Format bbox for console output.
  *
- * @param {BBoxResult|null|undefined} bbox - Bbox result object with x, y, width, height or error
+ * @param {BBoxResult|null|undefined} bbox - BBox result object with x, y, width, height or error
  * @returns {string}
  */
 function formatBBox(bbox) {

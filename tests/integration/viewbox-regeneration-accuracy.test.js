@@ -52,7 +52,7 @@ describe('ViewBox Regeneration Accuracy (Critical Bug Discovery)', () => {
   const testSvgs = [
     {
       name: 'alignment_table',
-      path: 'assets/alignement_table_svg_presrveAspectRatio_attribute_diagram.svg',
+      path: 'assets/alignment_table_svg_preserveAspectRatio_attribute_diagram.svg',
       description: 'Alignment table diagram with 100% dimensions'
     },
     {

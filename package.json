@@ -99,7 +99,7 @@
     "lint:fix": "prettier --write . && eslint --fix .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "ci": "pnpm run lint && pnpm run typecheck && pnpm run test:coverage && pnpm run test:e2e",
+    "ci": "bun run lint && bun run typecheck && bun run test:coverage && bun run test:e2e",
     "install-browsers": "playwright install --with-deps chromium && npx puppeteer browsers install chrome",
     "version": "node version.cjs",
     "version:bump:patch": "node scripts/bump-version.cjs patch",
@@ -114,11 +114,9 @@
     "puppeteer": "^24.34.0",
     "sharp": "^0.34.3"
   },
-  "pnpm": {
-    "overrides": {
-      "webidl-conversions": "7.0.0",
-      "parse5": "7.1.2"
-    }
+  "overrides": {
+    "webidl-conversions": "7.0.0",
+    "parse5": "7.1.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
