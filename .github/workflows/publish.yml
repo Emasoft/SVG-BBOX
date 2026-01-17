@@ -13,7 +13,7 @@ permissions:
 # Centralized configuration - Single source of truth for versions
 env:
   NODE_VERSION: '24'
-  BUN_VERSION: '1.1.42' # Pinned Bun version for reproducible builds
+  BUN_VERSION: '1.3.5' # Pinned Bun version for reproducible builds (must match ci.yml)
 
 jobs:
   publish:
