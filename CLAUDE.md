@@ -2,78 +2,90 @@
 
 ## Publishing Policy
 
-**NEVER push to GitHub or publish to npm without explicit user approval.**
+**MANDATORY: Use the unified release pipeline for ALL publishing.**
 
-- Always commit changes locally
-- Wait for user review before pushing commits
-- Wait for user approval before running releases
-- Add this to the todo list: "Wait for user review before pushing"
-
-## Release Workflow
-
-**Use the automated release script for all releases.**
-
-### Quick Start (Bash Script)
+When the user says **"publish"**, you MUST run the complete unified pipeline:
 
 ```bash
-# Release with version bump
-./scripts/release.sh patch   # 1.0.10 → 1.0.11
-./scripts/release.sh minor   # 1.0.10 → 1.1.0
-./scripts/release.sh major   # 1.0.10 → 2.0.0
-
-# Release specific version
-./scripts/release.sh 1.0.11
+./scripts/release.sh patch   # For bug fixes (1.0.10 → 1.0.11)
+./scripts/release.sh minor   # For new features (1.0.10 → 1.1.0)
+./scripts/release.sh major   # For breaking changes (1.0.10 → 2.0.0)
 ```
 
-### Quick Start (Python Tool - Recommended)
+**NEVER** perform any of these steps manually or separately:
+- ❌ Manual version bump
+- ❌ Manual git tag creation
+- ❌ Manual npm publish
+- ❌ Manual changelog update
+- ❌ Separate push and release
 
-The Python release tool provides the same functionality with better error handling,
-comprehensive validation, and multi-ecosystem support.
+**ALWAYS** use the unified pipeline which handles everything automatically.
+
+### What "Publish" Means (Complete Pipeline)
+
+When user says "publish", the release script runs this **complete sequence**:
+
+| Step | What It Does | Automated |
+|------|--------------|-----------|
+| 1 | **Lint** - ESLint + Prettier code quality | ✅ |
+| 2 | **Type Check** - TypeScript validation | ✅ |
+| 3 | **Tests** - Unit, integration, E2E tests | ✅ |
+| 4 | **Build** - Minification for CDN (unpkg/jsdelivr) | ✅ |
+| 5 | **Version Bump** - Update package.json | ✅ |
+| 6 | **Changelog** - Auto-update CHANGELOG.md with git-cliff | ✅ |
+| 7 | **Commit** - Version bump + changelog + bun.lock | ✅ |
+| 8 | **Tag** - Create git tag locally | ✅ |
+| 9 | **Push** - Push commits to GitHub | ✅ |
+| 10 | **CI Wait** - Wait for CI workflow to pass | ✅ |
+| 11 | **Release** - Create GitHub Release with notes | ✅ |
+| 12 | **Publish Wait** - Wait for npm publish workflow | ✅ |
+| 13 | **npm Verify** - Confirm package live on npm | ✅ |
+| 14 | **Bun Verify** - Test bun add + CLI execution | ✅ |
+
+**One command. Full automation. No manual steps.**
+
+### Approval Required
+
+Before running publish, always get explicit user approval:
+
+1. Show current version and proposed new version
+2. Summarize changes to be released
+3. Ask: "Ready to publish vX.Y.Z to npm?"
+4. Only proceed after user confirms
+
+### Quick Reference
 
 ```bash
-# Activate the virtual environment
+# PUBLISH (complete pipeline)
+./scripts/release.sh patch   # Bug fix release
+./scripts/release.sh minor   # Feature release
+./scripts/release.sh major   # Breaking change release
+
+# VALIDATION ONLY (no release)
+./scripts/release.sh --check # Verify everything is ready
+
+# DRY RUN (preview what would happen)
+./scripts/release.sh --dry-run patch
+```
+
+### Alternative: Python Tool
+
+The Python release tool provides the same unified pipeline with enhanced features:
+
+```bash
 source scripts/release/.venv/bin/activate
-
-# Release with version bump
-python -m release release patch --dry-run  # Preview changes first
-python -m release release patch --yes      # Execute release
-
-# Other useful commands
-python -m release validate --verbose  # Run all 18 validators
-python -m release status              # Show current version info
-python -m release discover --verbose  # Detect available publishers
-python -m release check security      # Run security checks only
-python -m release init-config         # Regenerate config file
+python -m release release patch --yes      # Complete pipeline
+python -m release validate --verbose       # Validation only
+python -m release status                   # Current version info
 ```
 
 **Python Tool Advantages:**
 - 188 automated tests ensuring reliability
-- 18 validators across 6 categories (git, version, security, quality, CI, dependencies)
-- Auto-discovery of npm, Homebrew, GitHub, PyPI, crates.io publishers
+- 18 validators across 6 categories
 - Rich terminal output with progress indicators
 - Proper error messages with fix suggestions
-- Multi-ecosystem support (Node.js, Python, Rust, Go)
 
-### What the Release Script Does (Proper Sequence)
-
-The script follows the **correct order** to avoid race conditions:
-
-1. **Validates prerequisites** - gh CLI, npm, pnpm, jq, git-cliff, authentication
-2. **Checks working directory** - Must be clean, on main branch
-3. **Runs quality checks** - Linting, type checking, all tests
-4. **Bumps version** - Updates package.json and pnpm-lock.yaml
-5. **Generates release notes** - Uses git-cliff to generate formatted changelog from commits
-6. **Updates CHANGELOG.md** - Auto-updates changelog with git-cliff (see below)
-7. **Commits version bump** - Creates commit for version change + CHANGELOG.md
-8. **Creates git tag locally** - Tag not pushed yet (avoids race condition)
-9. **Pushes commits to GitHub** - Triggers CI workflow
-10. **Waits for CI workflow** - Monitors lint, typecheck, test, e2e, coverage (3-10 min)
-11. **Creates GitHub Release** - 🔑 **Pushes tag + creates release atomically**
-12. **Waits for Publish workflow** - Monitors npm publish workflow (up to 5 min)
-13. **Verifies npm publication** - Confirms package is live on npm
-14. **Verifies bun installation** - Tests package works with bun add + CLI execution
-
-### Why This Order Matters
+### Why the Order Matters
 
 **CRITICAL: Proper sequence prevents race conditions and failed releases**
 
