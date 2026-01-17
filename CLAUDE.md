@@ -369,6 +369,65 @@ This is SAFE because the release script validates BEFORE committing:
 | Formatting | ✅ Yes | ✅ Redundant |
 | Security scan | ✅ Yes | ❌ Not in pre-commit |
 
+### Workflow Version Consistency Validation
+
+**RELIABILITY: BUN_VERSION and NODE_VERSION must match across workflows**
+
+The release script validates that tool versions are consistent between
+`ci.yml` and `publish.yml` workflows.
+
+**Historical Bug (Fixed in commit 1474f3f, 6bd2c8f):**
+
+The publish workflow had `BUN_VERSION: 1.1.42` while CI used `1.3.5`. The bun
+lockfile format changed between versions, causing publish to fail with
+"Unknown lockfile version" error.
+
+```
+error: Unknown lockfile version
+    at bun.lock:2:22
+InvalidLockfileVersion: failed to parse lockfile: 'bun.lock'
+```
+
+**Safeguards Implemented (Issue 8 & 9 in validate_ci_workflows):**
+
+1. **BUN_VERSION mismatch detection:**
+   - Compares BUN_VERSION in ci.yml vs publish.yml
+   - Reports exact versions found
+   - Provides sed command to fix
+
+2. **NODE_VERSION mismatch detection:**
+   - Compares NODE_VERSION in ci.yml vs publish.yml
+   - Important because npm OIDC requires Node.js 24+
+
+**Run validation manually:**
+
+```bash
+./scripts/release.sh --check
+```
+
+### Post-Publish Verification with Bun
+
+**RELIABILITY: Verify package works with both npm and bun**
+
+The release script now runs two verification phases after npm publication:
+
+1. **npm verification** (verify_post_publish_installation):
+   - Tests `npm install pkg@version`
+   - Tests `require('svg-bbox')`
+   - Tests all 13 CLI tools with --help
+
+2. **bun verification** (verify_bun_installation):
+   - Tests `bun add pkg@version`
+   - Tests `require('svg-bbox')` with bun runtime
+   - Runs actual CLI commands (sbb-getbbox on test SVG)
+   - Tests sbb-extract and sbb-compare --help
+
+**Why both verifications:**
+
+- Users install with both npm and bun
+- Bun handles dependencies differently than npm
+- Actual CLI execution catches more issues than --help
+
 ## JavaScript/TypeScript Code Fixing
 
 **CRITICAL: Always use the correct code-fixer agent for the language!**
