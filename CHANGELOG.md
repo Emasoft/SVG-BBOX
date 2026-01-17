@@ -7,13 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### ✗ Bug Fixes
+
+- **release**: Comprehensive audit and improvements to release pipeline
+- **hooks**: Re-stage formatted files in pre-commit hook
+
 ### ◆ Documentation
 
 - Document workflow version validation and bun verification safeguards
+- Regenerate CHANGELOG.md with v1.1.3-v1.1.8 entries
+- **CLAUDE.md**: Make unified publish pipeline mandatory
 
 ### ★ New Features
 
 - **release**: Add workflow version validation and bun verification
+- **release**: Auto-update CHANGELOG.md during releases
+
+### ◇ Styling
+
+- Fix Prettier formatting in README.md changelog section
 
 ## [1.1.8] - 2026-01-17
 

@@ -62,10 +62,8 @@ Before running publish, always get explicit user approval:
 ./scripts/release.sh major   # Breaking change release
 
 # VALIDATION ONLY (no release)
-./scripts/release.sh --check # Verify everything is ready
-
-# DRY RUN (preview what would happen)
-./scripts/release.sh --dry-run patch
+./scripts/release.sh --check          # Quick health check
+./scripts/release.sh --validate-only  # Full validation (dry run)
 ```
 
 ### Alternative: Python Tool

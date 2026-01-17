@@ -1120,6 +1120,22 @@ directory. These options control file access:
   - Example: `--allow-paths /tmp,/var/artifacts`
 - `--trusted-mode` - Trust all file paths without CWD restriction
   - Use with caution: disables all path security checks
+- `--auto-open` - Open PNG in Chrome/Chromium after rendering
+
+#### JPEG Conversion Options
+
+- `--jpg` - Also produce a JPEG version at 100% quality
+  - PNG is always created first, then converted to JPEG
+  - Both files are saved by default
+- `--delete-png-after` - Delete PNG after creating JPEG (requires `--jpg`)
+  - Useful for batch processing to save disk space
+
+#### Batch Processing
+
+- `--batch <file>` - Process multiple SVGs from a file list
+  - Each line: `input.svg` or `input.svg<TAB>output.png`
+  - Lines starting with `#` are comments
+  - All rendering options apply to each file
 
 #### Modes
 
@@ -1168,7 +1184,7 @@ Where `file1` and `file2` can be `.svg` or `.png` files.
 #### Options
 
 - `--out-diff <file>` - Output diff PNG file (white=different, black=same)
-- `--threshold <1-20>` - Pixel difference threshold (default: 1)
+- `--threshold <1-255>` - Pixel difference threshold (default: 1)
   - Pixels differ if any RGBA channel differs by more than threshold/256
 - `--alignment <mode>` - How to align the two SVGs
   - `origin` - Align using respective SVG origins (0,0) [default]
@@ -1185,6 +1201,14 @@ Where `file1` and `file2` can be `.svg` or `.png` files.
   - `clip` - Clip to match smaller SVG
 - `--meet-rule <rule>` - Aspect ratio rule for 'scale' mode (default: xMidYMid)
 - `--slice-rule <rule>` - Aspect ratio rule for 'clip' mode (default: xMidYMid)
+- `--scale <number>` - Resolution multiplier for rendering (default: 4x)
+- `--add-missing-viewbox` - Force regenerate viewBox for SVGs without one
+- `--aspect-ratio-threshold <number>` - Maximum allowed aspect ratio difference
+  (default: 0.001)
+- `--timeout <ms>` - Browser operation timeout in milliseconds (default: 30000)
+- `--no-html` - Do not open HTML report in browser (report still generated)
+- `--headless` - Alias for `--no-html`
+- `--quiet` - Minimal output - only prints diff percentage
 - `--json` - Output results as JSON
 - `--verbose` - Show detailed progress
 - `--help` - Display help text with usage examples
@@ -1559,8 +1583,11 @@ Export every object (and optionally groups) as separate SVGs.
 node sbb-extract.cjs input.svg --export-all out-dir \
   [--margin N] \
   [--export-groups] \
+  [--batch <file>] \
   [--json]
 ```
+
+- `--batch <file>` - Process multiple SVGs (one path per line)
 
 - Objects considered:
   - `path`, `rect`, `circle`, `ellipse`,
