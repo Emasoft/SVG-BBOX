@@ -16,7 +16,7 @@ concurrency:
 # Only support latest Node.js version for faster CI/CD
 env:
   NODE_VERSION: '24' # Only support Node.js 24 (latest)
-  BUN_VERSION: '1.1.42' # Pinned Bun version for reproducible builds
+  BUN_VERSION: '1.3.5' # Pinned Bun version for reproducible builds
   GIT_FETCH_DEPTH: '10' # Increased from 1 to support selective testing
   # Chrome Pool Configuration (conservative for CI - less RAM than local dev)
   # See config/timeouts.cjs for documentation on these values
