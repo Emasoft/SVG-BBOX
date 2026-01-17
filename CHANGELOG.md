@@ -3,42 +3,161 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### ★ New Features
-
-- **sbb-compare**: Add PNG comparison support
-  - PNG vs PNG: Direct pixel comparison (dimensions must match)
-  - SVG vs PNG: Renders SVG at PNG's exact resolution for comparison
-  - PNG vs SVG: Same as above (order doesn't matter)
+## [unreleased]
 
 ### ◆ Documentation
 
-- **README**: Update sbb-compare documentation with PNG comparison examples
-- **tests**: Add comprehensive PNG comparison test suite
-
-## [1.1.2] - 2026-01-02
+- Document workflow version validation and bun verification safeguards
 
 ### ★ New Features
 
-- **svg2png**: Add `--jpg` and `--delete-png-after` options for JPEG conversion
-- **build**: Migrate to Bun bundler for faster builds
+- **release**: Add workflow version validation and bun verification
+
+## [1.1.8] - 2026-01-17
 
 ### ✗ Bug Fixes
 
-- **security**: Comprehensive codebase audit fixes (Agent Swarm Pattern)
+- Address CLI tool issues and update tests for exit code 1 handling
+- NaN handling bug, --trusted-mode fix, tests and docs for security flags
+- **ci**: Update bun version to 1.3.5 and regenerate lockfile
+- **ci**: Use bunx for tests, fix Windows string escaping
+- **ci**: Extract browser verification to separate scripts
+- **tests**: Skip reference renderer tests in CI
+- **release**: Add bun lockfile support
+- **ci**: Update Bun version in publish workflow to 1.3.5
+
+### ◆ Documentation
+
+- Update puppeteer browser install command to use bunx
+- **README**: Fix browser installation instructions
+
+### ★ New Features
+
+- **browser**: Add robust browser detection and multi-platform CI
+- **sbb-compare**: Add path security flags, timeout config, quiet mode, and exit codes
+
+### Miscellaneous Tasks
+
+- Add browser detection verification to CI/CD workflows
+- Switch from pnpm to bun for package management
+- **release**: Bump version to 1.1.8
+
+### Build
+
+- Regenerate minified library for v1.1.7
+
+## [1.1.7] - 2026-01-10
+
+### ◆ Documentation
+
+- Add comprehensive installation guide with bun trust instructions
+
+### ★ New Features
+
+- Lazy Chromium download for seamless bun/npm install
+- Support Chrome and Chromium on all platforms
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.1.7
+
+## [1.1.5] - 2026-01-10
+
+### ✗ Bug Fixes
+
+- **sbb-compare**: Use exact diff score calculation (differentPixels / totalPixels * 100)
+- **tests**: Improve test reliability and add reference renderer documentation
+
+### ◆ Documentation
+
+- Add Bun as recommended package manager for installation
+
+### Miscellaneous Tasks
+
+- Prefer bun over pnpm for JS/TS development
+- **release**: Bump version to 1.1.5
+
+### ◇ Styling
+
+- Apply Prettier formatting
+
+### ✓ Testing
+
+- Add Python reference renderer and comprehensive rasterization tests
+
+### Build
+
+- Sync minified library version to 1.1.4
+
+## [1.1.4] - 2026-01-09
+
+### ✗ Bug Fixes
+
+- **release**: Add safeguards for flaky pre-commit hooks and test artifacts
+- **release**: Improve cleanup_test_artifacts and commit_version_bump robustness
+
+### ◆ Documentation
+
+- Update release safeguards with actual commit references
+
+### Miscellaneous Tasks
+
+- Remove incorrectly tracked temp test file
+- **release**: Bump version to 1.1.4
+
+### Build
+
+- Regenerate minified library for v1.1.3
+
+## [1.1.3] - 2026-01-08
+
+### ✗ Bug Fixes
+
+- Comprehensive codebase audit fixes (Agent Swarm Pattern)
 - **security**: Second audit swarm - fix CRITICAL + MAJOR issues
-- **release**: Skip tsconfig.json from JSON validation
-- **release**: Update UMD validation to accept minified patterns
+- **security**: Second audit swarm - fix CRITICAL + MAJOR issues
+- **sbb-fix-viewbox**: Preserve percentage dimensions in force mode
+- **cli**: Improve bbox calculation consistency and idempotency
+- **inkscape**: Increase Inkscape detection timeout from 5s to 15s
+
+### ★ New Features
+
+- **svg2png**: Add --jpg and --delete-png-after options for JPEG conversion
+
+### Miscellaneous Tasks
+
+- **build**: Rebuild minified file and fix flaky security tests
+- Ignore temp test artifacts in gitignore
+- **release**: Bump version to 1.1.3
+
+### ◇ Styling
+
+- Format security tests
+
+## [1.1.2] - 2026-01-01
+
+### ✗ Bug Fixes
+
+- **tests**: Resolve font and hook timeout issues in test suite
+- Add null/undefined parameter validation to wrapError function
 - **security**: Comprehensive security hardening and defensive programming
-- **core**: Add null/undefined parameter validation to wrapError function
+- **release**: Update UMD validation to accept minified patterns
+- **release**: Skip tsconfig.json from JSON validation
 
 ### ◆ Documentation
 
 - **cli**: Add help handler to cli-utils.cjs and CLI reference
+
+### ★ New Features
+
+- Add JSDoc type annotations for TypeScript checking
+- **build**: Migrate to Bun bundler for faster builds
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.1.2
 
 ### Build
 
@@ -46,13 +165,17 @@ and this project adheres to
 
 ## [1.1.1] - 2025-12-19
 
-### ★ New Features
-
-- **types**: Add JSDoc type annotations for TypeScript checking
-
 ### ✗ Bug Fixes
 
-- **tests**: Resolve font and hook timeout issues in test suite
+- **release-tool**: Filter CI workflow monitoring by commit SHA
+
+### ★ New Features
+
+- **release-tool**: Add comprehensive CI monitoring safeguards
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.1.1
 
 ### Build
 
@@ -60,34 +183,186 @@ and this project adheres to
 
 ## [1.1.0] - 2025-12-19
 
-### ★ New Features
-
-- **release**: Add Python release tool with comprehensive validation (188 tests)
-  - Multi-ecosystem support: Node.js, Python, Rust, Go
-  - 18 validators across 6 categories (git, version, security, quality, CI, dependencies)
-  - Auto-discovery of publishers (npm, PyPI, crates.io, Homebrew, Docker, GitHub)
-  - Rich CLI with commands: release, validate, check, status, discover, init-config, rollback
-- **release**: Add Go module proxy publisher support
-- **release**: Add auto-discovery of publishers on startup
-- **release**: Add multi-ecosystem and multi-publisher architecture
-
 ### ✗ Bug Fixes
 
 - **release-tool**: Update Pydantic models to match actual config structure
 - **release**: Comprehensive detection function improvements
-- **release**: Fix YAML boolean key parsing (on: parsed as True)
+- **release-tool**: Add publishers field to ReleaseConfig model
 
 ### ◆ Documentation
 
 - Add Python release tool documentation to CLAUDE.md
-- Update release workflow documentation with Python tool commands
+
+### ★ New Features
+
+- **release**: Add multi-ecosystem support for package managers
+- **release**: Add Python release tool foundation (Phases 1-2)
+- **release-tool**: Phase 3 - Implement comprehensive validators
+- **release-tool**: Phase 4 - Implement publishers, CI monitoring, and rollback
+- **release**: Add multi-ecosystem and multi-publisher support
+- **release**: Add Go module proxy publisher
+- **release**: Add auto-discovery of publishers on startup
+- **release**: Add comprehensive test suite for Python release tool
 
 ### Miscellaneous Tasks
 
 - Update minified bundle and release tooling
-- Update dependencies to latest versions
+- Update changelog and dependencies for v1.1.0
+- **release**: Add discovered publishers to release config
+- **release**: Bump version to 1.1.0
 
-## [1.0.16] - 2025-12-03
+### ◇ Styling
+
+- Format publishers list in release config
+
+## [1.0.29] - 2025-12-13
+
+### ✗ Bug Fixes
+
+- **release**: Add --target HEAD to gh release create
+- **release**: Use explicit commit SHA for gh release --target
+
+### ◆ Documentation
+
+- Add gh release --target HEAD troubleshooting
+
+### ★ New Features
+
+- **release**: Add configurable release_conf.yml support
+- **release**: Auto-generate config if not found
+- **release**: Add dependency detection, CI analysis, and --check flag
+
+### Miscellaneous Tasks
+
+- Auto-fix issues before release (lint, vitest config)
+- Auto-fix issues before release (lint, vitest config)
+
+### ⚡ Performance Improvements
+
+- **release**: Add selective testing and increase CI timeout
+
+### ◇ Styling
+
+- Normalize quotes in release_conf.yml (double to single)
+
+### Build
+
+- Regenerate minified library for v1.0.27
+
+## [1.0.27] - 2025-12-13
+
+### ✗ Bug Fixes
+
+- **release**: Fix jq parsing bug in CI workflow monitoring
+- **release**: Address shellcheck warnings and improve consistency
+- **release**: Improve output formatting and shellcheck compliance
+- **release**: Fix critical bugs and add missing local declarations
+
+### Miscellaneous Tasks
+
+- Auto-fix issues before release (lint, vitest config)
+
+## [1.0.26] - 2025-12-12
+
+### ✗ Bug Fixes
+
+- **release**: Add auto-rebuild safeguard for version mismatch
+- **test**: Fix inkscape-extract batch tests path validation
+- **test**: Increase timeouts for slow tests (Puppeteer, sbb-compare)
+
+### ★ New Features
+
+- **cli**: Add stdout support and expand allowed dirs for JSON output
+- **release**: Add comprehensive CI/CD pre-flight checks
+- **release**: Add comprehensive quality checks matching CI exactly
+
+### Miscellaneous Tasks
+
+- Auto-fix issues before release (lint, vitest config)
+- Auto-fix issues before release (lint, vitest config)
+
+### ↻ Code Refactoring
+
+- **cli**: Centralize JSON output handling (DRY) and add EPIPE handler
+
+### Build
+
+- Regenerate minified library for v1.0.25
+
+## [1.0.24] - 2025-12-12
+
+### ✗ Bug Fixes
+
+- Rebuild minified library with correct v1.0.23 version header
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.0.24
+
+## [1.0.23] - 2025-12-12
+
+### Miscellaneous Tasks
+
+- Add .claude/ to .prettierignore
+- **release**: Bump version to 1.0.22
+- Auto-fix issues before release (lint, vitest config)
+
+## [1.0.21] - 2025-12-10
+
+### ✗ Bug Fixes
+
+- **ci**: Address critical CI reliability issues
+- Address critical issues from comprehensive audit
+- **deps**: Override webidl-conversions to 7.0.0 for Node 18 compatibility
+- **deps**: Override parse5 to 7.1.2 for Node 18 CommonJS compatibility
+- **sbb-test**: Defer puppeteer/chrome-launcher loading for --help/--version
+- **test-selective**: Add shell:true for Windows pnpm compatibility
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.0.21
+
+### Build
+
+- Regenerate minified library for v1.0.20
+
+## [1.0.20] - 2025-12-10
+
+### ✗ Bug Fixes
+
+- **ci**: Enable selective testing for pushes to main/develop
+- **inkscape-text2path**: Support explicit output paths in batch mode
+- **inkscape-text2path**: Use separate args for --export-filename
+- **ci**: Use pnpm exec instead of npx for Windows compatibility
+
+### ★ New Features
+
+- **inkscape-tools**: Add input/output pair support to all batch modes
+- Add batch mode to remaining CLI tools
+
+### Miscellaneous Tasks
+
+- Rebuild minified file to sync version
+- **release**: Bump version to 1.0.20
+
+## [1.0.19] - 2025-12-04
+
+### Miscellaneous Tasks
+
+- Add missing multi-objects.svg test fixture
+- **release**: Bump version to 1.0.19
+
+## [1.0.18] - 2025-12-04
+
+### ✗ Bug Fixes
+
+- **ci**: Prevent CHANGELOG.md Prettier failures and suppress intentional test skip warnings
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.0.18
+
+## [1.0.17] - 2025-12-03
 
 ### ✗ Bug Fixes
 
@@ -100,6 +375,16 @@ and this project adheres to
 ### Miscellaneous Tasks
 
 - **release**: Bump version to 1.0.15
+- **release**: Bump version to 1.0.16
+- **release**: Bump version to 1.0.17
+
+### ◇ Styling
+
+- Format CHANGELOG.md with prettier
+
+### Build
+
+- Regenerate minified file to sync version with package.json (1.0.16)
 
 ## [1.0.14] - 2025-12-02
 
@@ -132,11 +417,9 @@ and this project adheres to
 
 - **security**: Comprehensive audit fixes for error handling and validation
 - **tests**: Limit reverse dependency tracking to library files only
-- **test**: Add margin to named color background test to expose background at
-  corners
+- **test**: Add margin to named color background test to expose background at corners
 - **test**: Handle Windows npm pack empty stdout in package-installation test
-- **test**: Add shell: true for Windows npm command compatibility
-  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **test**: Add shell: true for Windows npm command compatibility ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
 - **test**: Add graceful termination to prevent hanging test processes
 - **critical**: Fix viewBox modification and resolution bugs in svg2png/comparer
 - **extract,comparer**: ViewBox preservation and threshold range
@@ -147,8 +430,7 @@ and this project adheres to
 
 ### ★ New Features
 
-- **infra**: Infrastructure Overhaul Phase 1-2 - Publishing Pipeline Hardening +
-  Test Expansion
+- **infra**: Infrastructure Overhaul Phase 1-2 - Publishing Pipeline Hardening + Test Expansion
 - **cli**: Add createModeArgParser for multi-mode CLI tools (Phase 4 P1)
 - **cli**: Add modeFlags support to createModeArgParser (Phase 4 P3)
 
@@ -182,17 +464,12 @@ and this project adheres to
 - Add get_bboxes_for_text2path.cjs example script
 - **tests**: Handle null stderr on Windows in package-installation test
 - **sbb-comparer**: CRITICAL - Handle percentage width/height values correctly
-- **sbb-fix-viewbox**: Add --overwrite flag, default to \_fixed suffix for
-  safety ⚠ **BREAKING**
-- **sbb-comparer**: Add aspect ratio validation to prevent meaningless
-  comparisons ⚠ **BREAKING**
+- **sbb-fix-viewbox**: Add --overwrite flag, default to _fixed suffix for safety ⚠ **BREAKING**
+- **sbb-comparer**: Add aspect ratio validation to prevent meaningless comparisons ⚠ **BREAKING**
 - **examples**: Resolve 15+ critical issues in local-vs-global-coordinates.cjs
-- **release**: Add comprehensive safeguards against ANSI code contamination in
-  version strings
-- **release**: CRITICAL - Fix npm hook output contamination by silencing npm and
-  reading from package.json
-- **publish**: Add package installation test + fix broken npm package
-  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **release**: Add comprehensive safeguards against ANSI code contamination in version strings
+- **release**: CRITICAL - Fix npm hook output contamination by silencing npm and reading from package.json
+- **publish**: Add package installation test + fix broken npm package ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
 
 ### ◆ Documentation
 
@@ -200,15 +477,13 @@ and this project adheres to
 - **examples**: Add local vs global coordinates demonstration script
 - **API**: Add comprehensive Coordinate Systems section
 - **CLAUDE**: Document release safeguards and version tag format requirements
-- **CLAUDE**: Document npm lifecycle hook contamination fix and updated
-  safeguards
+- **CLAUDE**: Document npm lifecycle hook contamination fix and updated safeguards
 - **CLAUDE**: Add 'Source of Truth Pattern' insight to release safeguards
 
 ### ★ New Features
 
 - **release**: Make release.sh bulletproof with auto-fix and rollback
-- **critical-bug**: Add --force option to sbb-fix-viewbox and expose critical
-  viewBox regeneration bug
+- **critical-bug**: Add --force option to sbb-fix-viewbox and expose critical viewBox regeneration bug
 
 ### Miscellaneous Tasks
 
@@ -231,26 +506,20 @@ and this project adheres to
 - **tests**: Fix backwards logic - skip tests when no changes detected
 - **tests**: Fix SECOND backwards logic - skip tests when 0 tests needed
 - **tests**: CRITICAL - SvgVisualBBox.js should ONLY test tools that import it
-- **publish**: Add config/ directory to npm package
-  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
-- **publish**: Add package installation test + fix broken npm package
-  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **publish**: Add config/ directory to npm package ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **publish**: Add package installation test + fix broken npm package ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
 
 ### ◆ Documentation
 
-- Improve release workflow documentation - clarify CI wait steps and race
-  condition prevention
+- Improve release workflow documentation - clarify CI wait steps and race condition prevention
 
 ### ★ New Features
 
-- **release**: Add automated release script with proper GitHub Release → npm
-  sequencing
-- **release**: Improve release notes and fix test-selective for documentation
-  files
+- **release**: Add automated release script with proper GitHub Release → npm sequencing
+- **release**: Improve release notes and fix test-selective for documentation files
 - **tests**: Integrate Python filesystem-based change detection
 - **tests**: Implement runtime dependency detection
-- **release**: Improve release workflow with CI monitoring and professional
-  release notes
+- **release**: Improve release workflow with CI monitoring and professional release notes
 
 ### Miscellaneous Tasks
 
@@ -266,10 +535,8 @@ and this project adheres to
 
 - **docs**: Fix typos and add viewBox to aspect ratio diagram
 - **reliability**: Add file locking and timeouts (Issues #17, #4)
-- **security**: Add git ref validation to prevent command injection
-  ([#10](https://github.com/Emasoft/SVG-BBOX/issues/10))
-- **publish**: Add build validation to prepublishOnly
-  ([#40](https://github.com/Emasoft/SVG-BBOX/issues/40))
+- **security**: Add git ref validation to prevent command injection ([#10](https://github.com/Emasoft/SVG-BBOX/issues/10))
+- **publish**: Add build validation to prepublishOnly ([#40](https://github.com/Emasoft/SVG-BBOX/issues/40))
 
 ### ◆ Documentation
 
@@ -286,8 +553,7 @@ and this project adheres to
 
 - **tests**: Phase 1 test performance optimizations
 - **tests**: Phases 1 & 2 test performance optimizations
-- **tests**: Optimize E2E test performance with shared page pattern (Issues #8,
-  #18)
+- **tests**: Optimize E2E test performance with shared page pattern (Issues #8, #18)
 
 ### ↻ Code Refactoring
 
@@ -359,8 +625,7 @@ and this project adheres to
 
 - Run Prettier on README.md to fix CI formatting check
 - Format README with Prettier
-- **types**: Add proper type assertions for SVGGraphicsElement in
-  sbb-getbbox-extract
+- **types**: Add proper type assertions for SVGGraphicsElement in sbb-getbbox-extract
 
 ### ◆ Documentation
 
@@ -413,7 +678,7 @@ and this project adheres to
 
 ### Miscellaneous Tasks
 
-- Add \*\_dev/ pattern to gitignore and npmignore
+- Add *_dev/ pattern to gitignore and npmignore
 - Repository maintenance and improvements
 - Add npm publish workflow
 - Bump version to 1.0.4
@@ -501,8 +766,7 @@ and this project adheres to
 - Enhance HTML comparison report with dark mode and branding
 - Add comprehensive tooltips to HTML comparison report
 - Improve sbb-comparer HTML tooltips and fix SVG border sizing
-- Add browser API with showTrueBBoxBorder() function and comprehensive
-  documentation
+- Add browser API with showTrueBBoxBorder() function and comprehensive documentation
 - Add setViewBoxOnObjects() for viewBox reframing
 - Apply comprehensive security fixes to sbb-getbbox.cjs
 - Apply comprehensive security fixes to sbb-fix-viewbox.cjs
@@ -533,8 +797,7 @@ and this project adheres to
 
 - Rename sbb-export to sbb-extractor
 - Improve option naming and add symbol resolution
-- Comprehensive test improvement - modularization, cross-platform, error
-  handling
+- Comprehensive test improvement - modularization, cross-platform, error handling
 - Rename sbb-text-to-path to sbb-inkscape-text2path
 - Consolidate to 3 Inkscape tools, rename exportpng to svg2png
 
@@ -575,7 +838,7 @@ and this project adheres to
 - Add comprehensive documentation for HTML preview border solution
 - Add getbbox.cjs documentation to README
 - Improve help screens for all CLI tools
-- Fix README to use correct sbb-\* command names
+- Fix README to use correct sbb-* command names
 - Add comprehensive cross-platform compatibility section
 
 ### ★ New Features
@@ -599,8 +862,7 @@ and this project adheres to
 
 ### ✓ Testing
 
-- Add comprehensive HTML preview rendering tests with all faulty methods
-  documented
+- Add comprehensive HTML preview rendering tests with all faulty methods documented
 - Rewrite tests to use runtime font detection (no hardcoded fonts)
 - Add comprehensive Playwright E2E tests for HTML list interactive features
 
