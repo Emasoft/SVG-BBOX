@@ -2066,6 +2066,50 @@ validate_ci_workflows() {
         fi
     fi
 
+    # Issue 8: BUN_VERSION mismatch between CI and publish workflows
+    # WHY: Bun lockfile format changes between major versions (e.g., 1.1.x vs 1.3.x)
+    # If workflows use different Bun versions, publish can fail with "Unknown lockfile version"
+    local CI_WF=""
+    while IFS= read -r WF; do
+        [ -z "$WF" ] && continue
+        if [[ "$WF" == *"ci.yml"* ]] || [[ "$WF" == *"ci.yaml"* ]]; then
+            CI_WF="$WF"
+            break
+        fi
+    done < <(find_workflow_files)
+
+    if [ -n "$CI_WF" ] && [ -n "$PUBLISH_WF" ]; then
+        # Extract BUN_VERSION from both workflows
+        # NOTE: || true ensures set -o pipefail doesn't abort on empty grep result
+        local CI_BUN_VER=$(grep -oE "BUN_VERSION:\s*['\"]?([0-9]+\.[0-9]+\.[0-9]+)" "$CI_WF" 2>/dev/null | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -1 || true)
+        local PUBLISH_BUN_VER=$(grep -oE "BUN_VERSION:\s*['\"]?([0-9]+\.[0-9]+\.[0-9]+)" "$PUBLISH_WF" 2>/dev/null | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -1 || true)
+
+        if [ -n "$CI_BUN_VER" ] && [ -n "$PUBLISH_BUN_VER" ] && [ "$CI_BUN_VER" != "$PUBLISH_BUN_VER" ]; then
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo "ERROR[$ISSUE_COUNT]: BUN_VERSION mismatch between workflows"
+            echo "  ci.yml:      BUN_VERSION: $CI_BUN_VER"
+            echo "  publish.yml: BUN_VERSION: $PUBLISH_BUN_VER"
+            echo "  WHY: Bun lockfile format changes between major versions"
+            echo "  Fix: Update BUN_VERSION in $PUBLISH_WF to '$CI_BUN_VER'"
+            echo "  RUN: sed -i \"s/BUN_VERSION: '$PUBLISH_BUN_VER'/BUN_VERSION: '$CI_BUN_VER'/\" $PUBLISH_WF"
+            echo ""
+        fi
+
+        # Extract NODE_VERSION from both workflows
+        local CI_NODE_VER=$(grep -oE "NODE_VERSION:\s*['\"]?([0-9]+)" "$CI_WF" 2>/dev/null | grep -oE "[0-9]+" | head -1 || true)
+        local PUBLISH_NODE_VER=$(grep -oE "NODE_VERSION:\s*['\"]?([0-9]+)" "$PUBLISH_WF" 2>/dev/null | grep -oE "[0-9]+" | head -1 || true)
+
+        if [ -n "$CI_NODE_VER" ] && [ -n "$PUBLISH_NODE_VER" ] && [ "$CI_NODE_VER" != "$PUBLISH_NODE_VER" ]; then
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo "ERROR[$ISSUE_COUNT]: NODE_VERSION mismatch between workflows"
+            echo "  ci.yml:      NODE_VERSION: $CI_NODE_VER"
+            echo "  publish.yml: NODE_VERSION: $PUBLISH_NODE_VER"
+            echo "  WHY: npm OIDC requires Node.js 24+ (npm 11.5.1+)"
+            echo "  Fix: Update NODE_VERSION in $PUBLISH_WF to '$CI_NODE_VER'"
+            echo ""
+        fi
+    fi
+
     if [ "$ISSUE_COUNT" -eq 0 ]; then
         echo "OK: No issues detected in CI workflows"
     else
@@ -6390,7 +6434,135 @@ verify_post_publish_installation() {
     rm -rf "$VERIFY_TEMP_DIR"
     VERIFY_TEMP_DIR=""
 
-    log_success "Post-publish installation verification passed"
+    log_success "Post-publish installation verification passed (npm)"
+    return 0
+}
+
+# Verify post-publish installation with Bun
+# PHASE 1.5: Test installation with bun and run actual CLI commands
+# WHY: Users may install with bun, and we should verify it works
+verify_bun_installation() {
+    local VERSION=$1
+
+    # Check if bun is available
+    if ! command -v bun >/dev/null 2>&1; then
+        log_warning "Bun not installed - skipping bun verification"
+        return 0
+    fi
+
+    log_info "Verifying package installation with Bun..."
+
+    # Create isolated temp directory for bun test
+    local BUN_TEMP_DIR
+    BUN_TEMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'svg-bbox-bun-verify')
+    if [ -z "$BUN_TEMP_DIR" ] || [ ! -d "$BUN_TEMP_DIR" ]; then
+        log_warning "Failed to create temp directory for bun verification"
+        return 0  # Non-fatal
+    fi
+    log_info "  Test directory: $BUN_TEMP_DIR"
+
+    # Initialize bun project
+    log_info "  → Initializing bun project..."
+    if ! (cd "$BUN_TEMP_DIR" && bun init -y >/dev/null 2>&1); then
+        log_warning "bun init failed in temp directory"
+        rm -rf "$BUN_TEMP_DIR"
+        return 0  # Non-fatal
+    fi
+
+    # Install package from npm registry using bun
+    log_info "  → Installing ${PACKAGE_NAME}@$VERSION with bun..."
+    if ! (cd "$BUN_TEMP_DIR" && bun add "${PACKAGE_NAME}@$VERSION" 2>&1 | tail -5); then
+        log_warning "bun add failed - package may not be fully propagated yet"
+        rm -rf "$BUN_TEMP_DIR"
+        return 0  # Non-fatal
+    fi
+
+    local INSTALLED_PATH="$BUN_TEMP_DIR/node_modules/${PACKAGE_NAME}"
+
+    # Verify package exists
+    if [ ! -d "$INSTALLED_PATH" ]; then
+        log_error "Package not found at $INSTALLED_PATH after bun add"
+        rm -rf "$BUN_TEMP_DIR"
+        return 1
+    fi
+
+    # Test require works with bun
+    log_info "  → Verifying require('svg-bbox') works with bun..."
+    REQUIRE_TEST=$(cd "$BUN_TEMP_DIR" && bun -e "try { require('svg-bbox'); console.log('OK'); } catch(e) { console.log(e.code || e.message); process.exit(1); }" 2>&1)
+    if [ "$REQUIRE_TEST" != "OK" ]; then
+        log_error "require('svg-bbox') failed with bun: $REQUIRE_TEST"
+        rm -rf "$BUN_TEMP_DIR"
+        return 1
+    fi
+    log_success "  require('svg-bbox') works with bun"
+
+    # Test actual CLI command execution (not just --help)
+    log_info "  → Testing actual CLI command execution..."
+
+    # Create a simple test SVG
+    local TEST_SVG="$BUN_TEMP_DIR/test.svg"
+    cat > "$TEST_SVG" << 'SVGEOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>
+SVGEOF
+
+    # Test sbb-getbbox (core bbox calculation)
+    local BBOX_TOOL="$INSTALLED_PATH/sbb-getbbox.cjs"
+    if [ -f "$BBOX_TOOL" ]; then
+        log_info "  → Testing sbb-getbbox with actual SVG..."
+        # NOTE: portable_timeout works on both GNU (Linux) and BSD (macOS) systems
+        local BBOX_OUTPUT
+        BBOX_OUTPUT=$(cd "$BUN_TEMP_DIR" && portable_timeout 30 node "$BBOX_TOOL" "$TEST_SVG" 2>&1 || echo "COMMAND_FAILED")
+
+        if echo "$BBOX_OUTPUT" | grep -qE "COMMAND_FAILED|Error|MODULE_NOT_FOUND|Cannot find module"; then
+            log_error "sbb-getbbox failed: $BBOX_OUTPUT"
+            rm -rf "$BUN_TEMP_DIR"
+            return 1
+        fi
+
+        # Verify output contains expected bbox coordinates
+        if echo "$BBOX_OUTPUT" | grep -qE '"x":|"y":|"width":|"height":'; then
+            log_success "  sbb-getbbox returns valid bbox JSON"
+        else
+            log_warning "  sbb-getbbox output may not be valid bbox (output: $BBOX_OUTPUT)"
+        fi
+    fi
+
+    # Test sbb-extract (SVG extraction)
+    local EXTRACT_TOOL="$INSTALLED_PATH/sbb-extract.cjs"
+    if [ -f "$EXTRACT_TOOL" ]; then
+        log_info "  → Testing sbb-extract --help..."
+        local EXTRACT_OUTPUT
+        EXTRACT_OUTPUT=$(cd "$BUN_TEMP_DIR" && portable_timeout 10 node "$EXTRACT_TOOL" --help 2>&1 || echo "COMMAND_FAILED")
+
+        if echo "$EXTRACT_OUTPUT" | grep -qE "COMMAND_FAILED|MODULE_NOT_FOUND|Cannot find module"; then
+            log_error "sbb-extract failed: $EXTRACT_OUTPUT"
+            rm -rf "$BUN_TEMP_DIR"
+            return 1
+        fi
+        log_success "  sbb-extract --help works"
+    fi
+
+    # Test sbb-compare --help (compare tool)
+    local COMPARE_TOOL="$INSTALLED_PATH/sbb-compare.cjs"
+    if [ -f "$COMPARE_TOOL" ]; then
+        log_info "  → Testing sbb-compare --help..."
+        local COMPARE_OUTPUT
+        COMPARE_OUTPUT=$(cd "$BUN_TEMP_DIR" && portable_timeout 10 node "$COMPARE_TOOL" --help 2>&1 || echo "COMMAND_FAILED")
+
+        if echo "$COMPARE_OUTPUT" | grep -qE "COMMAND_FAILED|MODULE_NOT_FOUND|Cannot find module"; then
+            log_error "sbb-compare failed: $COMPARE_OUTPUT"
+            rm -rf "$BUN_TEMP_DIR"
+            return 1
+        fi
+        log_success "  sbb-compare --help works"
+    fi
+
+    # Cleanup
+    rm -rf "$BUN_TEMP_DIR"
+
+    log_success "Post-publish installation verification passed (bun)"
     return 0
 }
 
@@ -7035,9 +7207,13 @@ main() {
     # Verify npm publication
     verify_npm_publication "$NEW_VERSION" || rollback_release "$NEW_VERSION" "npm-verify"
 
-    # PHASE 1.4 - Verify package works after installation
+    # PHASE 1.4 - Verify package works after installation (npm)
     # This catches packaging bugs like missing files in package.json "files" array
     verify_post_publish_installation "$NEW_VERSION" || log_warning "Post-publish verification had issues (non-fatal)"
+
+    # PHASE 1.5 - Verify package works with bun installation
+    # WHY: Users may install with bun, and we should verify it works too
+    verify_bun_installation "$NEW_VERSION" || log_warning "Bun verification had issues (non-fatal)"
 
     # ══════════════════════════════════════════════════════════════════
     # MULTI-OUTLET VERIFICATION
