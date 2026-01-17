@@ -965,4 +965,458 @@ describe('sbb-extract CLI Integration Tests', () => {
       expect(finalContent).toContain('id="red_ball"');
     });
   });
+
+  describe('Batch IDs Extraction (--batch-ids)', () => {
+    it('should extract multiple elements from batch file', async () => {
+      /**
+       * Test batch extraction using --batch-ids with file containing IDs
+       */
+      const svgPath = path.join(tempDir, 'batch-source.svg');
+      const batchPath = path.join(tempDir, 'ids.txt');
+      const outDir = path.join(tempDir, 'batch-out');
+      await fs.mkdir(outDir, { recursive: true });
+
+      const svgContent = `<svg viewBox="0 0 300 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="icon_a" x="10" y="10" width="80" height="80" fill="blue"/>
+  <rect id="icon_b" x="110" y="10" width="80" height="80" fill="red"/>
+  <rect id="icon_c" x="210" y="10" width="80" height="80" fill="green"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      // Batch file with IDs to extract
+      const batchContent = `icon_a
+icon_c`;
+      await fs.writeFile(batchPath, batchContent, 'utf8');
+
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--batch-ids', batchPath, '--out-dir', outDir],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      const files = await fs.readdir(outDir);
+      // Should have files for icon_a and icon_c (not icon_b)
+      expect(files.some((f) => f.includes('icon_a'))).toBe(true);
+      expect(files.some((f) => f.includes('icon_c'))).toBe(true);
+    });
+
+    it('should support custom output names in batch file (id|filename format)', async () => {
+      /**
+       * Test batch extraction with custom output filenames
+       */
+      const svgPath = path.join(tempDir, 'custom-names.svg');
+      const batchPath = path.join(tempDir, 'ids-custom.txt');
+      const outDir = path.join(tempDir, 'custom-out');
+      await fs.mkdir(outDir, { recursive: true });
+
+      const svgContent = `<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="rect1" x="10" y="10" width="80" height="80" fill="blue"/>
+  <circle id="circle1" cx="150" cy="50" r="40" fill="red"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      // Batch file with custom output names
+      const batchContent = `rect1|my_rectangle.svg
+circle1|my_circle.svg`;
+      await fs.writeFile(batchPath, batchContent, 'utf8');
+
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--batch-ids', batchPath, '--out-dir', outDir],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      const files = await fs.readdir(outDir);
+      expect(files).toContain('my_rectangle.svg');
+      expect(files).toContain('my_circle.svg');
+    });
+
+    it('should handle batch file with comments and empty lines', async () => {
+      /**
+       * Test batch file parsing ignores comments (#) and empty lines
+       */
+      const svgPath = path.join(tempDir, 'comments-test.svg');
+      const batchPath = path.join(tempDir, 'ids-comments.txt');
+      const outDir = path.join(tempDir, 'comments-out');
+      await fs.mkdir(outDir, { recursive: true });
+
+      const svgContent = `<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="box" x="10" y="10" width="80" height="80" fill="blue"/>
+  <circle id="ball" cx="150" cy="50" r="40" fill="red"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      // Batch file with comments and empty lines
+      const batchContent = `# This is a comment
+box
+
+# Another comment
+ball
+`;
+      await fs.writeFile(batchPath, batchContent, 'utf8');
+
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--batch-ids', batchPath, '--out-dir', outDir],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      const files = await fs.readdir(outDir);
+      expect(files.length).toBe(2);
+    });
+  });
+
+  describe('Batch Processing (--batch)', () => {
+    it('should process multiple SVG files from batch file', async () => {
+      /**
+       * Test export-all with --batch flag processing multiple SVGs
+       */
+      const svg1Path = path.join(tempDir, 'file1.svg');
+      const svg2Path = path.join(tempDir, 'file2.svg');
+      const batchPath = path.join(tempDir, 'files.txt');
+      const outDir = path.join(tempDir, 'batch-export');
+
+      const svg1Content = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="r1" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      const svg2Content = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <circle id="c1" cx="50" cy="50" r="40" fill="red"/>
+</svg>`;
+
+      await fs.writeFile(svg1Path, svg1Content, 'utf8');
+      await fs.writeFile(svg2Path, svg2Content, 'utf8');
+
+      // Batch file with paths
+      const batchContent = `${svg1Path}
+${svg2Path}`;
+      await fs.writeFile(batchPath, batchContent, 'utf8');
+
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', '--export-all', outDir, '--batch', batchPath],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // Should create subdirectories for each input file
+      const dirs = await fs.readdir(outDir);
+      expect(dirs.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should handle batch file with non-existent files gracefully', async () => {
+      /**
+       * Test batch mode skips missing files with warning
+       */
+      const svgPath = path.join(tempDir, 'exists.svg');
+      const batchPath = path.join(tempDir, 'mixed.txt');
+      const outDir = path.join(tempDir, 'mixed-out');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="box" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      // Batch file with one valid, one missing file
+      const batchContent = `${svgPath}
+/path/to/nonexistent.svg`;
+      await fs.writeFile(batchPath, batchContent, 'utf8');
+
+      // Should not throw, but process valid file
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', '--export-all', outDir, '--batch', batchPath],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // Should have processed the existing file
+      const dirs = await fs.readdir(outDir);
+      expect(dirs.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Output Directory (--out-dir)', () => {
+    it('should use --out-dir for batch-ids extraction output', async () => {
+      /**
+       * Test that --out-dir specifies where extracted files are saved
+       */
+      const svgPath = path.join(tempDir, 'outdir-test.svg');
+      const batchPath = path.join(tempDir, 'outdir-ids.txt');
+      const customOutDir = path.join(tempDir, 'custom-output-dir');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="target" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      const batchContent = 'target';
+      await fs.writeFile(batchPath, batchContent, 'utf8');
+
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--batch-ids', batchPath, '--out-dir', customOutDir],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // Directory should be created and contain output
+      const exists = await fs
+        .access(customOutDir)
+        .then(() => true)
+        .catch(() => false);
+      expect(exists).toBe(true);
+
+      const files = await fs.readdir(customOutDir);
+      expect(files.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Ignore Resolution (--ignore-resolution)', () => {
+    it('should use full drawing bbox when --ignore-resolution is set', async () => {
+      /**
+       * Test that --ignore-resolution ignores width/height and uses full bbox
+       */
+      const svgPath = path.join(tempDir, 'ignore-res.svg');
+      const htmlPath = path.join(tempDir, 'ignore-res.html');
+
+      // SVG with width/height but no viewBox
+      const svgContent = `<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="big" x="0" y="0" width="200" height="200" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      const { stdout } = await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--list', '--ignore-resolution', '--out-html', htmlPath],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // Should not complain about resolution
+      expect(stdout).not.toContain('Warning');
+    });
+
+    it('should respect SVG viewBox without --ignore-resolution', async () => {
+      /**
+       * Test default behavior uses width/height when no viewBox
+       */
+      const svgPath = path.join(tempDir, 'respect-res.svg');
+
+      // SVG with width/height
+      const svgContent = `<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="box" x="10" y="10" width="80" height="80" fill="green"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      const { stdout } = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list'], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      // Should complete without errors
+      expect(stdout).toContain('Objects found');
+    });
+  });
+
+  describe('Quiet Mode (-q/--quiet)', () => {
+    it('should reduce output with --quiet flag', async () => {
+      /**
+       * Test that --quiet produces minimal output
+       */
+      const svgPath = path.join(tempDir, 'quiet-test.svg');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="r1" x="10" y="10" width="30" height="30" fill="blue"/>
+  <rect id="r2" x="50" y="50" width="30" height="30" fill="red"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      const quietResult = await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--list', '--quiet'],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      const normalResult = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list'], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      // Quiet mode should produce less output
+      expect(quietResult.stdout.length).toBeLessThanOrEqual(normalResult.stdout.length);
+    });
+
+    it('should work with -q short form', async () => {
+      /**
+       * Test -q alias for --quiet
+       */
+      const svgPath = path.join(tempDir, 'q-test.svg');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="box" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      // Should not throw with -q
+      const { stdout } = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list', '-q'], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      expect(stdout).toBeTruthy();
+    });
+  });
+
+  describe('Verbose Mode (-v/--verbose)', () => {
+    it('should show detailed output with --verbose flag', async () => {
+      /**
+       * Test that --verbose produces more detailed output
+       */
+      const svgPath = path.join(tempDir, 'verbose-test.svg');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="r1" x="10" y="10" width="30" height="30" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      const verboseResult = await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--list', '--verbose'],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      const normalResult = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list'], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      // Verbose mode should produce more output
+      expect(verboseResult.stdout.length).toBeGreaterThanOrEqual(normalResult.stdout.length);
+    });
+
+    it('should work with -v short form', async () => {
+      /**
+       * Test -v alias for --verbose
+       */
+      const svgPath = path.join(tempDir, 'v-test.svg');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="box" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      // Should not throw with -v
+      const { stdout } = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list', '-v'], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      expect(stdout).toBeTruthy();
+    });
+  });
+
+  describe('Output Flag (-o/--output)', () => {
+    it('should accept -o flag for extract mode output', async () => {
+      /**
+       * Test -o/--output flag as alternative to positional output
+       */
+      const svgPath = path.join(tempDir, 'o-extract.svg');
+      const outputPath = path.join(tempDir, 'extracted-o.svg');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="target" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--extract', 'target', '-o', outputPath],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      const exists = await elementExists(outputPath, '#target');
+      expect(exists).toBe(true);
+    });
+
+    it('should accept --output flag for rename mode output', async () => {
+      /**
+       * Test --output flag for rename mode
+       */
+      const svgPath = path.join(tempDir, 'o-rename.svg');
+      const outputPath = path.join(tempDir, 'renamed-o.svg');
+      const mappingPath = path.join(tempDir, 'o-mapping.json');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="old" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      const mapping = { old: 'new' };
+      await fs.writeFile(mappingPath, JSON.stringify(mapping), 'utf8');
+
+      await execFileAsync(
+        'node',
+        ['sbb-extract.cjs', svgPath, '--rename', mappingPath, '--output', outputPath],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      const content = await fs.readFile(outputPath, 'utf8');
+      expect(content).toContain('id="new"');
+    });
+  });
+
+  describe('JSON Short Flag (-j)', () => {
+    it('should accept -j as alias for --json', async () => {
+      /**
+       * Test -j short form outputs JSON format
+       */
+      const svgPath = path.join(tempDir, 'j-test.svg');
+
+      const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="box" x="10" y="10" width="80" height="80" fill="blue"/>
+</svg>`;
+      await fs.writeFile(svgPath, svgContent, 'utf8');
+
+      const { stdout } = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list', '-j'], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      // Should contain valid JSON
+      const jsonMatch = stdout.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+      expect(jsonMatch).toBeTruthy();
+
+      const json = JSON.parse(jsonMatch[0]);
+      expect(json).toHaveProperty('objects');
+    });
+  });
 });

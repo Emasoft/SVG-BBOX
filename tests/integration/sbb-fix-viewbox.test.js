@@ -384,6 +384,216 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
     });
   });
 
+  describe('--batch option (batch processing)', () => {
+    it('should process multiple files from batch file with auto-generated outputs', async () => {
+      // Create test SVGs
+      const svg1 = path.join(tempDir, 'batch1.svg');
+      const svg2 = path.join(tempDir, 'batch2.svg');
+      await fs.writeFile(
+        svg1,
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="100" height="100" fill="red"/></svg>',
+        'utf8'
+      );
+      await fs.writeFile(
+        svg2,
+        '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="blue"/></svg>',
+        'utf8'
+      );
+
+      // Create batch file (input only format)
+      const batchFile = path.join(tempDir, 'batch.txt');
+      await fs.writeFile(batchFile, `${svg1}\n${svg2}`, 'utf8');
+
+      await execFileAsync('node', ['sbb-fix-viewbox.cjs', '--batch', batchFile], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      // Verify outputs created with _fixed suffix
+      const out1 = path.join(tempDir, 'batch1_fixed.svg');
+      const out2 = path.join(tempDir, 'batch2_fixed.svg');
+
+      const attrs1 = await parseSvgAttributes(out1);
+      const attrs2 = await parseSvgAttributes(out2);
+
+      expect(attrs1.viewBox).toBeTruthy();
+      expect(attrs2.viewBox).toBeTruthy();
+    });
+
+    it('should process batch file with explicit input/output pairs', async () => {
+      const inputSvg = path.join(tempDir, 'input_pair.svg');
+      const outputSvg = path.join(tempDir, 'custom_output.svg');
+      await fs.writeFile(
+        inputSvg,
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect x="5" y="5" width="90" height="90" fill="green"/></svg>',
+        'utf8'
+      );
+
+      // Create batch file with tab-separated input/output pair
+      const batchFile = path.join(tempDir, 'batch_pairs.txt');
+      await fs.writeFile(batchFile, `${inputSvg}\t${outputSvg}`, 'utf8');
+
+      await execFileAsync('node', ['sbb-fix-viewbox.cjs', '--batch', batchFile], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      // Verify custom output path was used
+      const attrs = await parseSvgAttributes(outputSvg);
+      expect(attrs.viewBox).toBeTruthy();
+
+      // Default _fixed.svg should NOT exist
+      const defaultOutput = path.join(tempDir, 'input_pair_fixed.svg');
+      await expect(fs.access(defaultOutput)).rejects.toThrow();
+    });
+
+    it('should apply --force flag in batch mode', async () => {
+      const inputSvg = path.join(tempDir, 'batch_force.svg');
+      // SVG with existing viewBox (0,0,50,50) but content extends to 200x200
+      await fs.writeFile(
+        inputSvg,
+        '<svg viewBox="0 0 50 50" width="50" height="50" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="200" height="200" fill="orange"/></svg>',
+        'utf8'
+      );
+
+      const batchFile = path.join(tempDir, 'batch_force.txt');
+      await fs.writeFile(batchFile, inputSvg, 'utf8');
+
+      await execFileAsync('node', ['sbb-fix-viewbox.cjs', '--batch', batchFile, '--force'], {
+        cwd: projectRoot,
+        timeout: CLI_EXEC_TIMEOUT
+      });
+
+      const outputSvg = path.join(tempDir, 'batch_force_fixed.svg');
+      const attrs = await parseSvgAttributes(outputSvg);
+      // Should regenerate viewBox to full drawing bbox (0,0,200,200)
+      expect(attrs.viewBox).toMatch(/0\s+0\s+200\s+200/);
+    });
+  });
+
+  describe('--auto-open option', () => {
+    it('should accept --auto-open flag without error', async () => {
+      const inputPath = path.join(tempDir, 'auto-open.svg');
+      const outputPath = path.join(tempDir, 'auto-open_fixed.svg');
+
+      await fs.writeFile(
+        inputPath,
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="80" height="80" fill="purple"/></svg>',
+        'utf8'
+      );
+
+      // --auto-open should not cause error (even if Chrome isn't available)
+      // WHY: The tool attempts to open but continues gracefully if browser unavailable
+      const { stdout: _stdout } = await execFileAsync(
+        'node',
+        ['sbb-fix-viewbox.cjs', inputPath, '--auto-open'],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // Output file should be created regardless of auto-open success
+      const attrs = await parseSvgAttributes(outputPath);
+      expect(attrs.viewBox).toBeTruthy();
+    });
+  });
+
+  describe('--quiet option (minimal output)', () => {
+    it('should output only file path in quiet mode (single file)', async () => {
+      const inputPath = path.join(tempDir, 'quiet-single.svg');
+      const outputPath = path.join(tempDir, 'quiet-single_fixed.svg');
+
+      await fs.writeFile(
+        inputPath,
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="50" height="50" fill="cyan"/></svg>',
+        'utf8'
+      );
+
+      const { stdout } = await execFileAsync(
+        'node',
+        ['sbb-fix-viewbox.cjs', inputPath, '--quiet'],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // In quiet mode, stdout should contain only the output file path
+      const trimmedOutput = stdout.trim();
+      expect(trimmedOutput).toBe(outputPath);
+      // Should NOT contain verbose messages like "sbb-fix-viewbox" or "Fixed SVG saved"
+      expect(stdout).not.toContain('sbb-fix-viewbox v');
+      expect(stdout).not.toContain('Fixed SVG saved');
+    });
+
+    it('should output only file paths in quiet mode (batch)', async () => {
+      const svg1 = path.join(tempDir, 'quiet-batch1.svg');
+      const svg2 = path.join(tempDir, 'quiet-batch2.svg');
+      await fs.writeFile(
+        svg1,
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="30" height="30" fill="red"/></svg>',
+        'utf8'
+      );
+      await fs.writeFile(
+        svg2,
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="40" height="40" fill="blue"/></svg>',
+        'utf8'
+      );
+
+      const batchFile = path.join(tempDir, 'quiet-batch.txt');
+      await fs.writeFile(batchFile, `${svg1}\n${svg2}`, 'utf8');
+
+      const { stdout } = await execFileAsync(
+        'node',
+        ['sbb-fix-viewbox.cjs', '--batch', batchFile, '--quiet'],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // Should contain output paths but not verbose messages
+      expect(stdout).toContain('quiet-batch1_fixed.svg');
+      expect(stdout).toContain('quiet-batch2_fixed.svg');
+      expect(stdout).not.toContain('Processing');
+      expect(stdout).not.toContain('Batch complete');
+    });
+  });
+
+  describe('--verbose option (detailed output)', () => {
+    it('should show detailed progress in verbose mode', async () => {
+      const inputPath = path.join(tempDir, 'verbose-test.svg');
+      const outputPath = path.join(tempDir, 'verbose-test_fixed.svg');
+
+      await fs.writeFile(
+        inputPath,
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect x="5" y="5" width="60" height="60" fill="magenta"/></svg>',
+        'utf8'
+      );
+
+      const { stdout } = await execFileAsync(
+        'node',
+        ['sbb-fix-viewbox.cjs', inputPath, '--verbose'],
+        {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        }
+      );
+
+      // Verbose mode should include detailed messages
+      expect(stdout).toContain('Processing:');
+      expect(stdout).toContain('Output target:');
+      expect(stdout).toContain('Validated input path:');
+      expect(stdout).toContain('Read SVG content:');
+      expect(stdout).toContain('Launching headless browser');
+
+      // Output file should still be created
+      const attrs = await parseSvgAttributes(outputPath);
+      expect(attrs.viewBox).toBeTruthy();
+    });
+  });
+
   describe('Real-world scenarios', () => {
     it('should repair SVG from design tool missing viewBox', async () => {
       const inputPath = path.join(tempDir, 'from-figma.svg');

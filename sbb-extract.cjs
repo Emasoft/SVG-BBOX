@@ -208,6 +208,10 @@ const { runCLI, printError, printInfo, printWarning } = require('./lib/cli-utils
  * @property {string | null} renameOut - Output renamed SVG path
  * @property {boolean} autoOpen - Open result in Chrome
  * @property {boolean} ignoreResolution - Use full drawing bbox instead of width/height
+ * @property {string | null} batchIds - Batch IDs file path for extracting multiple elements
+ * @property {string | null} batchOutDir - Output directory for batch extraction
+ * @property {boolean} quiet - Minimal output mode - only prints essential info
+ * @property {boolean} verbose - Show detailed progress information
  */
 
 /**
@@ -227,7 +231,9 @@ function parseArgs(argv) {
       '--list': 'list',
       '--extract': { mode: 'extract', consumesValue: true, valueTarget: 'extractId' },
       '--export-all': { mode: 'exportAll', consumesValue: true, valueTarget: 'outDir' },
-      '--rename': { mode: 'rename', consumesValue: true, valueTarget: 'renameJson' }
+      '--rename': { mode: 'rename', consumesValue: true, valueTarget: 'renameJson' },
+      // WHY: --batch-ids also triggers extract mode for batch extraction of multiple elements
+      '--batch-ids': { mode: 'extract', consumesValue: true, valueTarget: 'batch-ids' }
     },
     globalFlags: [
       { name: 'json', alias: 'j', type: 'boolean', description: 'Output in JSON format' },
@@ -236,6 +242,18 @@ function parseArgs(argv) {
         name: 'ignore-resolution',
         type: 'boolean',
         description: 'Use full drawing bbox instead of width/height for viewBox'
+      },
+      {
+        name: 'quiet',
+        alias: 'q',
+        type: 'boolean',
+        description: 'Minimal output - only essential info'
+      },
+      {
+        name: 'verbose',
+        alias: 'v',
+        type: 'boolean',
+        description: 'Show detailed progress information'
       }
     ],
     modes: {
@@ -266,6 +284,16 @@ function parseArgs(argv) {
             alias: 'o',
             type: 'string',
             description: 'Output SVG file (alternative to positional)'
+          },
+          {
+            name: 'batch-ids',
+            type: 'string',
+            description: 'File with IDs to extract (one per line, format: id or id|output.svg)'
+          },
+          {
+            name: 'out-dir',
+            type: 'string',
+            description: 'Output directory for batch extraction'
           }
         ],
         positional: [
@@ -330,7 +358,15 @@ function parseArgs(argv) {
     renameJson: result.flags.renameJson || null,
     renameOut: /** @type {string | null} */ (null),
     autoOpen: result.flags['auto-open'] || false,
-    ignoreResolution: result.flags['ignore-resolution'] || false
+    ignoreResolution: result.flags['ignore-resolution'] || false,
+    // WHY: Batch IDs extraction allows extracting multiple elements by ID from a single SVG
+    batchIds: result.flags['batch-ids'] || null,
+    // WHY: Output directory for batch extraction (defaults to input directory)
+    batchOutDir: result.flags['out-dir'] || null,
+    // WHY: Quiet mode for scripting - only outputs essential info (file paths)
+    quiet: result.flags.quiet || false,
+    // WHY: Verbose mode for debugging - shows detailed progress
+    verbose: result.flags.verbose || false
   };
 
   // Mode-specific positional argument handling
@@ -338,17 +374,19 @@ function parseArgs(argv) {
   if (result.mode === 'extract') {
     // Use -o/--output flag if provided, otherwise fall back to positional
     options.outSvg = result.flags.output || result.positional[1] || null;
-    // Validate that output is provided (either via flag or positional)
-    if (!options.outSvg) {
+    // WHY: Only require output file if not using batch-ids mode
+    // Batch-ids mode uses --out-dir or defaults to input file directory
+    if (!options.outSvg && !options.batchIds) {
       // WHY: ValidationError already imported at top of file, no need to re-require
       throw new ValidationError(
         `Missing output file.\n\n` +
           `Usage:\n` +
           `  sbb-extract <input.svg> --extract <element-id> <output.svg>\n` +
-          `  sbb-extract <input.svg> --extract <element-id> -o <output.svg>\n\n` +
+          `  sbb-extract <input.svg> --extract <element-id> -o <output.svg>\n` +
+          `  sbb-extract <input.svg> --batch-ids ids.txt [--out-dir output-dir]\n\n` +
           `Example:\n` +
           `  sbb-extract drawing.svg --extract myIcon icon.svg\n` +
-          `  sbb-extract drawing.svg --extract myIcon -o icon.svg`
+          `  sbb-extract drawing.svg --batch-ids ids.txt`
       );
     }
   }
@@ -422,6 +460,64 @@ function readBatchFile(batchFilePath) {
   });
 
   return lines;
+}
+
+/**
+ * Read and parse batch IDs file for extract mode.
+ * Returns array of {id, output} objects.
+ *
+ * File format:
+ * - One entry per line
+ * - Format: id or id|output-filename.svg
+ * - Lines starting with # are comments
+ * - Empty lines are ignored
+ *
+ * WHY: Using | as divider because it cannot be used in file names on any OS
+ * (Windows, macOS, Linux all prohibit | in filenames)
+ *
+ * @param {string} batchFilePath - Path to the batch IDs file
+ * @returns {{id: string, output: string | null}[]} Array of ID/output pairs
+ */
+function readBatchIdsFile(batchFilePath) {
+  // SECURITY: Validate batch file
+  const safeBatchPath = validateFilePath(batchFilePath, {
+    requiredExtensions: ['.txt'],
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safeBatchPath, 'utf-8');
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new ValidationError(`Batch IDs file is empty: ${safeBatchPath}`);
+  }
+
+  // WHY: Using | as divider because it cannot be used in file names on any OS
+  const DIVIDER = '|';
+
+  return lines.map((line, index) => {
+    const parts = line.split(DIVIDER);
+    // WHY: parts[0] is always defined after split (even empty string for empty line)
+    // but TypeScript doesn't know this, so we use fallback to empty string
+    const id = (parts[0] || '').trim();
+    const output = parts.length > 1 && parts[1] ? parts[1].trim() : null;
+
+    if (!id) {
+      throw new ValidationError(`Invalid entry at line ${index + 1}: empty ID`);
+    }
+
+    // SECURITY: Validate output filename if provided
+    if (output && SHELL_METACHARACTERS.test(output)) {
+      throw new ValidationError(
+        `Invalid output filename at line ${index + 1}: contains shell metacharacters`
+      );
+    }
+
+    return { id, output };
+  });
 }
 
 // -------- shared browser/page setup --------
@@ -648,6 +744,8 @@ ${sanitizedSvg}
  * @param {boolean} jsonMode - Whether to output JSON format
  * @param {boolean} autoOpen - Whether to open result in Chrome
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @param {boolean} [quiet] - Minimal output mode - only prints essential info
+ * @param {boolean} [verbose] - Show detailed progress information
  * @returns {Promise<void>}
  */
 async function listAndAssignIds(
@@ -657,7 +755,9 @@ async function listAndAssignIds(
   outHtmlPath,
   jsonMode,
   autoOpen,
-  ignoreResolution = false
+  ignoreResolution = false,
+  quiet = false,
+  verbose = false
 ) {
   const result = await withPageForSvg(
     inputPath,
@@ -1198,6 +1298,14 @@ async function listAndAssignIds(
       spriteInfo: result.spriteInfo
     };
     console.log(JSON.stringify(jsonOut, null, 2));
+  } else if (quiet) {
+    // WHY: Quiet mode - only output file paths for scripting
+    if (outHtmlPath) {
+      console.log(outHtmlPath);
+    }
+    if (assignIds && result.fixedSvgString && outFixedPath) {
+      console.log(outFixedPath);
+    }
   } else {
     console.log(`✓ HTML listing written to: ${outHtmlPath}`);
     if (assignIds && result.fixedSvgString && outFixedPath) {
@@ -1241,6 +1349,19 @@ async function listAndAssignIds(
       console.log(
         `⚠️  ${zeroSizeObjects} object(s) have zero width/height - marked with ⚠️ in HTML`
       );
+    }
+
+    // WHY: Verbose mode - show additional detailed info
+    if (verbose) {
+      console.log('');
+      console.log('📋 Detailed info:');
+      console.log(`   Input: ${path.resolve(inputPath)}`);
+      if (outHtmlPath) {
+        console.log(`   HTML output: ${path.resolve(outHtmlPath)}`);
+      }
+      if (outFixedPath && result.fixedSvgString) {
+        console.log(`   Fixed SVG: ${path.resolve(outFixedPath)}`);
+      }
     }
 
     // Auto-open HTML in Chrome/Chromium if requested
@@ -1899,6 +2020,8 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
  * @param {boolean} includeContext - Include context elements in output
  * @param {boolean} jsonMode - Output in JSON format
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @param {boolean} [quiet] - Minimal output mode - only prints essential info
+ * @param {boolean} [verbose] - Show detailed progress information
  * @returns {Promise<void>}
  */
 async function extractSingleObject(
@@ -1908,7 +2031,9 @@ async function extractSingleObject(
   margin,
   includeContext,
   jsonMode,
-  ignoreResolution = false
+  ignoreResolution = false,
+  quiet = false,
+  verbose = false
 ) {
   const result = await withPageForSvg(
     inputPath,
@@ -2048,11 +2173,23 @@ async function extractSingleObject(
         2
       )
     );
+  } else if (quiet) {
+    // WHY: Quiet mode - only output the extracted file path for scripting
+    console.log(safeOutputPath);
   } else {
     console.log(`✓ Extracted "${elementId}" to: ${outSvgPath}`);
     console.log('  bbox:', result.bbox);
     console.log('  margin (user units):', margin);
     console.log('  includeContext (keep other objects?):', includeContext);
+
+    // WHY: Verbose mode - show additional detailed info
+    if (verbose) {
+      console.log('');
+      console.log('📋 Detailed extraction info:');
+      console.log(`   Input: ${path.resolve(inputPath)}`);
+      console.log(`   Element ID: ${elementId}`);
+      console.log(`   Output: ${path.resolve(outSvgPath)}`);
+    }
   }
 }
 
@@ -2066,6 +2203,8 @@ async function extractSingleObject(
  * @param {boolean} exportGroups - Whether to export group elements too
  * @param {boolean} jsonMode - Output in JSON format
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @param {boolean} [quiet] - Minimal output mode - only prints essential info
+ * @param {boolean} [verbose] - Show detailed progress information
  * @returns {Promise<void>}
  */
 async function exportAllObjects(
@@ -2074,7 +2213,9 @@ async function exportAllObjects(
   margin,
   exportGroups,
   jsonMode,
-  ignoreResolution = false
+  ignoreResolution = false,
+  quiet = false,
+  verbose = false
 ) {
   if (!fs.existsSync(outDir)) {
     fs.mkdirSync(outDir, { recursive: true });
@@ -2301,7 +2442,8 @@ async function exportAllObjects(
           2
         )
       );
-    } else {
+    } else if (!quiet) {
+      // WHY: Quiet mode skips this message since there's nothing to output
       console.log('No objects exported (none with visible bbox).');
     }
     return;
@@ -2321,8 +2463,15 @@ async function exportAllObjects(
       file: safeOutputPath,
       bbox: ex.bbox
     });
-    if (!jsonMode) {
-      console.log(`✓ Exported ${ex.id} -> ${safeOutputPath}`);
+    // WHY: Quiet mode outputs only file paths, verbose shows per-file messages
+    if (!jsonMode && !quiet) {
+      if (verbose) {
+        console.log(`✓ Exported ${ex.id} -> ${safeOutputPath}`);
+      }
+    }
+    if (quiet) {
+      // WHY: Quiet mode - output only file path per line for scripting
+      console.log(safeOutputPath);
     }
   }
 
@@ -2341,8 +2490,14 @@ async function exportAllObjects(
         2
       )
     );
-  } else {
-    console.log('\nExport completed.');
+  } else if (!quiet) {
+    console.log(`\nExport completed. ${exportedMeta.length} object(s) exported to ${outDir}`);
+    // WHY: Verbose mode - show additional details
+    if (verbose) {
+      console.log(`  Input: ${path.resolve(inputPath)}`);
+      console.log(`  Margin: ${margin}`);
+      console.log(`  Export groups: ${exportGroups}`);
+    }
   }
 }
 
@@ -2355,6 +2510,8 @@ async function exportAllObjects(
  * @param {string} renameOutPath - Output SVG file path
  * @param {boolean} jsonMode - Output in JSON format
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
+ * @param {boolean} [quiet] - Minimal output mode - only prints essential info
+ * @param {boolean} [verbose] - Show detailed progress information
  * @returns {Promise<void>}
  */
 async function renameIds(
@@ -2362,7 +2519,9 @@ async function renameIds(
   renameJsonPath,
   renameOutPath,
   jsonMode,
-  ignoreResolution = false
+  ignoreResolution = false,
+  quiet = false,
+  verbose = false
 ) {
   // SECURITY: Read and validate JSON mapping file safely
   const safeJsonPath = validateFilePath(renameJsonPath, {
@@ -2556,17 +2715,30 @@ async function renameIds(
         2
       )
     );
+  } else if (quiet) {
+    // WHY: Quiet mode - only output the output file path for scripting
+    console.log(renameOutPath);
   } else {
     console.log(`✓ Renamed IDs using ${renameJsonPath} -> ${renameOutPath}`);
     console.log(`  Applied mappings: ${result.applied.length}`);
     if (result.skipped.length) {
       console.log(`  Skipped mappings: ${result.skipped.length}`);
-      result.skipped.slice(0, 10).forEach((s) => {
+      // WHY: Verbose mode shows all skipped, normal mode shows first 10
+      const showCount = verbose ? result.skipped.length : Math.min(10, result.skipped.length);
+      result.skipped.slice(0, showCount).forEach((s) => {
         console.log('   -', s.mapping.from, '→', s.mapping.to, '(', s.reason, ')');
       });
-      if (result.skipped.length > 10) {
+      if (!verbose && result.skipped.length > 10) {
         console.log('    ... (more skipped mappings not shown)');
       }
+    }
+    // WHY: Verbose mode - show additional details
+    if (verbose) {
+      console.log('');
+      console.log('📋 Detailed info:');
+      console.log(`   Input: ${path.resolve(inputPath)}`);
+      console.log(`   Mapping file: ${path.resolve(renameJsonPath)}`);
+      console.log(`   Output: ${path.resolve(renameOutPath)}`);
     }
   }
 }
@@ -2576,10 +2748,12 @@ async function renameIds(
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function main() {
-  // Display version
-  printInfo(`sbb-extract v${getVersion()} | svg-bbox toolkit\n`);
-
   const opts = parseArgs(process.argv);
+
+  // WHY: Display version header unless in quiet or json mode
+  if (!opts.quiet && !opts.json) {
+    printInfo(`sbb-extract v${getVersion()} | svg-bbox toolkit\n`);
+  }
 
   try {
     if (opts.mode === 'list') {
@@ -2594,28 +2768,112 @@ async function main() {
         opts.outHtml,
         opts.json,
         opts.autoOpen,
-        opts.ignoreResolution
+        opts.ignoreResolution,
+        opts.quiet,
+        opts.verbose
       );
     } else if (opts.mode === 'extract') {
-      // Validate required arguments for extract mode
-      if (!opts.input) {
-        throw new ValidationError('Input SVG file is required for extract mode');
+      if (opts.batchIds) {
+        // Batch extraction mode - extract multiple elements by ID from a single SVG
+        if (!opts.input) {
+          throw new ValidationError('Input SVG file is required for batch extraction mode');
+        }
+
+        const entries = readBatchIdsFile(opts.batchIds);
+        // WHY: Default output directory to input file's directory if not specified
+        const outDir = opts.batchOutDir || path.dirname(opts.input);
+
+        // SECURITY: Validate output directory
+        validateOutputPath(outDir, { createDirectory: true });
+
+        if (!opts.json) {
+          printInfo(`Batch extracting ${entries.length} elements from ${opts.input}...\n`);
+        }
+
+        const results = [];
+        for (const entry of entries) {
+          // WHY: Generate output path using custom name or default to id.svg
+          const outputFilename = entry.output || `${entry.id}.svg`;
+          const outputPath = path.join(outDir, outputFilename);
+
+          // WHY: Ensure parent directory exists for nested outputs like "controls/volume.svg"
+          const outputDir = path.dirname(outputPath);
+          if (outputDir !== outDir) {
+            validateOutputPath(outputDir, { createDirectory: true });
+          }
+
+          try {
+            await extractSingleObject(
+              opts.input,
+              entry.id,
+              outputPath,
+              opts.margin,
+              opts.includeContext,
+              false, // WHY: Don't output JSON per-item, will output summary at end
+              opts.ignoreResolution,
+              opts.quiet,
+              opts.verbose
+            );
+
+            if (!opts.json) {
+              printInfo(`  Extracted ${entry.id} -> ${outputPath}`);
+            }
+
+            results.push({ id: entry.id, output: outputPath, success: true });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (!opts.json) {
+              printError(`  Failed to extract ${entry.id}: ${message}`);
+            }
+            results.push({ id: entry.id, error: message, success: false });
+          }
+        }
+
+        if (opts.json) {
+          console.log(
+            JSON.stringify(
+              {
+                mode: 'batchExtract',
+                input: path.resolve(opts.input),
+                batchIdsFile: path.resolve(opts.batchIds),
+                outDir: path.resolve(outDir),
+                margin: opts.margin,
+                includeContext: opts.includeContext,
+                results
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          const succeeded = results.filter((r) => r.success).length;
+          const failed = results.filter((r) => !r.success).length;
+          printInfo(`\nBatch extraction complete: ${succeeded} succeeded, ${failed} failed`);
+        }
+      } else {
+        // Single extraction mode (existing behavior)
+        // Validate required arguments for extract mode
+        if (!opts.input) {
+          throw new ValidationError('Input SVG file is required for extract mode');
+        }
+        if (!opts.extractId) {
+          throw new ValidationError('Element ID is required for extract mode');
+        }
+        if (!opts.outSvg) {
+          throw new ValidationError('Output SVG path is required for extract mode');
+        }
+        await extractSingleObject(
+          opts.input,
+          opts.extractId,
+          opts.outSvg,
+          opts.margin,
+          opts.includeContext,
+          opts.json,
+          opts.ignoreResolution,
+          opts.quiet,
+          opts.verbose
+        );
       }
-      if (!opts.extractId) {
-        throw new ValidationError('Element ID is required for extract mode');
-      }
-      if (!opts.outSvg) {
-        throw new ValidationError('Output SVG path is required for extract mode');
-      }
-      await extractSingleObject(
-        opts.input,
-        opts.extractId,
-        opts.outSvg,
-        opts.margin,
-        opts.includeContext,
-        opts.json,
-        opts.ignoreResolution
-      );
     } else if (opts.mode === 'exportAll') {
       // Check if batch mode
       if (opts.batch) {
@@ -2673,7 +2931,9 @@ async function main() {
               opts.margin,
               opts.exportGroups,
               false, // Don't output JSON for individual files in batch mode
-              opts.ignoreResolution
+              opts.ignoreResolution,
+              opts.quiet,
+              opts.verbose
             );
 
             results.push({
@@ -2744,7 +3004,9 @@ async function main() {
           opts.margin,
           opts.exportGroups,
           opts.json,
-          opts.ignoreResolution
+          opts.ignoreResolution,
+          opts.quiet,
+          opts.verbose
         );
       }
     } else if (opts.mode === 'rename') {
@@ -2763,7 +3025,9 @@ async function main() {
         opts.renameJson,
         opts.renameOut,
         opts.json,
-        opts.ignoreResolution
+        opts.ignoreResolution,
+        opts.quiet,
+        opts.verbose
       );
     } else {
       throw new SVGBBoxError(`Unknown mode: ${opts.mode}`);

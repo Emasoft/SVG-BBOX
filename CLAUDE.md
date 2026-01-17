@@ -737,15 +737,33 @@ This approach uses a swarm of parallel agents to audit every file in the codebas
 
 ### Audit Procedure
 
-#### Step 1: Create Timestamped Audit Directory
+#### Step 1: Agent Reports Folder (Permanent)
+
+**CRITICAL: Subagents cannot use Bash or Write tools directly due to permission
+restrictions.** Instead, use the permanent agent reports folder:
 
 ```bash
-# Create directory with timestamp in docs_dev/
+# Permanent folder for agent output (already exists, gitignored)
+docs_dev/agent_reports/
+
+# Subagents should return minimal inline reports to orchestrator
+# Orchestrator writes consolidated reports to timestamped audit directories
+```
+
+**Subagent Output Pattern:**
+- Subagents return 2-3 line summaries inline (not files)
+- Format: `[DONE] filename - Xc/Ym/Zm. Key issues: brief summary`
+- Orchestrator collects results and writes master summary
+
+#### Step 2: Create Timestamped Audit Directory
+
+```bash
+# Orchestrator creates directory with timestamp in docs_dev/
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 mkdir -p docs_dev/audit_reports_${TIMESTAMP}
 ```
 
-#### Step 2: Identify All Files to Audit
+#### Step 3: Identify All Files to Audit
 
 Audit these file categories:
 - **Source files**: `*.cjs`, `*.js`, `*.mjs`, `*.ts`
@@ -756,12 +774,12 @@ Audit these file categories:
 - **Test files**: `tests/**/*.test.js`
 - **Example files**: `examples/*.html`, `examples/*.js`
 
-#### Step 3: Spawn Parallel Agents (One Per File)
+#### Step 4: Spawn Parallel Agents (One Per File)
 
 Use the Task tool to spawn up to 40 agents in parallel. Each agent:
 - Reads exactly ONE file
 - Applies the standardized audit checklist
-- Outputs a report to `audit_<filename>.md`
+- Returns a minimal inline report (2-3 lines max)
 
 **Agent Prompt Template:**
 
@@ -783,33 +801,25 @@ Classify issues as:
 - MAJOR: Should fix before release (bugs, incorrect behavior)
 - MINOR: Nice to fix (style, documentation, minor improvements)
 
-Output a report to: docs_dev/audit_reports_<TIMESTAMP>/audit_<filename>.md
+Return a minimal inline report (DO NOT write files):
+Format: `[DONE] <filename> - Xc/Ym/Zm (critical/major/minor). Key issues: [brief summary]`
 
-Report format:
-# Audit Report: <filename>
-## Summary
-[1-2 sentence summary]
-## Issues Found
-### CRITICAL
-[List or "None"]
-### MAJOR
-[List with line numbers]
-### MINOR
-[List with line numbers]
-## Recommendations
-[Prioritized action items]
+If CRITICAL or MAJOR issues found, add one line per issue:
+- CRITICAL: [line number] - [brief description]
+- MAJOR: [line number] - [brief description]
 ```
 
-#### Step 4: Collect Reports and Create Master Summary
+#### Step 5: Collect Reports and Create Master Summary
 
-After all agents complete, create `AUDIT_MASTER_SUMMARY.md`:
+After all agents complete, orchestrator creates `AUDIT_MASTER_SUMMARY.md` in
+the timestamped audit directory:
 - Executive summary with issue counts
 - Issues organized by severity (CRITICAL → MAJOR → MINOR)
 - Files organized by assessment (Excellent → Good → Needs Attention)
 - Fix priority order
 - Audit methodology documentation
 
-#### Step 5: Fix Issues in Priority Order
+#### Step 6: Fix Issues in Priority Order
 
 1. **Phase 1 - CRITICAL**: Fix immediately (security, crashes)
 2. **Phase 2 - MAJOR**: Fix before release (bugs, incorrect behavior)

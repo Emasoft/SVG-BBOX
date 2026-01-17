@@ -176,8 +176,7 @@ NOTES:
 
 EXIT CODES:
   • 0: Conversion successful
-  • 1: Error occurred
-  • 2: Invalid arguments or Inkscape not found
+  • 1: Error occurred (includes invalid arguments, Inkscape not found, etc.)
 `);
 }
 
@@ -198,6 +197,7 @@ function printVersion(toolName) {
 /**
  * Detect Inkscape installation on the current platform.
  * Returns the path to the Inkscape executable or null if not found.
+ * @returns {Promise<string | null>} Path to Inkscape executable, or null if not found
  */
 async function findInkscape() {
   const platform = process.platform;

@@ -192,6 +192,8 @@ Description:
 Options:
   -h, --help      Show this help message
   -v, --version   Show version information
+  --quiet         Minimal output - only show test results (pass/fail)
+  --verbose       Show detailed test progress information
 
 Output Files:
   <basename>-bbox-results.json   Test results (JSON)
@@ -232,14 +234,44 @@ async function runTest() {
     showVersion();
   }
 
-  // Display version header after flag checks
-  printInfo(`sbb-test v${getVersion()} | svg-bbox toolkit\n`);
+  // WHY: Parse output verbosity flags for controlling console output
+  const quietMode = args.includes('--quiet');
+  const verboseMode = args.includes('--verbose');
 
-  const inputPath = args[0];
+  /**
+   * Log function that respects quiet/verbose flags
+   * @param {string} message - Message to log
+   * @param {'info'|'verbose'|'result'} level - Log level
+   */
+  const log = (message, level = 'info') => {
+    // WHY: Results always show regardless of flags (pass/fail output)
+    if (level === 'result') {
+      console.log(message);
+      return;
+    }
+    // WHY: Quiet mode suppresses all non-result output
+    if (quietMode) return;
+    // WHY: Verbose messages only show when --verbose is set
+    if (level === 'verbose' && !verboseMode) return;
+    console.log(message);
+  };
+
+  // Display version header after flag checks (respects quiet mode)
+  if (!quietMode) {
+    printInfo(`sbb-test v${getVersion()} | svg-bbox toolkit\n`);
+  }
+
+  // WHY: Filter out flag arguments to find the actual file path
+  const inputPath = args.find((arg) => !arg.startsWith('--') && !arg.startsWith('-'));
   if (!inputPath) {
     throw new ValidationError(
       'Usage: node sbb-test.cjs path/to/file.svg\nUse --help for more information.'
     );
+  }
+
+  // WHY: Log verbose progress information when --verbose is set
+  if (verboseMode && !quietMode) {
+    log(`Processing file: ${inputPath}`, 'verbose');
   }
 
   // SECURITY: Validate and sanitize input path
@@ -264,7 +296,13 @@ async function runTest() {
   /** @type {import('puppeteer').Browser|null} */
   let browser = null;
   try {
+    if (verboseMode && !quietMode) {
+      log('Launching browser...', 'verbose');
+    }
     browser = await launchBrowserWithFallback(errorLogMessages);
+    if (verboseMode && !quietMode) {
+      log('Browser launched successfully', 'verbose');
+    }
   } catch (err) {
     // Type guard for unknown error
     const errorStack = err instanceof Error ? err.stack : String(err);
@@ -302,8 +340,14 @@ async function runTest() {
       throw new Error('SvgVisualBBox.js not found at: ' + libPath);
     }
     await page.addScriptTag({ path: libPath });
+    if (verboseMode && !quietMode) {
+      log('SvgVisualBBox library injected', 'verbose');
+    }
 
     // 3. Now run tests in the browser context
+    if (verboseMode && !quietMode) {
+      log('Running tests in browser context...', 'verbose');
+    }
     const results = await page.evaluate(async (svgString) => {
       /* eslint-disable no-undef */
       /**
@@ -521,8 +565,25 @@ async function runTest() {
     const safeErrPath = validateOutputPath(errLogPath);
     writeFileSafe(safeErrPath, errorLogMessages.join('\n'), 'utf8');
 
-    printSuccess(`Results written to: ${safeJsonPath}`);
-    printInfo(`Errors written to: ${safeErrPath}`);
+    // WHY: Always show test results (pass/fail), respecting quiet mode for extra info
+    if (quietMode) {
+      // WHY: In quiet mode, just show minimal pass/fail summary
+      const errorCount = results && Array.isArray(results.errors) ? results.errors.length : 0;
+      console.log(errorCount === 0 ? 'PASS' : `FAIL (${errorCount} errors)`);
+    } else {
+      printSuccess(`Results written to: ${safeJsonPath}`);
+      printInfo(`Errors written to: ${safeErrPath}`);
+      // WHY: Verbose mode shows additional test execution details
+      if (verboseMode && results) {
+        log(`Tests completed. Errors: ${results.errors?.length || 0}`, 'verbose');
+        if (results.randomElementInfo) {
+          log(
+            `Random element tested: <${results.randomElementInfo.tagName}> (index: ${results.randomElementInfo.index})`,
+            'verbose'
+          );
+        }
+      }
+    }
   } catch (err) {
     // Type guard for unknown error
     const errorStack = err instanceof Error ? err.stack : String(err);

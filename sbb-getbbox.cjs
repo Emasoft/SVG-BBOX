@@ -111,6 +111,8 @@
  * @property {boolean} ignoreViewBox - Whether to ignore viewBox clipping
  * @property {boolean} spriteMode - Whether to auto-detect sprite sheets
  * @property {string|null} jsonOutput - Path to save JSON output, or null for console
+ * @property {boolean} quiet - Minimal output mode - only prints bbox values
+ * @property {boolean} verbose - Show detailed progress information
  */
 
 const fs = require('fs');
@@ -204,6 +206,18 @@ const argParser = createArgParser({
       alias: 'j',
       description: 'Save results as JSON to specified file (use - for stdout)',
       type: 'string'
+    },
+    {
+      name: 'quiet',
+      alias: 'q',
+      description: 'Minimal output - only prints bounding box values',
+      type: 'boolean'
+    },
+    {
+      name: 'verbose',
+      alias: 'v',
+      description: 'Show detailed progress information',
+      type: 'boolean'
     }
   ],
   minPositional: 0,
@@ -432,9 +446,19 @@ async function detectSpriteSheet(page) {
  * @param {string[]} objectIds - Array of object IDs (empty = whole content)
  * @param {boolean} ignoreViewBox - Compute full drawing bbox
  * @param {boolean} spriteMode - Auto-detect and process as sprite sheet
+ * @param {Object} [outputOptions] - Output options for quiet/verbose modes
+ * @param {boolean} [outputOptions.quiet] - Minimal output mode
+ * @param {boolean} [outputOptions.verbose] - Show detailed progress
  * @returns {Promise<BBoxFileResult>} Computation result with bboxes
  */
-async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, spriteMode = false) {
+async function computeBBox(
+  svgPath,
+  objectIds = [],
+  ignoreViewBox = false,
+  spriteMode = false,
+  outputOptions = {}
+) {
+  const { quiet = false, verbose = false } = outputOptions;
   // SECURITY: Validate file path (prevents path traversal)
   const safePath = validateFilePath(svgPath, {
     requiredExtensions: ['.svg'],
@@ -514,15 +538,28 @@ ${sanitizedSvg}
           objectIds = spriteInfo.sprites.map((s) => s.id);
         }
 
-        printInfo('Sprite sheet detected!');
-        printInfo(`  Sprites: ${spriteInfo.stats.count}`);
-        if (spriteInfo.grid) {
-          printInfo(`  Grid: ${spriteInfo.grid.rows} rows × ${spriteInfo.grid.cols} cols`);
+        // WHY: Sprite info is informational, suppress in quiet mode
+        if (!quiet) {
+          printInfo('Sprite sheet detected!');
+          printInfo(`  Sprites: ${spriteInfo.stats.count}`);
+          if (spriteInfo.grid) {
+            printInfo(`  Grid: ${spriteInfo.grid.rows} rows × ${spriteInfo.grid.cols} cols`);
+          }
+          printInfo(
+            `  Avg size: ${spriteInfo.stats.avgSize.width.toFixed(1)} × ${spriteInfo.stats.avgSize.height.toFixed(1)}`
+          );
+          printInfo(`  Computing bbox for ${objectIds.length} sprites...\n`);
+
+          // WHY: verbose mode shows additional detection criteria details
+          if (verbose) {
+            printInfo(`  Detection details:`);
+            printInfo(
+              `    Size uniformity (CV): width=${spriteInfo.stats.uniformity.widthCV}, height=${spriteInfo.stats.uniformity.heightCV}, area=${spriteInfo.stats.uniformity.areaCV}`
+            );
+            printInfo(`    Common ID pattern: ${spriteInfo.stats.hasCommonPattern ? 'yes' : 'no'}`);
+            printInfo(`    Grid arranged: ${spriteInfo.stats.isGridArranged ? 'yes' : 'no'}`);
+          }
         }
-        printInfo(
-          `  Avg size: ${spriteInfo.stats.avgSize.width.toFixed(1)} × ${spriteInfo.stats.avgSize.height.toFixed(1)}`
-        );
-        printInfo(`  Computing bbox for ${objectIds.length} sprites...\n`);
       }
     }
 
@@ -643,9 +680,18 @@ ${sanitizedSvg}
  * @param {string} dirPath - Directory path
  * @param {string|null} filterRegex - Regex pattern to filter filenames
  * @param {boolean} ignoreViewBox - Compute full drawing bbox
+ * @param {Object} [outputOptions] - Output options for quiet/verbose modes
+ * @param {boolean} [outputOptions.quiet] - Minimal output mode
+ * @param {boolean} [outputOptions.verbose] - Show detailed progress
  * @returns {Promise<BBoxFileResult[]>} Array of file results with bboxes
  */
-async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = false) {
+async function processDirectory(
+  dirPath,
+  filterRegex = null,
+  ignoreViewBox = false,
+  outputOptions = {}
+) {
+  const { quiet = false, verbose = false } = outputOptions;
   // SECURITY: Validate directory path
   const safeDir = validateFilePath(dirPath, {
     mustExist: true
@@ -673,16 +719,25 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
 
   /** @type {BBoxFileResult[]} */
   const results = [];
+
+  // WHY: Progress indicator is informational, suppress in quiet mode
   // WHY: Cast to ProgressIndicator since createProgress returns Object type
-  const progress = /** @type {ProgressIndicator} */ (
-    createProgress(`Processing ${filtered.length} files`)
-  );
+  const progress = quiet
+    ? null
+    : /** @type {ProgressIndicator} */ (createProgress(`Processing ${filtered.length} files`));
+
+  // WHY: verbose mode shows file count before processing
+  if (verbose && !quiet) {
+    printInfo(`Found ${filtered.length} SVG files in ${safeDir}`);
+  }
 
   for (let i = 0; i < filtered.length; i++) {
     const file = /** @type {string} */ (filtered[i]);
     const filePath = path.join(safeDir, file);
 
-    progress.update(`${i + 1}/${filtered.length} - ${file}`);
+    if (progress) {
+      progress.update(`${i + 1}/${filtered.length} - ${file}`);
+    }
 
     try {
       // WHY: Validate input file exists before attempting bbox computation
@@ -691,11 +746,12 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
         throw new ValidationError(`Input file not found: ${filePath}`);
       }
 
-      const result = await computeBBox(filePath, [], ignoreViewBox);
+      const result = await computeBBox(filePath, [], ignoreViewBox, false, { quiet, verbose });
       results.push(result);
     } catch (err) {
       // WHY: err is of type unknown in catch blocks, use type guard
       const message = err instanceof Error ? err.message : String(err);
+      // WHY: Errors should always be printed, even in quiet mode
       printError(`Failed to process ${file}: ${message}`);
       // WHY: results must be a Record<string, BBoxResult>, so wrap error in a special key
       results.push({
@@ -706,7 +762,9 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
     }
   }
 
-  progress.done(`Processed ${filtered.length} files`);
+  if (progress) {
+    progress.done(`Processed ${filtered.length} files`);
+  }
   return results;
 }
 
@@ -796,16 +854,27 @@ function parseListFile(listPath) {
  * SECURE: Handles errors for each entry independently.
  *
  * @param {string} listPath - Path to list file
+ * @param {Object} [outputOptions] - Output options for quiet/verbose modes
+ * @param {boolean} [outputOptions.quiet] - Minimal output mode
+ * @param {boolean} [outputOptions.verbose] - Show detailed progress
  * @returns {Promise<BBoxFileResult[]>} Array of file results with bboxes
  */
-async function processList(listPath) {
+async function processList(listPath, outputOptions = {}) {
+  const { quiet = false, verbose = false } = outputOptions;
   const entries = parseListFile(listPath);
   /** @type {BBoxFileResult[]} */
   const results = [];
+
+  // WHY: Progress indicator is informational, suppress in quiet mode
   // WHY: Cast to ProgressIndicator since createProgress returns Object type
-  const progress = /** @type {ProgressIndicator} */ (
-    createProgress(`Processing ${entries.length} entries`)
-  );
+  const progress = quiet
+    ? null
+    : /** @type {ProgressIndicator} */ (createProgress(`Processing ${entries.length} entries`));
+
+  // WHY: verbose mode shows entry count before processing
+  if (verbose && !quiet) {
+    printInfo(`Processing ${entries.length} entries from list file`);
+  }
 
   for (let i = 0; i < entries.length; i++) {
     const entry = /** @type {ListEntry} */ (entries[i]);
@@ -813,7 +882,10 @@ async function processList(listPath) {
     if (!entry) {
       continue;
     }
-    progress.update(`${i + 1}/${entries.length} - ${path.basename(entry.path)}`);
+
+    if (progress) {
+      progress.update(`${i + 1}/${entries.length} - ${path.basename(entry.path)}`);
+    }
 
     try {
       // WHY: Validate input file exists before attempting bbox computation
@@ -822,11 +894,15 @@ async function processList(listPath) {
         throw new ValidationError(`Input file not found: ${entry.path}`);
       }
 
-      const result = await computeBBox(entry.path, entry.ids, entry.ignoreViewBox);
+      const result = await computeBBox(entry.path, entry.ids, entry.ignoreViewBox, false, {
+        quiet,
+        verbose
+      });
       results.push(result);
     } catch (err) {
       // WHY: err is of type unknown in catch blocks, use type guard
       const message = err instanceof Error ? err.message : String(err);
+      // WHY: Errors should always be printed, even in quiet mode
       printError(`Failed to process ${entry.path}: ${message}`);
       // WHY: results must be a Record<string, BBoxResult>, so wrap error in a special key
       results.push({
@@ -837,7 +913,9 @@ async function processList(listPath) {
     }
   }
 
-  progress.done(`Processed ${entries.length} entries`);
+  if (progress) {
+    progress.done(`Processed ${entries.length} entries`);
+  }
   return results;
 }
 
@@ -870,17 +948,42 @@ function formatBBox(bbox) {
  * Print results to console.
  *
  * @param {BBoxFileResult[]} allResults - Array of file results with bboxes
+ * @param {Object} [outputOptions] - Output options for quiet/verbose modes
+ * @param {boolean} [outputOptions.quiet] - Minimal output mode
+ * @param {boolean} [outputOptions.verbose] - Show detailed progress
  */
-function printResults(allResults) {
-  for (const item of allResults) {
-    console.log(`\nSVG: ${item.path}`);
+function printResults(allResults, outputOptions = {}) {
+  const { quiet = false, verbose = false } = outputOptions;
 
-    const keys = Object.keys(item.results);
-    keys.forEach((key, idx) => {
-      const isLast = idx === keys.length - 1;
-      const prefix = isLast ? '└─' : '├─';
-      console.log(`${prefix} ${key}: ${formatBBox(item.results[key])}`);
-    });
+  for (const item of allResults) {
+    // WHY: In quiet mode, only output minimal bbox values without formatting
+    if (quiet) {
+      const keys = Object.keys(item.results);
+      keys.forEach((key) => {
+        const bbox = item.results[key];
+        if (bbox && !bbox.error) {
+          // WHY: Minimal output format for scripting: just the bbox values
+          console.log(`${bbox.x ?? 0} ${bbox.y ?? 0} ${bbox.width ?? 0} ${bbox.height ?? 0}`);
+        }
+      });
+    } else {
+      console.log(`\nSVG: ${item.path}`);
+
+      // WHY: verbose mode shows additional file info
+      if (verbose) {
+        console.log(`  File: ${item.filename}`);
+        if (item.spriteInfo?.isSprite) {
+          console.log(`  Type: Sprite sheet (${item.spriteInfo.stats?.count} sprites)`);
+        }
+      }
+
+      const keys = Object.keys(item.results);
+      keys.forEach((key, idx) => {
+        const isLast = idx === keys.length - 1;
+        const prefix = isLast ? '└─' : '├─';
+        console.log(`${prefix} ${key}: ${formatBBox(item.results[key])}`);
+      });
+    }
   }
 }
 
@@ -921,11 +1024,14 @@ function saveJSON(allResults, outputPath) {
 // ============================================================================
 
 async function main() {
-  // Display version
-  printInfo(`sbb-getbbox v${getVersion()} | svg-bbox toolkit\n`);
-
-  // Parse arguments
+  // Parse arguments first to check quiet/verbose flags
   const args = argParser(process.argv);
+
+  // Display version (but not in quiet mode or JSON mode)
+  // WHY: quiet mode suppresses all non-essential output
+  if (!args.flags.quiet && !args.flags.json) {
+    printInfo(`sbb-getbbox v${getVersion()} | svg-bbox toolkit\n`);
+  }
 
   // Determine mode based on flags and positional args
   let mode = null;
@@ -939,10 +1045,13 @@ async function main() {
     throw new ValidationError('No input specified. Use --help for usage information.');
   }
 
+  /** @type {CLIOptions} */
   const options = {
     ignoreViewBox: args.flags['ignore-vbox'] || false,
     spriteMode: args.flags.sprite || false,
-    jsonOutput: args.flags.json || null
+    jsonOutput: args.flags.json || null,
+    quiet: args.flags.quiet || false,
+    verbose: args.flags.verbose || false
   };
 
   /** @type {BBoxFileResult[]} */
@@ -957,20 +1066,42 @@ async function main() {
     }
     const objectIds = args.positional.slice(1);
 
-    const result = await computeBBox(svgPath, objectIds, options.ignoreViewBox, options.spriteMode);
+    // WHY: Pass quiet/verbose options to control output during computation
+    const result = await computeBBox(
+      svgPath,
+      objectIds,
+      options.ignoreViewBox,
+      options.spriteMode,
+      {
+        quiet: options.quiet,
+        verbose: options.verbose
+      }
+    );
     allResults.push(result);
   } else if (mode === 'dir') {
     const filter = args.flags.filter || null;
-    allResults = await processDirectory(args.flags.dir, filter, options.ignoreViewBox);
+    // WHY: Pass quiet/verbose options to directory processing
+    allResults = await processDirectory(args.flags.dir, filter, options.ignoreViewBox, {
+      quiet: options.quiet,
+      verbose: options.verbose
+    });
   } else if (mode === 'list') {
-    allResults = await processList(args.flags.list);
+    // WHY: Pass quiet/verbose options to list processing
+    allResults = await processList(args.flags.list, {
+      quiet: options.quiet,
+      verbose: options.verbose
+    });
   }
 
   // Output results
   if (options.jsonOutput) {
     saveJSON(allResults, options.jsonOutput);
   } else {
-    printResults(allResults);
+    // WHY: Pass quiet/verbose options to control output formatting
+    printResults(allResults, {
+      quiet: options.quiet,
+      verbose: options.verbose
+    });
   }
 }
 

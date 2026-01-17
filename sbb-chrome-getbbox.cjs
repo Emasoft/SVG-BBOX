@@ -66,6 +66,8 @@ const { printError, printInfo, runCLI, writeJSONOutput } = require('./lib/cli-ut
  * @property {string | null} json - JSON output path or null
  * @property {string} input - Input SVG file path
  * @property {string[]} elementIds - Element IDs to get bbox for
+ * @property {boolean} quiet - Minimal output mode (only bbox values)
+ * @property {boolean} verbose - Verbose output mode (detailed progress)
  */
 
 /**
@@ -216,8 +218,13 @@ function formatBBox(bbox) {
   if (!bbox) {
     return 'null';
   }
-  // Type narrowing: check if it's an error result
-  if ('error' in bbox) {
+  // WHY: Handle string errors from root-level error responses (e.g., "No SVG element found")
+  // The 'in' operator throws TypeError on primitives, so check type first
+  if (typeof bbox === 'string') {
+    return `ERROR: ${bbox}`;
+  }
+  // Type narrowing: check if it's an error result object
+  if (typeof bbox === 'object' && bbox !== null && 'error' in bbox) {
     return `ERROR: ${bbox.error}`;
   }
   // Now TypeScript knows bbox is BBoxResultSuccess
@@ -229,8 +236,33 @@ function formatBBox(bbox) {
 /**
  * Print results to console
  * @param {GetBBoxResult} result - Result object with path and results
+ * @param {boolean} [quiet=false] - Minimal output mode (only bbox values)
  */
-function printResults(result) {
+function printResults(result, quiet = false) {
+  // WHY: In quiet mode, only print the raw bbox values without decoration
+  if (quiet) {
+    const keys = Object.keys(result.results);
+    keys.forEach((key) => {
+      const bbox = result.results[key];
+      // WHY: Check bbox is an object before using 'in' operator
+      // The 'in' operator throws TypeError on primitives (string errors from root-level)
+      if (bbox && typeof bbox === 'object' && !('error' in bbox)) {
+        // Output format: key: x,y,width,height (original bbox without margin)
+        const orig = bbox.originalBbox;
+        console.log(
+          `${key}: ${orig.x.toFixed(2)},${orig.y.toFixed(2)},${orig.width.toFixed(2)},${orig.height.toFixed(2)}`
+        );
+      } else if (typeof bbox === 'string') {
+        // WHY: Handle string errors from root-level error responses
+        console.log(`${key}: ERROR: ${bbox}`);
+      } else if (bbox && typeof bbox === 'object' && 'error' in bbox) {
+        console.log(`${key}: ERROR: ${bbox.error}`);
+      }
+    });
+    return;
+  }
+
+  // Normal output mode with full formatting
   console.log(`\nSVG: ${result.path}`);
 
   const keys = Object.keys(result.results);
@@ -290,6 +322,8 @@ OPTIONAL ARGUMENTS:
 OPTIONS:
   --margin <number>       Margin around bbox in SVG units (default: 5)
   --json <path>           Save results as JSON to specified file (use - for stdout)
+  --quiet                 Minimal output - only prints bounding box values
+  --verbose               Show detailed progress information
   --help, -h              Show this help message
   --version, -v           Show version number
 
@@ -358,7 +392,9 @@ function parseArgs(argv) {
     margin: 5,
     json: null,
     input: '',
-    elementIds: []
+    elementIds: [],
+    quiet: false,
+    verbose: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -400,6 +436,14 @@ function parseArgs(argv) {
           options.json = next;
           useNext();
           break;
+        case 'quiet':
+          // WHY: Minimal output mode - only prints bounding box values
+          options.quiet = true;
+          break;
+        case 'verbose':
+          // WHY: Detailed progress information for debugging
+          options.verbose = true;
+          break;
         default:
           printError(`Unknown option: ${key}`);
           process.exit(1);
@@ -433,9 +477,23 @@ function parseArgs(argv) {
  * Main CLI entry point
  */
 async function main() {
-  printInfo(`sbb-chrome-getbbox v${getVersion()} | svg-bbox toolkit\n`);
-
+  // WHY: Parse args first to know if quiet/verbose mode is enabled before printing
   const options = parseArgs(process.argv);
+
+  // WHY: Suppress version banner in quiet mode - only show bbox values
+  if (!options.quiet) {
+    printInfo(`sbb-chrome-getbbox v${getVersion()} | svg-bbox toolkit\n`);
+  }
+
+  // WHY: Verbose mode shows detailed progress information for debugging
+  if (options.verbose && !options.quiet) {
+    printInfo(`Processing: ${options.input}`);
+    printInfo(
+      `Element IDs: ${options.elementIds.length > 0 ? options.elementIds.join(', ') : 'WHOLE CONTENT'}`
+    );
+    printInfo(`Margin: ${options.margin}`);
+    printInfo('Launching browser...');
+  }
 
   // Get bbox using Chrome .getBBox()
   const result = await getBBoxWithChrome({
@@ -444,11 +502,16 @@ async function main() {
     margin: options.margin
   });
 
+  // WHY: Verbose mode confirms browser completed successfully
+  if (options.verbose && !options.quiet) {
+    printInfo('Browser operation completed');
+  }
+
   // Output results
   if (options.json) {
     saveJSON(result, options.json);
   } else {
-    printResults(result);
+    printResults(result, options.quiet);
   }
 }
 

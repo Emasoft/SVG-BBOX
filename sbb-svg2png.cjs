@@ -59,6 +59,8 @@ const sharp = require('sharp');
  * @property {boolean} deletePngAfter - Delete PNG after creating JPG (requires --jpg)
  * @property {string | null} allowPaths - Comma-separated allowed directory paths
  * @property {boolean} trustedMode - Disable all path security restrictions
+ * @property {boolean} quiet - Minimal output mode (only essential info)
+ * @property {boolean} verbose - Detailed progress information
  * @property {string} [input] - Input SVG file path (single file mode)
  * @property {string} [output] - Output PNG file path (single file mode)
  */
@@ -111,6 +113,20 @@ let MODULE_ALLOWED_DIRS = null;
 let MODULE_TRUSTED_MODE = false;
 
 /**
+ * WHY: Module-level variable for quiet mode
+ * When true, only essential output (file paths) is printed
+ * @type {boolean}
+ */
+let MODULE_QUIET_MODE = false;
+
+/**
+ * WHY: Module-level variable for verbose mode
+ * When true, detailed progress information is printed
+ * @type {boolean}
+ */
+let MODULE_VERBOSE_MODE = false;
+
+/**
  * Get the allowed directories for path validation
  * @returns {string[]|null} Array of allowed directories, or null for trusted mode
  */
@@ -122,6 +138,26 @@ function getAllowedDirs() {
   // WHY: If allow-paths is set, use the configured dirs
   // Otherwise fall back to just CWD
   return MODULE_ALLOWED_DIRS || [process.cwd()];
+}
+
+/**
+ * Log normal output (suppressed in quiet mode)
+ * @param {...unknown} args - Arguments to log
+ */
+function logNormal(...args) {
+  if (!MODULE_QUIET_MODE) {
+    console.log(...args);
+  }
+}
+
+/**
+ * Log verbose output (only shown in verbose mode, suppressed in quiet mode)
+ * @param {...unknown} args - Arguments to log
+ */
+function logVerbose(...args) {
+  if (MODULE_VERBOSE_MODE && !MODULE_QUIET_MODE) {
+    console.log(...args);
+  }
 }
 
 // ---------- CLI parsing ----------
@@ -227,6 +263,14 @@ OPTIONS:
       USE WITH CAUTION - only for trusted inputs
       Allows reading/writing files anywhere on the filesystem
 
+  --quiet
+      Minimal output mode - only prints essential info (output file path)
+      Useful for scripting and automation
+
+  --verbose
+      Show detailed progress information
+      Includes mode, viewBox, bbox details, dimensions, background, margin
+
   --help, -h
       Show this help message
 
@@ -318,7 +362,9 @@ function parseArgs(argv) {
     jpg: false,
     deletePngAfter: false,
     allowPaths: null,
-    trustedMode: false
+    trustedMode: false,
+    quiet: false,
+    verbose: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -397,6 +443,14 @@ function parseArgs(argv) {
         case 'trusted-mode':
           // WHY: Disable all path security restrictions (use with caution)
           options.trustedMode = true;
+          break;
+        case 'quiet':
+          // WHY: Minimal output mode - only essential info (for scripting)
+          options.quiet = true;
+          break;
+        case 'verbose':
+          // WHY: Detailed progress information
+          options.verbose = true;
           break;
         default:
           console.warn('Unknown option:', key);
@@ -965,6 +1019,15 @@ ${sanitizedSvg}
     } catch {
       // If parent doesn't exist, use original path
     }
+    // WHY: Only allow .jpg/.jpeg output extensions when --jpg flag is present
+    // Screenshot is always PNG format; .jpg output requires --jpg for conversion
+    const outputExt = path.extname(resolvedOutput).toLowerCase();
+    if ((outputExt === '.jpg' || outputExt === '.jpeg') && !opts.jpg) {
+      throw new _ValidationError(
+        `Output file has ${outputExt} extension but screenshot is PNG format. ` +
+          `Use --jpg flag for JPEG output format, or use .png extension.`
+      );
+    }
     const safeOutPath = validateOutputPath(resolvedOutput, {
       allowedDirs: getAllowedDirs(),
       requiredExtensions: ['.png', '.jpg', '.jpeg']
@@ -984,14 +1047,23 @@ ${sanitizedSvg}
       }
     });
 
-    printSuccess(`Rendered: ${safeOutPath}`);
-    printInfo(`mode: ${measure.mode}`);
-    printInfo(`viewBox: ${measure.viewBox}`);
-    console.log('  bbox (original target):', measure.targetBBox);
-    console.log('  bbox (with margin):', measure.expandedBBox);
-    printInfo(`size: ${measure.pixelWidth}×${measure.pixelHeight}px`);
-    console.log(`  background: ${opts.background}`);
-    console.log(`  margin (user units): ${opts.margin}`);
+    // WHY: Essential output - always show output file path (even in quiet mode for scripting)
+    if (MODULE_QUIET_MODE) {
+      // Quiet mode: only output file path (for scripting)
+      console.log(safeOutPath);
+    } else {
+      printSuccess(`Rendered: ${safeOutPath}`);
+    }
+    // WHY: Verbose output - detailed progress info
+    if (MODULE_VERBOSE_MODE && !MODULE_QUIET_MODE) {
+      printInfo(`mode: ${measure.mode}`);
+      printInfo(`viewBox: ${measure.viewBox}`);
+      console.log('  bbox (original target):', measure.targetBBox);
+      console.log('  bbox (with margin):', measure.expandedBBox);
+      printInfo(`size: ${measure.pixelWidth}×${measure.pixelHeight}px`);
+      console.log(`  background: ${opts.background}`);
+      console.log(`  margin (user units): ${opts.margin}`);
+    }
 
     // WHY: Convert PNG to JPEG at 100% quality if --jpg option is specified
     if (opts.jpg) {
@@ -1002,12 +1074,21 @@ ${sanitizedSvg}
       // Quality 100 = maximum quality, minimal compression artifacts
       await sharp(safeOutPath).jpeg({ quality: 100 }).toFile(jpgPath);
 
-      printSuccess(`Converted to JPEG: ${jpgPath}`);
+      // WHY: Essential output - always show output file path (even in quiet mode for scripting)
+      if (MODULE_QUIET_MODE) {
+        // Quiet mode: only output file path (for scripting)
+        console.log(jpgPath);
+      } else {
+        printSuccess(`Converted to JPEG: ${jpgPath}`);
+      }
 
       // WHY: Delete PNG after successful JPEG creation if --delete-png-after is specified
       if (opts.deletePngAfter) {
         fs.unlinkSync(safeOutPath);
-        printInfo(`Deleted PNG: ${safeOutPath}`);
+        // WHY: Verbose output - show deletion info
+        if (MODULE_VERBOSE_MODE && !MODULE_QUIET_MODE) {
+          printInfo(`Deleted PNG: ${safeOutPath}`);
+        }
       }
     }
 
@@ -1019,18 +1100,27 @@ ${sanitizedSvg}
       openInChrome(absolutePath)
         .then((result) => {
           if (result.success) {
-            printSuccess(`Opened in Chrome: ${absolutePath}`);
+            // WHY: Normal output - show success (but not in quiet mode)
+            if (!MODULE_QUIET_MODE) {
+              printSuccess(`Opened in Chrome: ${absolutePath}`);
+            }
           } else {
             // WHY: result.error can be null, provide fallback message
-            printWarning(result.error ?? 'Failed to open in Chrome');
-            printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+            // WHY: Normal output - show warning (but not in quiet mode)
+            if (!MODULE_QUIET_MODE) {
+              printWarning(result.error ?? 'Failed to open in Chrome');
+              printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+            }
           }
         })
         .catch((err) => {
           // WHY: Type guard for unknown error in catch block
           const errMsg = err instanceof Error ? err.message : String(err);
-          printWarning(`Failed to auto-open: ${errMsg}`);
-          printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+          // WHY: Normal output - show warning (but not in quiet mode)
+          if (!MODULE_QUIET_MODE) {
+            printWarning(`Failed to auto-open: ${errMsg}`);
+            printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+          }
         });
     }
   } finally {
@@ -1053,10 +1143,17 @@ ${sanitizedSvg}
 // ---------- entry point ----------
 
 async function main() {
-  // Display version
-  printInfo(`sbb-svg2png v${getVersion()} | svg-bbox toolkit\n`);
-
   const opts = parseArgs(process.argv);
+
+  // WHY: Initialize module-level output control from args
+  // Must be set before any output is printed
+  MODULE_QUIET_MODE = opts.quiet;
+  MODULE_VERBOSE_MODE = opts.verbose;
+
+  // Display version (but not in quiet mode)
+  if (!MODULE_QUIET_MODE) {
+    printInfo(`sbb-svg2png v${getVersion()} | svg-bbox toolkit\n`);
+  }
 
   // WHY: Initialize module-level path security from args
   // --trusted-mode allows ALL paths (disables all restrictions)
@@ -1064,7 +1161,10 @@ async function main() {
   if (opts.trustedMode) {
     // WHY: Trusted mode disables all path restrictions
     MODULE_TRUSTED_MODE = true;
-    printWarning('Trusted mode enabled - path restrictions disabled');
+    // WHY: Show warning in verbose mode only (unless quiet)
+    if (MODULE_VERBOSE_MODE && !MODULE_QUIET_MODE) {
+      printWarning('Trusted mode enabled - path restrictions disabled');
+    }
   } else if (opts.allowPaths) {
     // WHY: Parse comma-separated list of allowed directories
     // Also resolve symlinks to handle macOS /tmp -> /private/tmp
@@ -1089,7 +1189,10 @@ async function main() {
       }
     }
     MODULE_ALLOWED_DIRS = Array.from(resolvedPaths);
-    printInfo(`Allowed paths: ${MODULE_ALLOWED_DIRS.join(', ')}`);
+    // WHY: Show allowed paths in verbose mode only
+    if (MODULE_VERBOSE_MODE && !MODULE_QUIET_MODE) {
+      printInfo(`Allowed paths: ${MODULE_ALLOWED_DIRS.join(', ')}`);
+    }
   } else {
     // WHY: Default to CWD only (most secure)
     MODULE_ALLOWED_DIRS = [process.cwd()];
@@ -1099,7 +1202,7 @@ async function main() {
   if (opts.batch) {
     const filePairs = readBatchFile(opts.batch);
 
-    console.log(`Processing ${filePairs.length} SVG files from ${opts.batch}...\n`);
+    logNormal(`Processing ${filePairs.length} SVG files from ${opts.batch}...\n`);
 
     /** @type {Array<{success: boolean, input: string, output?: string, error?: string}>} */
     const results = [];
@@ -1109,8 +1212,8 @@ async function main() {
       if (!filePair) continue;
       const { input: svgPath, output: pngPath } = filePair;
 
-      console.log(`[${i + 1}/${filePairs.length}] Rendering ${svgPath}...`);
-      console.log(`    Target: ${pngPath}`);
+      logNormal(`[${i + 1}/${filePairs.length}] Rendering ${svgPath}...`);
+      logVerbose(`    Target: ${pngPath}`);
 
       try {
         // WHY: Validate input file exists before attempting rendering
@@ -1157,9 +1260,9 @@ async function main() {
     const successful = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
 
-    console.log(`\n${'═'.repeat(78)}`);
-    console.log(`Summary: ${successful} successful, ${failed} failed`);
-    console.log('═'.repeat(78));
+    logNormal(`\n${'═'.repeat(78)}`);
+    logNormal(`Summary: ${successful} successful, ${failed} failed`);
+    logNormal('═'.repeat(78));
 
     return;
   }

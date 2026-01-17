@@ -505,3 +505,350 @@ describe('sbb-compare PNG Comparison Tests', () => {
     });
   });
 });
+
+// ============================================================================
+// ADDITIONAL CLI OPTIONS TESTS
+// ============================================================================
+
+describe('sbb-compare Additional CLI Options Tests', () => {
+  beforeAll(() => {
+    // Create temp directory for test outputs
+    if (!fs.existsSync(TEMP_DIR)) {
+      fs.mkdirSync(TEMP_DIR, { recursive: true });
+    }
+  });
+
+  afterAll(() => {
+    // Clean up temp directory
+    if (fs.existsSync(TEMP_DIR)) {
+      fs.rmSync(TEMP_DIR, { recursive: true, force: true });
+    }
+  });
+
+  describe('Verbose Output Mode', () => {
+    it('should output detailed progress with --verbose flag', async () => {
+      /** Tests that --verbose flag produces more detailed output than default mode */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-circle.svg');
+      const diffPath = path.join(TEMP_DIR, 'verbose_test_diff.png');
+
+      // WHY: Use runCommandWithExitCode because files differ (exit code 1)
+      const { stdout, stderr } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--verbose',
+        '--out-diff',
+        diffPath
+      ]);
+
+      // Verbose output should include detailed progress info in stdout or stderr
+      const combinedOutput = stdout + stderr;
+      // Verbose mode provides more information than quiet mode
+      expect(combinedOutput.length).toBeGreaterThan(20);
+    });
+  });
+
+  describe('Quiet Output Mode', () => {
+    it('should output minimal information with --quiet flag', async () => {
+      /** Tests that --quiet flag produces minimal output suitable for scripting */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const diffPath = path.join(TEMP_DIR, 'quiet_test_diff.png');
+
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--quiet',
+        '--out-diff',
+        diffPath
+      ]);
+
+      // Quiet mode should only output the diff percentage (minimal output)
+      // Output should be very short - just a number or percentage
+      const trimmed = stdout.trim();
+      expect(trimmed.length).toBeLessThan(100);
+      // Should contain numeric diff percentage
+      expect(trimmed).toMatch(/\d/);
+    });
+  });
+
+  describe('Headless and No-HTML Options', () => {
+    it('should accept --no-html flag without error', async () => {
+      /** Tests that --no-html flag prevents browser opening (report still generated) */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const diffPath = path.join(TEMP_DIR, 'nohtml_test_diff.png');
+
+      // Should complete without opening browser
+      const { exitCode } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--no-html',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      // Exit code 0 means identical files
+      expect(exitCode).toBe(0);
+    });
+
+    it('should accept --headless flag as alias for --no-html', async () => {
+      /** Tests that --headless is a valid alias for --no-html */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const diffPath = path.join(TEMP_DIR, 'headless_test_diff.png');
+
+      const { exitCode } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--headless',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      expect(exitCode).toBe(0);
+    });
+  });
+
+  describe('Meet Rule Option', () => {
+    it('should accept --meet-rule xMinYMin with scale resolution', async () => {
+      /** Tests that --meet-rule xMinYMin aligns to top-left corner during scaling */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-circle.svg');
+      const diffPath = path.join(TEMP_DIR, 'meet_xMinYMin_diff.png');
+
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--resolution',
+        'scale',
+        '--meet-rule',
+        'xMinYMin',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      expect(result.totalPixels).toBeGreaterThan(0);
+    });
+
+    it('should accept --meet-rule xMaxYMax with scale resolution', async () => {
+      /** Tests that --meet-rule xMaxYMax aligns to bottom-right corner during scaling */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-circle.svg');
+      const diffPath = path.join(TEMP_DIR, 'meet_xMaxYMax_diff.png');
+
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--resolution',
+        'scale',
+        '--meet-rule',
+        'xMaxYMax',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      expect(result.totalPixels).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Slice Rule Option', () => {
+    it('should accept --slice-rule xMidYMid with clip resolution', async () => {
+      /** Tests that --slice-rule works with clip resolution mode */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-circle.svg');
+      const diffPath = path.join(TEMP_DIR, 'slice_xMidYMid_diff.png');
+
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--resolution',
+        'clip',
+        '--slice-rule',
+        'xMidYMid',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      expect(result.totalPixels).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Aspect Ratio Threshold Option', () => {
+    it('should accept --aspect-ratio-threshold with valid value', async () => {
+      /** Tests that --aspect-ratio-threshold controls tolerance for aspect ratio differences */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-circle.svg');
+      const diffPath = path.join(TEMP_DIR, 'aspect_threshold_diff.png');
+
+      // Both SVGs have 1:1 aspect ratio (100x100 and 200x200), so this should succeed
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--aspect-ratio-threshold',
+        '0.01',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      expect(result.totalPixels).toBeGreaterThan(0);
+    });
+
+    it('should reject --aspect-ratio-threshold outside valid range', async () => {
+      /** Tests that --aspect-ratio-threshold validates range (0-1) */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+
+      // Value > 1 is invalid
+      await expect(
+        execFilePromise('node', [
+          COMPARER_PATH,
+          svg1Path,
+          svg2Path,
+          '--aspect-ratio-threshold',
+          '2.0'
+        ])
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('Scale Option', () => {
+    it('should accept --scale parameter for resolution multiplier', async () => {
+      /** Tests that --scale controls the render resolution multiplier */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const diffPath = path.join(TEMP_DIR, 'scale_test_diff.png');
+
+      // Using scale=2 means 2x resolution
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--scale',
+        '2',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      // With scale=2 on 100x100 SVG, total pixels should be greater than base
+      expect(result.totalPixels).toBeGreaterThan(0);
+      expect(result.diffPercentage).toBe(0); // Identical files
+    });
+  });
+
+  describe('Timeout Option', () => {
+    it('should accept --timeout parameter in milliseconds', async () => {
+      /** Tests that --timeout configures browser operation timeout */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const diffPath = path.join(TEMP_DIR, 'timeout_test_diff.png');
+
+      // Set a reasonable timeout (60 seconds)
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--timeout',
+        '60000',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      expect(result.diffPercentage).toBe(0);
+    });
+  });
+
+  describe('Trusted Mode Option', () => {
+    it('should accept --trusted-mode flag for bypassing path restrictions', async () => {
+      /** Tests that --trusted-mode disables CWD path security restrictions */
+      const svg1Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2Path = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const diffPath = path.join(TEMP_DIR, 'trusted_mode_diff.png');
+
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        svg1Path,
+        svg2Path,
+        '--trusted-mode',
+        '--json',
+        '--out-diff',
+        diffPath
+      ]);
+
+      const result = JSON.parse(stdout);
+      expect(result.diffPercentage).toBe(0);
+    });
+  });
+
+  describe('Batch Comparison Mode', () => {
+    it('should process batch file with multiple SVG pairs', async () => {
+      /** Tests that --batch processes a tab-separated file of SVG pairs */
+      // Create a batch file with two comparison pairs
+      const batchFilePath = path.join(TEMP_DIR, 'test_batch.txt');
+      const svg1 = path.join(FIXTURES_DIR, 'simple-rect.svg');
+      const svg2 = path.join(FIXTURES_DIR, 'simple-rect-red.svg');
+      const svg3 = path.join(FIXTURES_DIR, 'simple-circle.svg');
+
+      // Write batch file content (tab-separated)
+      const batchContent = `${svg1}\t${svg1}\n${svg2}\t${svg3}`;
+      fs.writeFileSync(batchFilePath, batchContent);
+
+      const { stdout } = runCommandWithExitCode('node', [
+        COMPARER_PATH,
+        '--batch',
+        batchFilePath,
+        '--json',
+        '--trusted-mode'
+      ]);
+
+      const result = JSON.parse(stdout);
+      // Batch mode returns an array of results
+      expect(Array.isArray(result.results)).toBe(true);
+      expect(result.results.length).toBe(2);
+      // First pair is identical
+      expect(result.results[0].diffPercentage).toBe(0);
+      // Second pair is different
+      expect(result.results[1].diffPercentage).toBeGreaterThan(0);
+    });
+
+    it('should reject batch file with invalid format', async () => {
+      /** Tests that --batch rejects files without proper tab separation */
+      const batchFilePath = path.join(TEMP_DIR, 'invalid_batch.txt');
+      // Invalid: using spaces instead of tabs
+      const invalidContent = 'file1.svg file2.svg';
+      fs.writeFileSync(batchFilePath, invalidContent);
+
+      await expect(
+        execFilePromise('node', [
+          COMPARER_PATH,
+          '--batch',
+          batchFilePath,
+          '--json',
+          '--trusted-mode'
+        ])
+      ).rejects.toThrow();
+    });
+  });
+});

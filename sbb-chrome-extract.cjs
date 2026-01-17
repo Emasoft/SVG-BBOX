@@ -48,6 +48,8 @@
  * @property {string} background - Background color
  * @property {string|null} batch - Batch file path (optional)
  * @property {string} [input] - Input SVG file path (set in single mode)
+ * @property {boolean} quiet - Minimal output mode (only essential info)
+ * @property {boolean} verbose - Detailed progress information
  */
 
 /**
@@ -72,6 +74,36 @@ const { getVersion } = require('./version.cjs');
 const { printError, printSuccess, printInfo, runCLI } = require('./lib/cli-utils.cjs');
 // SECURITY: Import security utilities
 const { SHELL_METACHARACTERS, SVGBBoxError } = require('./lib/security-utils.cjs');
+
+// WHY: Module-level flags for output verbosity control
+// Set by parseArgs() and respected by log functions
+let MODULE_QUIET = false;
+let MODULE_VERBOSE = false;
+
+/**
+ * Log info message (respects quiet/verbose flags)
+ * @param {string} message - Message to log
+ * @param {'info'|'verbose'|'essential'} level - Message level
+ *   - 'info': Normal output, suppressed in quiet mode
+ *   - 'verbose': Only shown in verbose mode
+ *   - 'essential': Always shown (file paths, errors)
+ */
+function log(message, level = 'info') {
+  if (level === 'essential') {
+    // WHY: Essential output (file paths) always shown
+    console.log(message);
+  } else if (level === 'verbose') {
+    // WHY: Verbose output only in verbose mode (and not in quiet mode)
+    if (MODULE_VERBOSE && !MODULE_QUIET) {
+      console.log(message);
+    }
+  } else {
+    // WHY: Normal info output suppressed in quiet mode
+    if (!MODULE_QUIET) {
+      console.log(message);
+    }
+  }
+}
 
 /**
  * Extract SVG element using native .getBBox() method
@@ -152,11 +184,14 @@ async function extractWithGetBBox(options) {
       margin
     );
 
-    printInfo(
-      `Standard .getBBox() result: ${result.originalBbox.width.toFixed(2)} × ${result.originalBbox.height.toFixed(2)}`
+    // WHY: Verbose output for bbox dimensions
+    log(
+      `Standard .getBBox() result: ${result.originalBbox.width.toFixed(2)} × ${result.originalBbox.height.toFixed(2)}`,
+      'verbose'
     );
-    printInfo(
-      `With margin (${margin}): ${result.bbox.width.toFixed(2)} × ${result.bbox.height.toFixed(2)}`
+    log(
+      `With margin (${margin}): ${result.bbox.width.toFixed(2)} × ${result.bbox.height.toFixed(2)}`,
+      'verbose'
     );
 
     // Create a new SVG with just this element and the getBBox dimensions
@@ -195,7 +230,8 @@ ${defsContent}${/** @type {Element} */ (clone).outerHTML}
 
     // Write the extracted SVG
     fs.writeFileSync(outputSvg, extractedSvg);
-    printSuccess(`SVG extracted to: ${outputSvg}`);
+    // WHY: File paths are essential output (always shown, even in quiet mode)
+    log(`SVG extracted to: ${outputSvg}`, 'essential');
 
     // Render PNG if requested
     if (outputPng) {
@@ -206,7 +242,8 @@ ${defsContent}${/** @type {Element} */ (clone).outerHTML}
         background,
         viewBox: result.bbox
       });
-      printSuccess(`PNG rendered to: ${outputPng}`);
+      // WHY: File paths are essential output (always shown, even in quiet mode)
+      log(`PNG rendered to: ${outputPng}`, 'essential');
     }
   } finally {
     await browser.close();
@@ -288,7 +325,11 @@ async function renderToPng(page, svgContent, outputPath, options) {
     omitBackground: background === 'transparent'
   });
 
-  printInfo(`PNG size: ${pngWidth}×${pngHeight}px (scale: ${scale}x, background: ${background})`);
+  // WHY: PNG details are verbose output
+  log(
+    `PNG size: ${pngWidth}×${pngHeight}px (scale: ${scale}x, background: ${background})`,
+    'verbose'
+  );
 }
 
 /**
@@ -358,6 +399,9 @@ PNG RENDERING OPTIONS:
 GENERAL OPTIONS:
   --help, -h              Show this help message
   --version, -v           Show version number
+  --quiet                 Minimal output - only prints extracted file paths
+                          Useful for scripting and automation
+  --verbose               Show detailed progress information
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -530,7 +574,9 @@ function parseArgs(argv) {
     height: null,
     background: 'transparent',
     batch: null,
-    input: undefined
+    input: undefined,
+    quiet: false,
+    verbose: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -615,6 +661,14 @@ function parseArgs(argv) {
           options.background = next || 'transparent';
           useNext();
           break;
+        case 'quiet':
+          // WHY: Quiet mode - only output essential info (extracted file paths)
+          options.quiet = true;
+          break;
+        case 'verbose':
+          // WHY: Verbose mode - show detailed progress information
+          options.verbose = true;
+          break;
         default:
           printError(`Unknown option: ${key}`);
           process.exit(1);
@@ -670,9 +724,16 @@ function parseArgs(argv) {
  * @returns {Promise<void>}
  */
 async function main() {
-  printInfo(`sbb-chrome-extract v${getVersion()} | svg-bbox toolkit\n`);
-
   const options = parseArgs(process.argv);
+
+  // WHY: Set module-level flags before any output
+  MODULE_QUIET = options.quiet;
+  MODULE_VERBOSE = options.verbose;
+
+  // WHY: Version banner suppressed in quiet mode
+  if (!MODULE_QUIET) {
+    printInfo(`sbb-chrome-extract v${getVersion()} | svg-bbox toolkit\n`);
+  }
 
   // BATCH MODE
   if (options.batch) {
@@ -680,7 +741,10 @@ async function main() {
     /** @type {BatchResult[]} */
     const results = [];
 
-    printInfo(`Processing ${entries.length} extraction(s) in batch mode...\n`);
+    // WHY: Batch progress info suppressed in quiet mode
+    if (!MODULE_QUIET) {
+      printInfo(`Processing ${entries.length} extraction(s) in batch mode...\n`);
+    }
 
     for (let i = 0; i < entries.length; i++) {
       // WHY: TypeScript needs explicit null check for array element access
@@ -695,7 +759,10 @@ async function main() {
           throw new SVGBBoxError(`Input file not found: ${inputFile}`);
         }
 
-        printInfo(`[${i + 1}/${entries.length}] Extracting "${objectId}" from ${inputFile}...`);
+        // WHY: Progress info suppressed in quiet mode
+        if (!MODULE_QUIET) {
+          printInfo(`[${i + 1}/${entries.length}] Extracting "${objectId}" from ${inputFile}...`);
+        }
 
         /** @type {ExtractOptions} */
         const extractOptions = {
@@ -719,7 +786,10 @@ async function main() {
           error: undefined
         });
 
-        console.log(`  ✓ ${path.basename(outputFile)}`);
+        // WHY: Success indicator suppressed in quiet mode (file path already shown by extractWithGetBBox)
+        if (!MODULE_QUIET) {
+          console.log(`  ✓ ${path.basename(outputFile)}`);
+        }
       } catch (err) {
         // WHY: TypeScript requires type guard for catch block errors (type 'unknown')
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -732,20 +802,24 @@ async function main() {
         };
         results.push(errorResult);
 
+        // WHY: Errors always shown (essential output)
         console.error(`  ✗ Failed: ${inputFile}`);
         console.error(`    ${errorMessage}`);
       }
     }
 
     // Output batch summary
-    console.log('');
-    const successful = results.filter((r) => !r.error).length;
-    const failed = results.filter((r) => r.error).length;
+    // WHY: Summary suppressed in quiet mode
+    if (!MODULE_QUIET) {
+      console.log('');
+      const successful = results.filter((r) => !r.error).length;
+      const failed = results.filter((r) => r.error).length;
 
-    if (failed === 0) {
-      printSuccess(`Batch complete! ${successful}/${entries.length} extraction(s) successful.`);
-    } else {
-      printInfo(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+      if (failed === 0) {
+        printSuccess(`Batch complete! ${successful}/${entries.length} extraction(s) successful.`);
+      } else {
+        printInfo(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+      }
     }
 
     return;

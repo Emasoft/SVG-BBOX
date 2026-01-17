@@ -28,6 +28,10 @@ const execFilePromise = promisify(execFile);
 // as it needs to build/load the font cache on first run
 const INKSCAPE_VERSION_TIMEOUT = 15000;
 
+// WHY 15000ms timeout: Inkscape queries can hang indefinitely if the file is malformed
+// or if Inkscape encounters an internal error during rendering
+const INKSCAPE_QUERY_TIMEOUT = 15000;
+
 // WHY: Common installation paths for Inkscape across different platforms
 // Users may have Inkscape installed in non-PATH locations
 const INKSCAPE_COMMON_PATHS = [
@@ -105,7 +109,9 @@ async function getBBoxWithInkscape(options) {
   if (elementIds.length === 0) {
     try {
       // Query all objects in the file
-      const { stdout } = await execFilePromise(inkscapeCmd, ['--query-all', safePath]);
+      const { stdout } = await execFilePromise(inkscapeCmd, ['--query-all', safePath], {
+        timeout: INKSCAPE_QUERY_TIMEOUT
+      });
 
       const lines = stdout.trim().split('\n');
       if (lines.length === 0 || !lines[0]) {
@@ -152,14 +158,20 @@ async function getBBoxWithInkscape(options) {
       }
 
       try {
-        const { stdout } = await execFilePromise(inkscapeCmd, [
-          `--query-id=${id}`,
-          '--query-x',
-          '--query-y',
-          '--query-width',
-          '--query-height',
-          safePath
-        ]);
+        const { stdout } = await execFilePromise(
+          inkscapeCmd,
+          [
+            `--query-id=${id}`,
+            '--query-x',
+            '--query-y',
+            '--query-width',
+            '--query-height',
+            safePath
+          ],
+          {
+            timeout: INKSCAPE_QUERY_TIMEOUT
+          }
+        );
 
         const lines = stdout.trim().split('\n');
         if (lines.length >= 4) {

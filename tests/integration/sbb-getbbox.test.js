@@ -322,6 +322,249 @@ describe('sbb-getbbox CLI Integration Tests', () => {
     });
   });
 
+  describe('CLI options coverage', () => {
+    describe('-s/--sprite option (sprite sheet detection)', () => {
+      it('should detect and process sprite sheet with multiple elements', async () => {
+        const svgPath = path.join(tempDir, 'sprites.svg');
+        // Create SVG with 4 icon-* elements (triggers sprite detection via common ID pattern)
+        const svgContent = `<svg viewBox="0 0 200 100" width="200" height="100" xmlns="http://www.w3.org/2000/svg">
+  <rect id="icon-home" x="0" y="0" width="40" height="40" fill="red"/>
+  <rect id="icon-user" x="50" y="0" width="40" height="40" fill="green"/>
+  <rect id="icon-settings" x="100" y="0" width="40" height="40" fill="blue"/>
+  <rect id="icon-help" x="150" y="0" width="40" height="40" fill="orange"/>
+</svg>`;
+        await fs.writeFile(svgPath, svgContent, 'utf8');
+
+        const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath, '--sprite'], {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        });
+
+        // Should detect sprite sheet and report sprite info
+        expect(stdout).toContain('Sprite sheet detected');
+        expect(stdout).toContain('Sprites:');
+        // Should compute bbox for each sprite
+        expect(stdout).toContain('icon-home');
+        expect(stdout).toContain('icon-user');
+      });
+    });
+
+    describe('-d/--dir option (batch directory processing)', () => {
+      it('should process all SVG files in directory', async () => {
+        // Create multiple SVG files in tempDir
+        const svg1 = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="30" height="30" fill="red"/></svg>`;
+        const svg2 = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="25" fill="blue"/></svg>`;
+        await fs.writeFile(path.join(tempDir, 'rect.svg'), svg1, 'utf8');
+        await fs.writeFile(path.join(tempDir, 'circle.svg'), svg2, 'utf8');
+
+        const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', '--dir', tempDir], {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        });
+
+        // Should process both files
+        expect(stdout).toContain('rect.svg');
+        expect(stdout).toContain('circle.svg');
+        expect(stdout).toContain('WHOLE CONTENT');
+      });
+    });
+
+    describe('-f/--filter option (regex filter for directory)', () => {
+      it('should filter directory files by regex pattern', async () => {
+        // Create multiple SVG files with different naming patterns
+        const svgA = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="50" height="50" fill="red"/></svg>`;
+        const svgB = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" fill="blue"/></svg>`;
+        await fs.writeFile(path.join(tempDir, 'icon-home.svg'), svgA, 'utf8');
+        await fs.writeFile(path.join(tempDir, 'icon-user.svg'), svgA, 'utf8');
+        await fs.writeFile(path.join(tempDir, 'logo.svg'), svgB, 'utf8');
+
+        const { stdout } = await execFileAsync(
+          'node',
+          ['sbb-getbbox.cjs', '--dir', tempDir, '--filter', '^icon-'],
+          {
+            cwd: projectRoot,
+            timeout: CLI_EXEC_TIMEOUT
+          }
+        );
+
+        // Should only process icon-* files, not logo.svg
+        expect(stdout).toContain('icon-home.svg');
+        expect(stdout).toContain('icon-user.svg');
+        expect(stdout).not.toContain('logo.svg');
+      });
+    });
+
+    describe('-l/--list option (process from list file)', () => {
+      it('should process SVGs from list file', async () => {
+        // Create SVG files
+        const svg1 = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect id="box" x="5" y="5" width="40" height="40" fill="red"/></svg>`;
+        const svg2 = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="20" fill="blue"/></svg>`;
+        const svgPath1 = path.join(tempDir, 'first.svg');
+        const svgPath2 = path.join(tempDir, 'second.svg');
+        await fs.writeFile(svgPath1, svg1, 'utf8');
+        await fs.writeFile(svgPath2, svg2, 'utf8');
+
+        // Create list file with paths and optional element IDs
+        const listContent = `# Comment line\n${svgPath1} box\n${svgPath2}`;
+        const listPath = path.join(tempDir, 'files.txt');
+        await fs.writeFile(listPath, listContent, 'utf8');
+
+        const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', '--list', listPath], {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        });
+
+        // Should process both files
+        expect(stdout).toContain('first.svg');
+        expect(stdout).toContain('box:'); // Specific element ID from first file
+        expect(stdout).toContain('second.svg');
+        expect(stdout).toContain('WHOLE CONTENT'); // No ID specified for second file
+      });
+    });
+
+    describe('-j/--json option (JSON output)', () => {
+      it('should output results as JSON to file', async () => {
+        const svgPath = path.join(tempDir, 'test.svg');
+        const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="20" width="60" height="60" fill="green"/></svg>`;
+        await fs.writeFile(svgPath, svgContent, 'utf8');
+
+        const jsonPath = path.join(tempDir, 'output.json');
+        await execFileAsync('node', ['sbb-getbbox.cjs', svgPath, '--json', jsonPath], {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        });
+
+        // Verify JSON file was created and has correct structure
+        const jsonContent = await fs.readFile(jsonPath, 'utf8');
+        const parsed = JSON.parse(jsonContent);
+
+        expect(parsed).toHaveProperty(svgPath);
+        expect(parsed[svgPath]).toHaveProperty('WHOLE CONTENT');
+        expect(parsed[svgPath]['WHOLE CONTENT']).toHaveProperty('x');
+        expect(parsed[svgPath]['WHOLE CONTENT']).toHaveProperty('width');
+      });
+
+      it('should output JSON to stdout when using -', async () => {
+        const svgPath = path.join(tempDir, 'stdout-test.svg');
+        const svgContent = `<svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="30" fill="purple"/></svg>`;
+        await fs.writeFile(svgPath, svgContent, 'utf8');
+
+        const { stdout } = await execFileAsync(
+          'node',
+          ['sbb-getbbox.cjs', svgPath, '--json', '-'],
+          {
+            cwd: projectRoot,
+            timeout: CLI_EXEC_TIMEOUT
+          }
+        );
+
+        // stdout should be valid JSON
+        const parsed = JSON.parse(stdout);
+        expect(parsed).toHaveProperty(svgPath);
+        // Account for conservative rounding (ceil to 0.5) applied by bbox computation
+        // Width should be 30 or slightly higher due to ceil rounding
+        expect(parsed[svgPath]['WHOLE CONTENT'].width).toBeGreaterThanOrEqual(30);
+        expect(parsed[svgPath]['WHOLE CONTENT'].width).toBeLessThanOrEqual(31);
+      });
+    });
+
+    describe('-q/--quiet option (minimal output)', () => {
+      it('should output only bbox values in quiet mode', async () => {
+        const svgPath = path.join(tempDir, 'quiet.svg');
+        const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="20" width="30" height="40" fill="cyan"/></svg>`;
+        await fs.writeFile(svgPath, svgContent, 'utf8');
+
+        const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath, '--quiet'], {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        });
+
+        // Quiet mode should NOT contain version info, file path decorations, or tree characters
+        expect(stdout).not.toContain('sbb-getbbox v');
+        expect(stdout).not.toContain('SVG:');
+        expect(stdout).not.toContain('└─');
+        // Should contain space-separated bbox values: "x y width height"
+        expect(stdout.trim()).toMatch(/^\d+(\.\d+)?\s+\d+(\.\d+)?\s+\d+(\.\d+)?\s+\d+(\.\d+)?$/);
+      });
+    });
+
+    describe('-v/--verbose option (detailed output)', () => {
+      it('should show detailed progress in verbose mode', async () => {
+        const svgPath = path.join(tempDir, 'verbose.svg');
+        const svgContent = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="80" height="80" fill="magenta"/></svg>`;
+        await fs.writeFile(svgPath, svgContent, 'utf8');
+
+        const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath, '--verbose'], {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        });
+
+        // Verbose mode shows version info and file details
+        expect(stdout).toContain('sbb-getbbox v');
+        expect(stdout).toContain('verbose.svg');
+        // Should still contain bbox output
+        expect(stdout).toMatch(/width:\s*80/);
+      });
+    });
+
+    describe('Combined options', () => {
+      it('should combine --dir and --json options', async () => {
+        // Create multiple SVG files
+        const svg1 = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" fill="red"/></svg>`;
+        const svg2 = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" fill="blue"/></svg>`;
+        await fs.writeFile(path.join(tempDir, 'a.svg'), svg1, 'utf8');
+        await fs.writeFile(path.join(tempDir, 'b.svg'), svg2, 'utf8');
+
+        const jsonPath = path.join(tempDir, 'batch-output.json');
+        await execFileAsync('node', ['sbb-getbbox.cjs', '--dir', tempDir, '--json', jsonPath], {
+          cwd: projectRoot,
+          timeout: CLI_EXEC_TIMEOUT
+        });
+
+        // Verify JSON contains both files
+        const jsonContent = await fs.readFile(jsonPath, 'utf8');
+        const parsed = JSON.parse(jsonContent);
+        const paths = Object.keys(parsed);
+
+        expect(paths.length).toBe(2);
+        expect(paths.some((p) => p.includes('a.svg'))).toBe(true);
+        expect(paths.some((p) => p.includes('b.svg'))).toBe(true);
+      });
+
+      it('should combine --sprite and --quiet options', async () => {
+        const svgPath = path.join(tempDir, 'quiet-sprites.svg');
+        // Create sprite sheet with common ID pattern
+        const svgContent = `<svg viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
+  <rect id="icon-a" x="0" y="0" width="40" height="40" fill="red"/>
+  <rect id="icon-b" x="50" y="0" width="40" height="40" fill="green"/>
+  <rect id="icon-c" x="100" y="0" width="40" height="40" fill="blue"/>
+  <rect id="icon-d" x="150" y="0" width="40" height="40" fill="yellow"/>
+</svg>`;
+        await fs.writeFile(svgPath, svgContent, 'utf8');
+
+        const { stdout } = await execFileAsync(
+          'node',
+          ['sbb-getbbox.cjs', svgPath, '--sprite', '--quiet'],
+          {
+            cwd: projectRoot,
+            timeout: CLI_EXEC_TIMEOUT
+          }
+        );
+
+        // Quiet mode with sprite should output multiple lines of bbox values (one per sprite)
+        // No sprite detection messages, no tree formatting
+        expect(stdout).not.toContain('Sprite sheet detected');
+        expect(stdout).not.toContain('icon-');
+        // Should have multiple lines of space-separated values
+        const lines = stdout
+          .trim()
+          .split('\n')
+          .filter((l) => l.trim());
+        expect(lines.length).toBeGreaterThanOrEqual(4); // 4 sprites
+      });
+    });
+  });
+
   describe('Real-world scenarios', () => {
     it('should detect intentional content outside viewBox (logo cutout)', async () => {
       const svgPath = path.join(tempDir, 'logo-cutout.svg');

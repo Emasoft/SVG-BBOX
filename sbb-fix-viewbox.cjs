@@ -60,6 +60,60 @@ const {
   printWarning
 } = require('./lib/cli-utils.cjs');
 
+// WHY: Module-level flags for quiet/verbose mode
+// Set by main() after parsing args, used by logging helpers
+let MODULE_QUIET = false;
+let MODULE_VERBOSE = false;
+
+/**
+ * Log a message if not in quiet mode.
+ * @param {string} message - Message to log
+ */
+function log(message) {
+  if (!MODULE_QUIET) {
+    console.log(message);
+  }
+}
+
+/**
+ * Log a verbose message (only in verbose mode, never in quiet mode).
+ * @param {string} message - Message to log
+ */
+function logVerbose(message) {
+  if (MODULE_VERBOSE && !MODULE_QUIET) {
+    console.log(message);
+  }
+}
+
+/**
+ * Log an info message if not in quiet mode.
+ * @param {string} message - Message to log
+ */
+function logInfo(message) {
+  if (!MODULE_QUIET) {
+    printInfo(message);
+  }
+}
+
+/**
+ * Log a success message if not in quiet mode.
+ * @param {string} message - Message to log
+ */
+function logSuccess(message) {
+  if (!MODULE_QUIET) {
+    printSuccess(message);
+  }
+}
+
+/**
+ * Log a warning message (always shown, even in quiet mode for safety).
+ * @param {string} message - Message to log
+ */
+function logWarning(message) {
+  // WHY: Warnings are always shown for safety, even in quiet mode
+  printWarning(message);
+}
+
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
@@ -88,7 +142,11 @@ OPTIONS:
   --overwrite         Overwrite input file (USE WITH CAUTION - loses original viewBox!)
   --auto-open         Automatically open fixed SVG in Chrome/Chromium
                       (only applies to single file mode)
+  --quiet             Minimal output - only prints output file path
+                      Useful for scripting and automation
+  --verbose           Show detailed progress information
   --help, -h          Show this help message
+  --version, -v       Show version number
 
 WHAT IT DOES:
   1. Loads SVG in headless Chrome
@@ -157,7 +215,7 @@ USE CASES:
 /**
  * Parse command-line arguments.
  * @param {string[]} argv - The process.argv array
- * @returns {{ input: string | null, output: string | null, autoOpen: boolean, force: boolean, overwrite: boolean, batch: string | null }}
+ * @returns {{ input: string | null, output: string | null, autoOpen: boolean, force: boolean, overwrite: boolean, batch: string | null, quiet: boolean, verbose: boolean }}
  */
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -173,6 +231,8 @@ function parseArgs(argv) {
   let force = false;
   let overwrite = false;
   let batch = null;
+  let quiet = false;
+  let verbose = false;
 
   for (let i = 0; i < args.length; i++) {
     // WHY: TypeScript doesn't know args[i] is safe within bounds of for loop
@@ -185,6 +245,12 @@ function parseArgs(argv) {
       force = true;
     } else if (arg === '--overwrite') {
       overwrite = true;
+    } else if (arg === '--quiet') {
+      // WHY: Quiet mode for scripting - only outputs essential info (output file path)
+      quiet = true;
+    } else if (arg === '--verbose') {
+      // WHY: Verbose mode for debugging - shows detailed progress information
+      verbose = true;
     } else if (arg === '--batch' && i + 1 < args.length) {
       // WHY: args[++i] is string | undefined, convert to string | null for return type consistency
       batch = args[++i] ?? null;
@@ -227,7 +293,7 @@ function parseArgs(argv) {
     }
   }
 
-  return { input, output, autoOpen, force, overwrite, batch };
+  return { input, output, autoOpen, force, overwrite, batch, quiet, verbose };
 }
 
 /**
@@ -352,22 +418,31 @@ const PUPPETEER_OPTIONS = {
  * @returns {Promise<void>}
  */
 async function fixSvgFile(inputPath, outputPath, autoOpen = false, force = false) {
+  logVerbose(`Processing: ${inputPath}`);
+  logVerbose(`Output target: ${outputPath}`);
+  logVerbose(`Force mode: ${force}`);
+
   // SECURITY: Validate and sanitize input path
   const safePath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
     mustExist: true
   });
+  logVerbose(`Validated input path: ${safePath}`);
 
   // SECURITY: Read SVG with size limit and validation
   const svgContent = readSVGFileSafe(safePath);
+  logVerbose(`Read SVG content: ${svgContent.length} bytes`);
 
   // SECURITY: Sanitize SVG content (remove scripts, event handlers)
   const sanitizedSvg = sanitizeSVGContent(svgContent);
+  logVerbose(`Sanitized SVG content: ${sanitizedSvg.length} bytes`);
 
   let browser = null;
 
   try {
+    logVerbose('Launching headless browser...');
     browser = await puppeteer.launch(PUPPETEER_OPTIONS);
+    logVerbose('Browser launched successfully');
     const page = await browser.newPage();
 
     // SECURITY: Set page timeout
@@ -408,6 +483,7 @@ ${sanitizedSvg}
       }
       /* eslint-enable no-undef */
     }, FONT_TIMEOUT_MS);
+    logVerbose('Fonts loaded, computing visual bbox...');
 
     // Run the fix inside the browser context
     const fixedSvgString = await page.evaluate(async (forceRegenerate) => {
@@ -571,13 +647,22 @@ ${sanitizedSvg}
       /* eslint-enable no-undef */
       return serializer.serializeToString(svg);
     }, force);
+    logVerbose(`Visual bbox computed, fixed SVG generated: ${fixedSvgString.length} bytes`);
 
     // SECURITY: Validate output path and write safely
     const safeOutPath = validateOutputPath(outputPath, {
       requiredExtensions: ['.svg']
     });
+    logVerbose(`Writing fixed SVG to: ${safeOutPath}`);
     writeFileSafe(safeOutPath, fixedSvgString, 'utf8');
-    printSuccess(`Fixed SVG saved to: ${safeOutPath}`);
+
+    // WHY: In quiet mode, only output the output file path (for scripting)
+    // In normal/verbose mode, show success message
+    if (MODULE_QUIET) {
+      console.log(safeOutPath);
+    } else {
+      printSuccess(`Fixed SVG saved to: ${safeOutPath}`);
+    }
 
     // Auto-open SVG in Chrome/Chromium if requested
     // CRITICAL: Must use Chrome/Chromium (other browsers have poor SVG support)
@@ -587,18 +672,18 @@ ${sanitizedSvg}
       openInChrome(absolutePath)
         .then((result) => {
           if (result.success) {
-            printSuccess(`Opened in Chrome: ${absolutePath}`);
+            logSuccess(`Opened in Chrome: ${absolutePath}`);
           } else {
             // WHY: result.error is string | null, provide fallback for null case
-            printWarning(result.error ?? 'Failed to open in Chrome');
-            printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+            logWarning(result.error ?? 'Failed to open in Chrome');
+            logInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
           }
         })
         .catch((err) => {
           // WHY: err is of type 'unknown' in catch blocks - must use type guard
           const errorMessage = err instanceof Error ? err.message : String(err);
-          printWarning(`Failed to auto-open: ${errorMessage}`);
-          printInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
+          logWarning(`Failed to auto-open: ${errorMessage}`);
+          logInfo(`Please open manually in Chrome/Chromium: ${absolutePath}`);
         });
     }
   } finally {
@@ -621,15 +706,21 @@ ${sanitizedSvg}
 // -------- entry point --------
 
 async function main() {
-  // Display version
-  printInfo(`sbb-fix-viewbox v${getVersion()} | svg-bbox toolkit\n`);
+  const { input, output, autoOpen, force, overwrite, batch, quiet, verbose } = parseArgs(
+    process.argv
+  );
 
-  const { input, output, autoOpen, force, overwrite, batch } = parseArgs(process.argv);
+  // WHY: Set module-level flags for logging helpers to use
+  MODULE_QUIET = quiet;
+  MODULE_VERBOSE = verbose;
 
-  // SECURITY: Warn when overwriting original file
+  // Display version (but not in quiet mode)
+  logInfo(`sbb-fix-viewbox v${getVersion()} | svg-bbox toolkit\n`);
+
+  // SECURITY: Warn when overwriting original file (always show for safety)
   if (overwrite && !batch) {
-    printWarning('⚠️  --overwrite flag detected: Original viewBox information will be lost!');
-    printWarning('   Original file will be overwritten. Press Ctrl+C to cancel...');
+    logWarning('⚠️  --overwrite flag detected: Original viewBox information will be lost!');
+    logWarning('   Original file will be overwritten. Press Ctrl+C to cancel...');
     // Give user 2 seconds to cancel
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
@@ -639,7 +730,8 @@ async function main() {
     const filePairs = readBatchFile(batch);
     const results = [];
 
-    printInfo(`Processing ${filePairs.length} file(s) in batch mode...\n`);
+    logInfo(`Processing ${filePairs.length} file(s) in batch mode...\n`);
+    logVerbose(`Batch file: ${batch}`);
 
     for (let i = 0; i < filePairs.length; i++) {
       // WHY: TypeScript doesn't know filePairs[i] is safe within bounds of for loop
@@ -654,8 +746,9 @@ async function main() {
           throw new ValidationError(`Input file not found: ${inputFile}`);
         }
 
-        printInfo(`[${i + 1}/${filePairs.length}] Fixing: ${inputFile}`);
-        printInfo(`    Target: ${outputFile}`);
+        logInfo(`[${i + 1}/${filePairs.length}] Fixing: ${inputFile}`);
+        logVerbose(`    Target: ${outputFile}`);
+        logVerbose(`    Force mode: ${force}`);
 
         await fixSvgFile(inputFile, outputFile, false, force);
 
@@ -665,7 +758,12 @@ async function main() {
           success: true
         });
 
-        console.log(`  ✓ ${path.basename(outputFile)}`);
+        // WHY: In quiet mode, only output essential info (output file path)
+        if (MODULE_QUIET) {
+          console.log(outputFile);
+        } else {
+          log(`  ✓ ${path.basename(outputFile)}`);
+        }
       } catch (err) {
         // WHY: err is of type 'unknown' in catch blocks - must use type guard
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -676,20 +774,22 @@ async function main() {
           error: errorMessage
         });
 
+        // WHY: Errors are always shown, even in quiet mode
         printError(`  ✗ Failed: ${inputFile}`);
         printError(`    ${errorMessage}`);
       }
     }
 
-    // Print summary
-    console.log('');
+    // Print summary (not in quiet mode)
+    log('');
     const successful = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
 
     if (failed === 0) {
-      printSuccess(`Batch complete! ${successful}/${filePairs.length} files fixed successfully.`);
+      logSuccess(`Batch complete! ${successful}/${filePairs.length} files fixed successfully.`);
     } else {
-      printWarning(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+      // WHY: Always show warnings about failures
+      logWarning(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
     }
 
     return;
