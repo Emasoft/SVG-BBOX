@@ -473,12 +473,14 @@ get_config_array() {
 # ══════════════════════════════════════════════════════════════════
 
 # Detect package manager from lock files
+# WHY: Supports multiple package managers with their respective lockfile formats
 detect_package_manager() {
     if [ -f "pnpm-lock.yaml" ]; then
         echo "pnpm"
     elif [ -f "yarn.lock" ]; then
         echo "yarn"
-    elif [ -f "bun.lockb" ]; then
+    # WHY: Bun has two lockfile formats - bun.lock (text, newer) and bun.lockb (binary, older)
+    elif [ -f "bun.lock" ] || [ -f "bun.lockb" ]; then
         echo "bun"
     elif [ -f "package-lock.json" ]; then
         echo "npm"
@@ -4681,19 +4683,22 @@ validate_deps_lockfile() {
     local HAS_ERRORS=false
 
     # Determine package manager
+    # WHY: Check for all supported lockfile formats including bun's text and binary formats
     local PKG_MANAGER=""
     if [ -f "pnpm-lock.yaml" ]; then
         PKG_MANAGER="pnpm"
+    elif [ -f "bun.lock" ] || [ -f "bun.lockb" ]; then
+        PKG_MANAGER="bun"
     elif [ -f "package-lock.json" ]; then
         PKG_MANAGER="npm"
     elif [ -f "yarn.lock" ]; then
         PKG_MANAGER="yarn"
     else
         report_validation_error "DEPS_NO_LOCKFILE" \
-            "No lockfile found (pnpm-lock.yaml, package-lock.json, or yarn.lock)" \
+            "No lockfile found (pnpm-lock.yaml, bun.lock, package-lock.json, or yarn.lock)" \
             "CI uses --frozen-lockfile which requires a committed lockfile" \
             "Generate lockfile and commit it" \
-            "pnpm install && git add pnpm-lock.yaml"
+            "bun install && git add bun.lock"
         return 1
     fi
 
@@ -4723,6 +4728,24 @@ validate_deps_lockfile() {
                     "git add package-lock.json && git commit -m 'chore: commit lockfile'"
             fi
             ;;
+        bun)
+            # WHY: Bun uses --frozen-lockfile to verify lockfile is in sync
+            # Check both bun.lock (text) and bun.lockb (binary) formats
+            local BUN_LOCKFILE=""
+            if [ -f "bun.lock" ]; then
+                BUN_LOCKFILE="bun.lock"
+            elif [ -f "bun.lockb" ]; then
+                BUN_LOCKFILE="bun.lockb"
+            fi
+            # Verify lockfile is committed
+            if ! git ls-files --error-unmatch "$BUN_LOCKFILE" >/dev/null 2>&1; then
+                report_validation_warning "DEPS_LOCKFILE_NOT_COMMITTED" \
+                    "$BUN_LOCKFILE exists but is not committed" \
+                    "CI may produce different dependency tree" \
+                    "Commit the lockfile" \
+                    "git add $BUN_LOCKFILE && git commit -m 'chore: commit lockfile'"
+            fi
+            ;;
     esac
 
     if [ "$HAS_ERRORS" = true ]; then
@@ -4750,6 +4773,14 @@ validate_deps_audit() {
 
     if [ -f "pnpm-lock.yaml" ]; then
         AUDIT_OUTPUT=$(pnpm audit --json 2>/dev/null || true)
+        if [ -n "$AUDIT_OUTPUT" ]; then
+            CRITICAL=$(echo "$AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.critical // 0' 2>/dev/null || echo "0")
+            HIGH=$(echo "$AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.high // 0' 2>/dev/null || echo "0")
+        fi
+    elif [ -f "bun.lock" ] || [ -f "bun.lockb" ]; then
+        # WHY: Bun uses pnpm audit internally - fall back to npm audit for compatibility
+        # Note: As of bun 1.3, `bun audit` is not yet available
+        AUDIT_OUTPUT=$(npm audit --json 2>/dev/null || true)
         if [ -n "$AUDIT_OUTPUT" ]; then
             CRITICAL=$(echo "$AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.critical // 0' 2>/dev/null || echo "0")
             HIGH=$(echo "$AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.high // 0' 2>/dev/null || echo "0")
