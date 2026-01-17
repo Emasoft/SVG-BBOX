@@ -272,6 +272,7 @@ const TEST_DEPENDENCIES = {
 
   'package-lock.json': [RUN_ALL_TESTS_PATTERN],
   'pnpm-lock.yaml': [RUN_ALL_TESTS_PATTERN],
+  'bun.lock': [RUN_ALL_TESTS_PATTERN],
 
   // Build and utility scripts
   // Empty arrays = these files don't require any specific tests to run
@@ -701,15 +702,15 @@ async function runTests(patterns) {
   );
 
   try {
-    // Use pnpm exec instead of npx for cross-platform compatibility
-    // On Windows, pnpm is a .cmd file that requires shell: true to be found
+    // WHY: Use bunx (bun's package runner) for cross-platform compatibility
+    // On Windows, bunx is a .cmd file that requires shell: true to be found
     const isWindows = process.platform === 'win32';
-    const { stdout, stderr } = await execFileAsync('pnpm', ['exec', 'vitest', ...args], {
+    const { stdout, stderr } = await execFileAsync('bunx', ['vitest', ...args], {
       cwd: path.join(__dirname, '..'),
       env: { ...process.env, FORCE_COLOR: '1' },
       maxBuffer: MAX_EXEC_BUFFER_BYTES,
       timeout: VITEST_RUN_TIMEOUT_MS,
-      shell: isWindows // Required for Windows to find pnpm.cmd
+      shell: isWindows // Required for Windows to find bunx.cmd
     });
 
     // Print test output
