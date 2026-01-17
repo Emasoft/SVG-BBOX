@@ -5865,6 +5865,44 @@ EOF
 }
 
 # Commit version bump
+# Update CHANGELOG.md with git-cliff before committing
+# WHY: Changelog must be updated with each release to document all changes
+# The changelog is the source of truth for release notes
+update_changelog() {
+    local VERSION=$1
+
+    log_info "Updating CHANGELOG.md with git-cliff..."
+
+    # Check if git-cliff is installed
+    if ! command_exists git-cliff; then
+        log_warning "git-cliff not installed - changelog will not be updated"
+        log_info "Install: brew install git-cliff (macOS) or cargo install git-cliff (Linux)"
+        return 0  # Non-fatal, continue with release
+    fi
+
+    # Check if cliff.toml exists
+    if [ ! -f "cliff.toml" ]; then
+        log_warning "cliff.toml not found - using default git-cliff config"
+    fi
+
+    # Generate full changelog with the new tag
+    # WHY: Using -o overwrites CHANGELOG.md with complete history
+    # The --tag flag tells git-cliff to include commits up to this tag
+    if git-cliff --tag "v${VERSION}" -o CHANGELOG.md 2>/dev/null; then
+        log_success "CHANGELOG.md updated for v${VERSION}"
+        return 0
+    else
+        log_warning "git-cliff failed - changelog may be incomplete"
+        # Try without --tag as fallback
+        if git-cliff -o CHANGELOG.md 2>/dev/null; then
+            log_success "CHANGELOG.md updated (without tag)"
+            return 0
+        fi
+        log_warning "Could not update changelog - continuing anyway"
+        return 0  # Non-fatal
+    fi
+}
+
 commit_version_bump() {
     local VERSION=$1
 
@@ -5890,6 +5928,18 @@ commit_version_bump() {
     # WHY: Lock file only changes if dependencies are affected by version bump
     if [ -f "pnpm-lock.yaml" ]; then
         git add pnpm-lock.yaml 2>/dev/null || true
+    fi
+
+    # Stage bun.lock if it exists (for bun package manager)
+    # WHY: Bun uses bun.lock instead of pnpm-lock.yaml
+    if [ -f "bun.lock" ]; then
+        git add bun.lock 2>/dev/null || true
+    fi
+
+    # Stage CHANGELOG.md if it was updated
+    # WHY: Changelog must be included in the release commit
+    if [ -f "CHANGELOG.md" ]; then
+        git add CHANGELOG.md 2>/dev/null || true
     fi
 
     # Verify there are changes to commit
@@ -7182,6 +7232,11 @@ main() {
 
     # Generate release notes
     generate_release_notes "$NEW_VERSION" "$PREVIOUS_TAG" || rollback_release "$NEW_VERSION" "release-notes"
+
+    # Update CHANGELOG.md before committing
+    # WHY: Changelog must be updated at every release to maintain accurate history
+    # WHY: This must happen BEFORE commit_version_bump() so CHANGELOG.md is included in the commit
+    update_changelog "$NEW_VERSION"
 
     # Commit version bump
     commit_version_bump "$NEW_VERSION" || rollback_release "$NEW_VERSION" "commit-version"
