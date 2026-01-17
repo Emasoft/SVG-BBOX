@@ -1105,8 +1105,21 @@ node sbb-svg2png.cjs input.svg output.png \
   [--scale N] \
   [--width W --height H] \
   [--background white|transparent|#rrggbb] \
-  [--margin N]
+  [--margin N] \
+  [--allow-paths <dirs>] \
+  [--trusted-mode]
 ```
+
+#### Security Options
+
+By default, `sbb-svg2png` only allows access to files within the current working
+directory. These options control file access:
+
+- `--allow-paths <dirs>` - Allow access to additional directories
+  (comma-separated)
+  - Example: `--allow-paths /tmp,/var/artifacts`
+- `--trusted-mode` - Trust all file paths without CWD restriction
+  - Use with caution: disables all path security checks
 
 #### Modes
 
@@ -1176,6 +1189,17 @@ Where `file1` and `file2` can be `.svg` or `.png` files.
 - `--verbose` - Show detailed progress
 - `--help` - Display help text with usage examples
 - `--version` - Display version number
+
+#### Security Options
+
+By default, `sbb-compare` only allows access to files within the current working
+directory. These options control file access:
+
+- `--allow-paths <dirs>` - Allow access to additional directories
+  (comma-separated)
+  - Example: `--allow-paths /tmp,/var/artifacts`
+- `--trusted-mode` - Trust all file paths without CWD restriction
+  - Use with caution: disables all path security checks
 
 #### Understanding preserveAspectRatio Values
 
@@ -1577,7 +1601,61 @@ and provide reliable, cross-platform results.
 
 ---
 
+#### Specifying Custom Inkscape Path
+
+All Inkscape tools support the `--inkscape-path` option to specify a custom
+Inkscape executable path. This is useful when:
+
+- Inkscape is not in your system PATH
+- You have multiple Inkscape versions installed
+- Using Inkscape from a non-standard location
+
+```bash
+# macOS App Bundle
+node sbb-inkscape-getbbox.cjs drawing.svg \
+  --inkscape-path /Applications/Inkscape.app/Contents/MacOS/inkscape
+
+# Homebrew installation
+node sbb-inkscape-getbbox.cjs drawing.svg \
+  --inkscape-path /opt/homebrew/bin/inkscape
+
+# Linux custom path
+node sbb-inkscape-getbbox.cjs drawing.svg \
+  --inkscape-path /usr/local/bin/inkscape
+```
+
+---
+
 #### Available Inkscape Tools
+
+##### 0. `sbb-inkscape-getbbox.cjs` - Get BBox via Inkscape
+
+Get bounding box information using Inkscape's query commands.
+
+```bash
+node sbb-inkscape-getbbox.cjs input.svg [options]
+```
+
+**Options:**
+
+- `--all` - Query all objects in the SVG
+- `--inkscape-path <path>` - Custom Inkscape executable path
+- `--json` - Output results as JSON
+
+**Examples:**
+
+```bash
+# Get bbox for specific elements
+node sbb-inkscape-getbbox.cjs drawing.svg element1 element2
+
+# Get bbox for all elements
+node sbb-inkscape-getbbox.cjs drawing.svg --all
+
+# Use custom Inkscape path
+node sbb-inkscape-getbbox.cjs drawing.svg --inkscape-path /opt/homebrew/bin/inkscape
+```
+
+---
 
 ##### 1. `sbb-inkscape-text2path.cjs` - Convert Text to Paths
 

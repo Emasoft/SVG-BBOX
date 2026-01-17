@@ -116,16 +116,19 @@ async function getBBoxWithInkscape(options) {
         const parts = firstLine.split(',');
         if (parts.length >= 5) {
           // Extract coordinates - parts[0] is the ID, parts[1-4] are x,y,width,height
-          const xStr = parts[1] ?? '0';
-          const yStr = parts[2] ?? '0';
-          const widthStr = parts[3] ?? '0';
-          const heightStr = parts[4] ?? '0';
+          // WHY: parseFloat returns NaN for invalid input, not null/undefined
+          // so we must explicitly check for NaN and use 0 as fallback
+          /** @param {string | undefined} str */
+          const parseCoord = (str) => {
+            const val = parseFloat(str || '');
+            return Number.isNaN(val) ? 0 : val;
+          };
           results['WHOLE CONTENT'] = {
             bbox: {
-              x: parseFloat(xStr),
-              y: parseFloat(yStr),
-              width: parseFloat(widthStr),
-              height: parseFloat(heightStr)
+              x: parseCoord(parts[1]),
+              y: parseCoord(parts[2]),
+              width: parseCoord(parts[3]),
+              height: parseCoord(parts[4])
             },
             objectCount: lines.length
           };
@@ -160,12 +163,17 @@ async function getBBoxWithInkscape(options) {
 
         const lines = stdout.trim().split('\n');
         if (lines.length >= 4) {
-          const parsed = lines.map(parseFloat);
-          // Extract coordinates with fallback to 0 for type safety
-          const x = parsed[0] ?? 0;
-          const y = parsed[1] ?? 0;
-          const width = parsed[2] ?? 0;
-          const height = parsed[3] ?? 0;
+          // WHY: parseFloat returns NaN for invalid input, not null/undefined
+          // so we must explicitly check for NaN and use 0 as fallback
+          /** @param {string | undefined} str */
+          const parseCoord = (str) => {
+            const val = parseFloat(str || '');
+            return Number.isNaN(val) ? 0 : val;
+          };
+          const x = parseCoord(lines[0]);
+          const y = parseCoord(lines[1]);
+          const width = parseCoord(lines[2]);
+          const height = parseCoord(lines[3]);
           results[id] = {
             bbox: { x, y, width, height },
             element: { id }

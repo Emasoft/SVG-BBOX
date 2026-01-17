@@ -167,13 +167,8 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { execFile: _execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
-const {
-  getVersion,
-  printVersion: _printVersion,
-  hasVersionFlag: _hasVersionFlag
-} = require('./version.cjs');
+const { getVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
@@ -190,13 +185,7 @@ const {
   ValidationError
 } = require('./lib/security-utils.cjs');
 
-const {
-  runCLI,
-  printSuccess: _printSuccess,
-  printError,
-  printInfo,
-  printWarning
-} = require('./lib/cli-utils.cjs');
+const { runCLI, printError, printInfo, printWarning } = require('./lib/cli-utils.cjs');
 
 // -------- CLI parsing --------
 

@@ -164,6 +164,13 @@ const { EXIT_CODES } = require('./lib/security-utils.cjs');
 let MODULE_ALLOWED_DIRS = null;
 
 /**
+ * WHY: Module-level variable for trusted mode
+ * When true, all path security restrictions are disabled
+ * @type {boolean}
+ */
+let MODULE_TRUSTED_MODE = false;
+
+/**
  * WHY: Module-level variable for custom timeout
  * This is set by main() based on --timeout flag
  * Used by browser operations throughout the module
@@ -173,10 +180,14 @@ let MODULE_TIMEOUT_MS = BROWSER_TIMEOUT_MS;
 
 /**
  * Get the allowed directories for path validation
- * @returns {string[]} Array of allowed directories
+ * @returns {string[]|null} Array of allowed directories, or null for trusted mode
  */
 function getAllowedDirs() {
-  // WHY: If trusted mode or allow-paths is set, use the configured dirs
+  // WHY: If trusted mode, return null to skip all directory checks
+  if (MODULE_TRUSTED_MODE) {
+    return null;
+  }
+  // WHY: If allow-paths is set, use the configured dirs
   // Otherwise fall back to just CWD
   return MODULE_ALLOWED_DIRS || [process.cwd()];
 }
@@ -2511,12 +2522,11 @@ async function main() {
   MODULE_TIMEOUT_MS = args.timeout || BROWSER_TIMEOUT_MS;
 
   // WHY: Initialize module-level allowed directories from args
-  // --trusted-mode allows ALL paths (uses root filesystem as allowed)
+  // --trusted-mode allows ALL paths (disables all restrictions)
   // --allow-paths allows specific comma-separated directories
   if (args.trustedMode) {
-    // WHY: Trusted mode allows access to all paths (for CI/testing)
-    // Use root path to effectively disable path restrictions
-    MODULE_ALLOWED_DIRS = ['/'];
+    // WHY: Trusted mode disables all path restrictions
+    MODULE_TRUSTED_MODE = true;
     if (args.verbose && !args.quiet) {
       printWarning('Trusted mode enabled - path restrictions disabled');
     }
