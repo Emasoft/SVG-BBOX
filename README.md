@@ -2010,6 +2010,16 @@ expected vs what you saw. Read the CONTRIBUTING file in the repo to know more.
 
 ---
 
+## 📝 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes, new
+features, bug fixes, and breaking changes in each release.
+
+The changelog follows [Keep a Changelog](https://keepachangelog.com/) format
+and is automatically generated using [git-cliff](https://git-cliff.org/).
+
+---
+
 ## 📄 License
 
 This project is licensed under the **MIT License**.

@@ -63,13 +63,15 @@ The script follows the **correct order** to avoid race conditions:
 3. **Runs quality checks** - Linting, type checking, all tests
 4. **Bumps version** - Updates package.json and pnpm-lock.yaml
 5. **Generates release notes** - Uses git-cliff to generate formatted changelog from commits
-6. **Commits version bump** - Creates commit for version change
-7. **Creates git tag locally** - Tag not pushed yet (avoids race condition)
-8. **Pushes commits to GitHub** - Triggers CI workflow
-9. **Waits for CI workflow** - Monitors lint, typecheck, test, e2e, coverage (3-10 min)
-10. **Creates GitHub Release** - 🔑 **Pushes tag + creates release atomically**
-11. **Waits for Publish workflow** - Monitors npm publish workflow (up to 5 min)
-12. **Verifies npm publication** - Confirms package is live on npm
+6. **Updates CHANGELOG.md** - Auto-updates changelog with git-cliff (see below)
+7. **Commits version bump** - Creates commit for version change + CHANGELOG.md
+8. **Creates git tag locally** - Tag not pushed yet (avoids race condition)
+9. **Pushes commits to GitHub** - Triggers CI workflow
+10. **Waits for CI workflow** - Monitors lint, typecheck, test, e2e, coverage (3-10 min)
+11. **Creates GitHub Release** - 🔑 **Pushes tag + creates release atomically**
+12. **Waits for Publish workflow** - Monitors npm publish workflow (up to 5 min)
+13. **Verifies npm publication** - Confirms package is live on npm
+14. **Verifies bun installation** - Tests package works with bun add + CLI execution
 
 ### Why This Order Matters
 
@@ -427,6 +429,62 @@ The release script now runs two verification phases after npm publication:
 - Users install with both npm and bun
 - Bun handles dependencies differently than npm
 - Actual CLI execution catches more issues than --help
+
+### Changelog Auto-Update
+
+**CHANGELOG: Automatic changelog generation with git-cliff**
+
+The release script automatically updates CHANGELOG.md at every release using
+git-cliff. This ensures the changelog is always current and matches the release.
+
+**How it works:**
+
+1. `update_changelog()` is called AFTER `generate_release_notes()` but BEFORE
+   `commit_version_bump()`
+2. Uses `git-cliff --tag "vX.Y.Z" -o CHANGELOG.md` to regenerate the full changelog
+3. The changelog is included in the version bump commit
+
+**Validation and error handling:**
+
+- VERSION parameter is validated (empty check, ANSI stripping, semver format)
+- File permissions are checked before write
+- Verifies CHANGELOG.md was created and is non-empty
+- Verifies the new version appears in the generated changelog
+- Shows git-cliff warnings for debugging (e.g., non-conventional commits)
+- Falls back to `git-cliff -o CHANGELOG.md` if --tag fails
+
+**Configuration:**
+
+- `cliff.toml` - git-cliff configuration file (optional but recommended)
+- Uses Keep a Changelog format
+- Follows Semantic Versioning
+- Groups commits by type (feat, fix, docs, etc.)
+
+**Manual changelog update:**
+
+If needed outside of releases:
+
+```bash
+# Regenerate full changelog
+git-cliff -o CHANGELOG.md
+
+# Preview without writing
+git-cliff
+
+# Include unreleased commits for a future version
+git-cliff --tag "v1.2.0" -o CHANGELOG.md
+```
+
+**Non-fatal behavior:**
+
+Changelog update failures are logged but don't block the release. This is
+intentional because:
+
+- git-cliff might not be installed
+- cliff.toml might be missing
+- Some commits might not follow conventional format (warnings only)
+
+The release will proceed with the existing CHANGELOG.md if update fails.
 
 ## JavaScript/TypeScript Code Fixing
 

@@ -38,6 +38,33 @@ jobs:
       - name: Install dependencies (for prepublishOnly script)
         run: bun install --frozen-lockfile
 
+      # =================================================================
+      # PRE-PUBLISH VALIDATION
+      # WHY: These checks ensure package quality even if release.sh is
+      # bypassed (e.g., manual tag push). They duplicate CI checks but
+      # provide a safety net for the publishing step.
+      # =================================================================
+
+      - name: Run linter (code quality gate)
+        run: |
+          echo "=== Pre-publish Linting ==="
+          bun run lint
+          echo "✓ Linting passed"
+
+      - name: Run type checker (TypeScript validation)
+        run: |
+          echo "=== Pre-publish Type Checking ==="
+          bun run typecheck
+          echo "✓ Type checking passed"
+
+      - name: Run critical tests (fast validation)
+        run: |
+          echo "=== Pre-publish Critical Tests ==="
+          # Run unit tests and critical integration tests
+          # Skip slow E2E tests (already verified in CI workflow)
+          bunx vitest run tests/unit tests/integration --reporter=verbose
+          echo "✓ Critical tests passed"
+
       - name: Verify toolchain versions
         run: |
           NODE_VER=$(node --version | sed 's/v//')

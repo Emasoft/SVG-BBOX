@@ -5870,8 +5870,26 @@ EOF
 # The changelog is the source of truth for release notes
 update_changelog() {
     local VERSION=$1
+    local CLIFF_OUTPUT=""
+    local CLIFF_EXIT_CODE=0
 
-    log_info "Updating CHANGELOG.md with git-cliff..."
+    # Validate VERSION parameter (same pattern as other functions)
+    # WHY: Empty or ANSI-contaminated version strings cause tag creation failures
+    if [ -z "$VERSION" ]; then
+        log_error "update_changelog called without VERSION parameter"
+        return 0  # Non-fatal, but log the error
+    fi
+
+    # Strip any ANSI codes that might have leaked in (paranoid safeguard)
+    VERSION=$(echo "$VERSION" | strip_ansi)
+
+    # Validate version format
+    if ! validate_version "$VERSION"; then
+        log_error "Invalid version format in update_changelog: $VERSION"
+        return 0  # Non-fatal, but log the error
+    fi
+
+    log_info "Updating CHANGELOG.md with git-cliff for v${VERSION}..."
 
     # Check if git-cliff is installed
     if ! command_exists git-cliff; then
@@ -5885,20 +5903,82 @@ update_changelog() {
         log_warning "cliff.toml not found - using default git-cliff config"
     fi
 
+    # Check file write permissions
+    # WHY: Detect permission issues before git-cliff runs
+    if [ -f "CHANGELOG.md" ] && [ ! -w "CHANGELOG.md" ]; then
+        log_error "CHANGELOG.md exists but is not writable"
+        log_info "Fix: chmod u+w CHANGELOG.md"
+        return 0  # Non-fatal
+    fi
+
+    # Check directory write permissions for new file creation
+    if [ ! -f "CHANGELOG.md" ] && [ ! -w "." ]; then
+        log_error "Current directory is not writable - cannot create CHANGELOG.md"
+        return 0  # Non-fatal
+    fi
+
     # Generate full changelog with the new tag
     # WHY: Using -o overwrites CHANGELOG.md with complete history
     # The --tag flag tells git-cliff to include commits up to this tag
-    if git-cliff --tag "v${VERSION}" -o CHANGELOG.md 2>/dev/null; then
+    # Capture stderr for debugging while still showing warnings
+    CLIFF_OUTPUT=$(git-cliff --tag "v${VERSION}" -o CHANGELOG.md 2>&1)
+    CLIFF_EXIT_CODE=$?
+
+    if [ $CLIFF_EXIT_CODE -eq 0 ]; then
+        # Verify the file was actually written and has content
+        if [ ! -f "CHANGELOG.md" ]; then
+            log_error "git-cliff succeeded but CHANGELOG.md was not created"
+            log_debug "git-cliff output: $CLIFF_OUTPUT"
+            return 0  # Non-fatal
+        fi
+
+        # Check file is not empty (should have at least header)
+        if [ ! -s "CHANGELOG.md" ]; then
+            log_error "git-cliff created empty CHANGELOG.md"
+            log_debug "git-cliff output: $CLIFF_OUTPUT"
+            return 0  # Non-fatal
+        fi
+
+        # Verify the new version appears in the changelog
+        if ! grep -q "\[${VERSION}\]" CHANGELOG.md 2>/dev/null; then
+            log_warning "Version ${VERSION} not found in CHANGELOG.md - may be missing commits"
+        fi
+
         log_success "CHANGELOG.md updated for v${VERSION}"
+
+        # Show any warnings from git-cliff (e.g., non-conventional commits)
+        if [ -n "$CLIFF_OUTPUT" ] && echo "$CLIFF_OUTPUT" | grep -q "WARN"; then
+            log_debug "git-cliff warnings (non-fatal):"
+            echo "$CLIFF_OUTPUT" | grep "WARN" | head -5 | while read -r line; do
+                log_debug "  $line"
+            done
+        fi
+
         return 0
     else
-        log_warning "git-cliff failed - changelog may be incomplete"
+        # git-cliff failed - show the error for debugging
+        log_warning "git-cliff failed (exit code: $CLIFF_EXIT_CODE)"
+        if [ -n "$CLIFF_OUTPUT" ]; then
+            log_debug "git-cliff output:"
+            echo "$CLIFF_OUTPUT" | head -10 | while read -r line; do
+                log_debug "  $line"
+            done
+        fi
+
         # Try without --tag as fallback
-        if git-cliff -o CHANGELOG.md 2>/dev/null; then
+        log_info "Retrying without --tag flag..."
+        CLIFF_OUTPUT=$(git-cliff -o CHANGELOG.md 2>&1)
+        CLIFF_EXIT_CODE=$?
+
+        if [ $CLIFF_EXIT_CODE -eq 0 ] && [ -s "CHANGELOG.md" ]; then
             log_success "CHANGELOG.md updated (without tag)"
             return 0
         fi
+
         log_warning "Could not update changelog - continuing anyway"
+        if [ -n "$CLIFF_OUTPUT" ]; then
+            log_debug "Fallback git-cliff output: $CLIFF_OUTPUT"
+        fi
         return 0  # Non-fatal
     fi
 }
