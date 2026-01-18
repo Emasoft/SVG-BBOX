@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies (for prepublishOnly script)
         run: bun install --frozen-lockfile
 
+      - name: Install Puppeteer Chrome for tests
+        run: bunx puppeteer browsers install chrome
+
       # =================================================================
       # PRE-PUBLISH VALIDATION
       # WHY: These checks ensure package quality even if release.sh is
@@ -93,9 +96,6 @@ jobs:
             echo "::warning::Bun version mismatch: expected ${{ env.BUN_VERSION }}, got $BUN_VER"
           fi
           echo "::notice::Toolchain versions verified for publishing"
-
-      - name: Install Puppeteer Chrome for verification
-        run: bunx puppeteer browsers install chrome
 
       - name: Verify browser detection before publish
         run: |
