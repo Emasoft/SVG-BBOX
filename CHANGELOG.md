@@ -5,18 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [1.1.9] - 2026-01-18
 
 ### ✗ Bug Fixes
 
 - **release**: Comprehensive audit and improvements to release pipeline
 - **hooks**: Re-stage formatted files in pre-commit hook
+- **audit**: Comprehensive codebase audit fixes
 
 ### ◆ Documentation
 
 - Document workflow version validation and bun verification safeguards
 - Regenerate CHANGELOG.md with v1.1.3-v1.1.8 entries
 - **CLAUDE.md**: Make unified publish pipeline mandatory
+- Update README CLI options and regenerate CHANGELOG
 
 ### ★ New Features
 
