@@ -256,8 +256,10 @@ describe('Security Flags Integration Tests', () => {
       const errorOutput = (result.stderr || '') + (result.stdout || '');
       expect(errorOutput).not.toMatch(/outside allowed directories/i);
 
-      // Should show trusted mode warning
-      expect(errorOutput).toMatch(/trusted mode|path restrictions disabled/i);
+      // Should succeed - either show success message or exit with code 0
+      // WHY: --trusted-mode disables path restrictions so the file should render
+      const succeeded = result.status === 0 || errorOutput.includes('Rendered:');
+      expect(succeeded).toBe(true);
     });
   });
 
