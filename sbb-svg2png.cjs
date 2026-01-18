@@ -143,6 +143,7 @@ function getAllowedDirs() {
 /**
  * Log normal output (suppressed in quiet mode)
  * @param {...unknown} args - Arguments to log
+ * @returns {void}
  */
 function logNormal(...args) {
   if (!MODULE_QUIET_MODE) {
@@ -153,6 +154,7 @@ function logNormal(...args) {
 /**
  * Log verbose output (only shown in verbose mode, suppressed in quiet mode)
  * @param {...unknown} args - Arguments to log
+ * @returns {void}
  */
 function logVerbose(...args) {
   if (MODULE_VERBOSE_MODE && !MODULE_QUIET_MODE) {
@@ -162,6 +164,10 @@ function logVerbose(...args) {
 
 // ---------- CLI parsing ----------
 
+/**
+ * Print CLI help message with usage instructions and examples
+ * @returns {void}
+ */
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
@@ -600,7 +606,15 @@ function readBatchFile(batchFilePath) {
 
 // ---------- core render logic ----------
 
-// SECURITY: Secure Puppeteer options
+/**
+ * SECURITY: Secure Puppeteer launch options
+ * WHY: These flags are required for headless Chrome in containerized/CI environments:
+ * - headless: true - Run without visible browser window
+ * - --no-sandbox - Required when running as root in Docker/CI (Chrome sandbox conflicts with container sandbox)
+ * - --disable-setuid-sandbox - Disables setuid sandbox (not available in containers)
+ * - --disable-dev-shm-usage - Uses /tmp instead of /dev/shm (avoids shared memory issues in Docker)
+ * @type {{headless: boolean, args: string[]}}
+ */
 const PUPPETEER_OPTIONS = {
   headless: true,
   args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
@@ -1142,6 +1156,11 @@ ${sanitizedSvg}
 
 // ---------- entry point ----------
 
+/**
+ * Main entry point for sbb-svg2png CLI
+ * Parses arguments and renders SVG to PNG (single file or batch mode)
+ * @returns {Promise<void>}
+ */
 async function main() {
   const opts = parseArgs(process.argv);
 

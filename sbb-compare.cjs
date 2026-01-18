@@ -136,17 +136,10 @@ const {
   sanitizeSVGContent,
   writeFileSafe,
   SVGBBoxError,
-  ValidationError,
-  FileSystemError: _FileSystemError
+  ValidationError
 } = require('./lib/security-utils.cjs');
 
-const {
-  runCLI,
-  printSuccess,
-  printError: _printError,
-  printInfo,
-  printWarning
-} = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printInfo, printWarning } = require('./lib/cli-utils.cjs');
 
 // Import EXIT_CODES for distinct exit codes (0=success, 1=differ, 2=error)
 const { EXIT_CODES } = require('./lib/security-utils.cjs');
@@ -1931,7 +1924,10 @@ async function generateHtmlReport(
   <script>
     // Theme detection and switching
     (function() {
-      // Detect system theme preference
+      /**
+       * Detect system theme preference
+       * @returns {string} 'dark' or 'light'
+       */
       function getSystemTheme() {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
           return 'dark';
@@ -1939,20 +1935,31 @@ async function generateHtmlReport(
         return 'light';
       }
 
-      // Get stored theme or use system preference
+      /**
+       * Get stored theme or use system preference
+       * @returns {string} 'dark' or 'light'
+       */
       function getInitialTheme() {
         const stored = localStorage.getItem('svg-bbox-theme');
         return stored || getSystemTheme();
       }
 
-      // Apply theme
+      /**
+       * Apply theme to document
+       * @param {string} theme - 'dark' or 'light'
+       * @returns {void}
+       */
       function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('svg-bbox-theme', theme);
         updateThemeButton(theme);
       }
 
-      // Update button text
+      /**
+       * Update theme toggle button text
+       * @param {string} theme - 'dark' or 'light'
+       * @returns {void}
+       */
       function updateThemeButton(theme) {
         const button = document.getElementById('theme-toggle');
         if (button) {

@@ -26,11 +26,7 @@ const fs = require('fs');
 const path = require('path');
 // NOTE: puppeteer and chrome-launcher are loaded lazily inside launchBrowserWithFallback()
 // to allow --help and --version to work even when Chrome binaries are not installed
-const {
-  getVersion,
-  printVersion: _printVersion,
-  hasVersionFlag: _hasVersionFlag
-} = require('./version.cjs');
+const { getVersion } = require('./version.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -39,18 +35,10 @@ const {
   readSVGFileSafe,
   sanitizeSVGContent,
   writeFileSafe,
-  SVGBBoxError: _SVGBBoxError,
-  ValidationError,
-  FileSystemError: _FileSystemError
+  ValidationError
 } = require('./lib/security-utils.cjs');
 
-const {
-  runCLI,
-  printSuccess,
-  printError: _printError,
-  printInfo,
-  printWarning: _printWarning
-} = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printInfo } = require('./lib/cli-utils.cjs');
 
 // Centralized timeout configuration
 const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
@@ -83,12 +71,6 @@ const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
  * @property {string[]} errors - Array of error messages
  */
 
-/**
- * Launch Puppeteer with the best available browser:
- *  1. Try bundled Chromium (default Puppeteer behavior).
- *  2. If that fails, try to find a system Chrome/Chromium via chrome-launcher
- *     and launch Puppeteer using its executablePath.
- */
 /**
  * Launch browser with fallback to system Chrome
  * @param {string[]} errorLogMessages - Array to collect error messages
@@ -241,7 +223,8 @@ async function runTest() {
   /**
    * Log function that respects quiet/verbose flags
    * @param {string} message - Message to log
-   * @param {'info'|'verbose'|'result'} level - Log level
+   * @param {'info'|'verbose'|'result'} level - Log level (default: 'info')
+   * @returns {void}
    */
   const log = (message, level = 'info') => {
     // WHY: Results always show regardless of flags (pass/fail output)
@@ -443,7 +426,9 @@ async function runTest() {
         if (allCandidates.length > 0) {
           const index = Math.floor(Math.random() * allCandidates.length);
           const selectedElement = allCandidates[index];
-          // Type guard - ensure element exists before proceeding
+          // WHY: Type guard for array access - Math.random() index should always
+          // be valid, but TypeScript can't prove array[index] is defined. We set
+          // a note instead of throwing because this is a non-critical test path.
           if (!selectedElement) {
             res.summary.note = 'Failed to select random element from candidates.';
           } else {
@@ -598,7 +583,9 @@ async function runTest() {
       try {
         await browser.close();
       } catch {
-        // Force kill if close fails - browser.process() may return null
+        // WHY: browser.close() can throw if browser crashed or connection was
+        // lost. Force-killing ensures no zombie Chrome processes remain. We
+        // swallow the error because cleanup should not cause test failure.
         const browserProcess = browser.process();
         if (browserProcess) {
           browserProcess.kill('SIGKILL');

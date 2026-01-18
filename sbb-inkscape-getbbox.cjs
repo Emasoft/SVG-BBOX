@@ -124,7 +124,10 @@ async function getBBoxWithInkscape(options) {
           // Extract coordinates - parts[0] is the ID, parts[1-4] are x,y,width,height
           // WHY: parseFloat returns NaN for invalid input, not null/undefined
           // so we must explicitly check for NaN and use 0 as fallback
-          /** @param {string | undefined} str */
+          /**
+           * @param {string | undefined} str
+           * @returns {number}
+           */
           const parseCoord = (str) => {
             const val = parseFloat(str || '');
             return Number.isNaN(val) ? 0 : val;
@@ -177,7 +180,10 @@ async function getBBoxWithInkscape(options) {
         if (lines.length >= 4) {
           // WHY: parseFloat returns NaN for invalid input, not null/undefined
           // so we must explicitly check for NaN and use 0 as fallback
-          /** @param {string | undefined} str */
+          /**
+           * @param {string | undefined} str
+           * @returns {number}
+           */
           const parseCoord = (str) => {
             const val = parseFloat(str || '');
             return Number.isNaN(val) ? 0 : val;
@@ -272,6 +278,7 @@ function saveJSON(result, outputPath) {
 
 /**
  * Print help message
+ * @returns {void}
  */
 function printHelp() {
   const version = getVersion();
@@ -419,13 +426,13 @@ function parseArgs(argv) {
   };
 
   for (let i = 0; i < args.length; i++) {
-    const a = args[i];
+    const arg = args[i];
     // Skip undefined entries (for type safety)
-    if (!a) {
+    if (!arg) {
       continue;
     }
-    if (a.startsWith('--')) {
-      const parts = a.split('=');
+    if (arg.startsWith('--')) {
+      const parts = arg.split('=');
       const key = parts[0] ?? '';
       const val = parts[1];
       const name = key.replace(/^--/, '');
@@ -451,7 +458,7 @@ function parseArgs(argv) {
           process.exit(1);
       }
     } else {
-      positional.push(a);
+      positional.push(arg);
     }
   }
 
@@ -482,6 +489,7 @@ function parseArgs(argv) {
 
 /**
  * Main CLI entry point
+ * @returns {Promise<void>}
  */
 async function main() {
   printInfo(`sbb-inkscape-getbbox v${getVersion()} | svg-bbox toolkit\n`);

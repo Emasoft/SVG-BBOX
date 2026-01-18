@@ -31,6 +31,7 @@ const COLORS = {
   magenta: '\x1b[35m'
 };
 
+// Shorthand alias for COLORS to reduce verbosity in template strings
 const c = COLORS;
 
 /**
@@ -140,6 +141,7 @@ ${c.yellow}${c.bold}AVAILABLE COMMANDS:${c.reset}
     Inkscape: 'Inkscape Comparison Tools (Inkscape CLI)'
   };
 
+  // Counter for sequential tool numbering across all categories in the help output
   let toolNumber = 1;
   for (const [catKey, catLabel] of Object.entries(categories)) {
     console.log(`${c.magenta}${c.bold}${catLabel}:${c.reset}`);
@@ -204,7 +206,7 @@ function printVersionInfo() {
 
 /**
  * Interactive tool selection prompt.
- * Asks user to enter a tool number (1-12) and displays help for that tool.
+ * Asks user to enter a tool number (1-16) and displays help for that tool.
  * Only works in TTY (terminal) mode; exits silently if not a TTY.
  * @returns {void}
  */
@@ -232,7 +234,7 @@ function promptToolSelection() {
     }
 
     const selectedTool = TOOLS[selection - 1];
-    // Guard clause to satisfy TypeScript - bounds already checked above but TS doesn't track array access
+    // Guard clause for defensive programming - bounds already checked above but array access could theoretically fail
     if (!selectedTool) {
       printError('Tool not found. This should never happen.');
       process.exit(1);

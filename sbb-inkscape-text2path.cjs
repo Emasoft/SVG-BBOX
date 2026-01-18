@@ -94,6 +94,10 @@ const {
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Prints CLI help text to stdout.
+ * @returns {void}
+ */
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
@@ -662,6 +666,10 @@ async function processSingleFile(inkscapePath, inputPath, outputPath, options, a
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Main entry point for the CLI.
+ * @returns {Promise<void>}
+ */
 async function main() {
   const args = parseArgs(process.argv);
 

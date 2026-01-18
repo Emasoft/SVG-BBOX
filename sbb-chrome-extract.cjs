@@ -334,6 +334,7 @@ async function renderToPng(page, svgContent, outputPath, options) {
 
 /**
  * Print help message
+ * @returns {void}
  */
 function printHelp() {
   const version = getVersion();

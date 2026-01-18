@@ -398,10 +398,11 @@ function parseArgs(argv) {
   };
 
   for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === undefined) continue;
-    if (a.startsWith('--')) {
-      const parts = a.split('=');
+    const arg = args[i];
+    // WHY: Defensive check - TypeScript strict mode requires explicit undefined handling
+    if (arg === undefined) continue;
+    if (arg.startsWith('--')) {
+      const parts = arg.split('=');
       const key = parts[0] || '';
       const val = parts[1];
       const name = key.replace(/^--/, '');
@@ -409,6 +410,8 @@ function parseArgs(argv) {
 
       /**
        * Advance to next arg if value was not inline (--key value vs --key=value)
+       * WHY: Defined inside loop intentionally to capture `i` variable in closure
+       * for incrementing when consuming the next argument as a value
        */
       function useNext() {
         if (val === undefined) {
@@ -449,7 +452,7 @@ function parseArgs(argv) {
           process.exit(1);
       }
     } else {
-      positional.push(a);
+      positional.push(arg);
     }
   }
 
@@ -475,6 +478,7 @@ function parseArgs(argv) {
 
 /**
  * Main CLI entry point
+ * @returns {Promise<void>} Resolves when CLI execution completes
  */
 async function main() {
   // WHY: Parse args first to know if quiet/verbose mode is enabled before printing

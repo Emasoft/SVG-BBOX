@@ -2747,6 +2747,11 @@ async function renameIds(
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Main entry point for the sbb-extract CLI tool.
+ * Parses command-line arguments and executes the requested operation mode.
+ * @returns {Promise<void>}
+ */
 async function main() {
   const opts = parseArgs(process.argv);
 

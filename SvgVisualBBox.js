@@ -1019,6 +1019,7 @@
       await new Promise((resolve, reject) => {
         // CRITICAL FIX #1: Store event handlers for cleanup
         // WHY: Event listeners must be removed to allow garbage collection
+        /** @type {() => void} Handler for successful image load - resolves promise and cleans up listeners */
         const onload = function () {
           // Remove event listeners immediately after firing
           img.onload = null;
@@ -1548,7 +1549,7 @@
 
       // Aggressive safety margin in user units
       let marginUser = safetyMarginUser;
-      if (marginUser == null || !isFinite(marginUser)) {
+      if (marginUser === null || marginUser === undefined || !isFinite(marginUser)) {
         const size = Math.max(coarseBBox.width, coarseBBox.height);
         // 25% of largest dimension + 100 units as a "big" safety net
         marginUser = (size > 0 ? size * 0.25 : 0) + 100;
@@ -2153,7 +2154,7 @@
       bbox = await getSvgElementVisualBBoxTwoPassAggressive(firstEl, bboxOpts);
     } else {
       /** @type {(string | Element)[]} */
-      const validElements = elements.filter((el) => el != null);
+      const validElements = elements.filter((el) => el !== null && el !== undefined);
       bbox = await getSvgElementsUnionVisualBBox(validElements, bboxOpts);
     }
 

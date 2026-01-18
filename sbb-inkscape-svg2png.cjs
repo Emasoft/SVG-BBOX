@@ -302,8 +302,11 @@ function parseArgs(argv) {
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
 
-    // WHY: Helper to safely get next argument value with type assertion
-    // After bounds check, the value is guaranteed to exist
+    /**
+     * Helper to safely get next argument value with type assertion.
+     * After bounds check, the value is guaranteed to exist.
+     * @returns {string} The next argument value
+     */
     const getNextArg = () => /** @type {string} */ (argv[++i]);
 
     if (arg === '--help' || arg === '-h') {
@@ -527,8 +530,7 @@ function readBatchFile(batchFilePath) {
     const inputFile = /** @type {string} */ (parts[0]);
 
     // If output is specified, use it; otherwise auto-generate
-    /** @type {string} */
-    let outputFile;
+    /** @type {string} */ let outputFile;
     if (parts.length >= 2 && parts[1]) {
       // Explicit output path provided
       outputFile = parts[1];

@@ -114,6 +114,10 @@ function logWarning(message) {
   printWarning(message);
 }
 
+/**
+ * Print help message and usage instructions.
+ * @returns {void}
+ */
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
@@ -403,7 +407,14 @@ function readBatchFile(batchFilePath) {
   return filePairs;
 }
 
-// SECURITY: Secure Puppeteer options
+/**
+ * SECURITY: Secure Puppeteer browser launch options.
+ * - headless: true - Run browser without visible UI (prevents UI-based attacks)
+ * - --no-sandbox: Required for running in Docker/CI environments
+ * - --disable-setuid-sandbox: Disable setuid sandbox (not needed in containerized envs)
+ * - --disable-dev-shm-usage: Prevent /dev/shm memory issues in constrained environments
+ * @type {{ headless: boolean, args: string[] }}
+ */
 const PUPPETEER_OPTIONS = {
   headless: true,
   args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
@@ -705,6 +716,11 @@ ${sanitizedSvg}
 
 // -------- entry point --------
 
+/**
+ * Main entry point for the sbb-fix-viewbox CLI tool.
+ * Parses arguments and processes SVG files in single or batch mode.
+ * @returns {Promise<void>}
+ */
 async function main() {
   const { input, output, autoOpen, force, overwrite, batch, quiet, verbose } = parseArgs(
     process.argv

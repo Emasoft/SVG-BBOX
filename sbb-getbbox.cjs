@@ -1023,6 +1023,11 @@ function saveJSON(allResults, outputPath) {
 // MAIN (with comprehensive error handling)
 // ============================================================================
 
+/**
+ * Main entry point for the sbb-getbbox CLI tool.
+ * Parses arguments, determines mode, and processes SVG files to extract bounding boxes.
+ * @returns {Promise<void>}
+ */
 async function main() {
   // Parse arguments first to check quiet/verbose flags
   const args = argParser(process.argv);

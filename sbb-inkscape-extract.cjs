@@ -21,11 +21,10 @@ const {
   validateFilePath,
   validateOutputPath,
   SHELL_METACHARACTERS,
-  SVGBBoxError,
-  ValidationError: _ValidationError
+  SVGBBoxError
 } = require('./lib/security-utils.cjs');
 
-const { runCLI, printSuccess, printError: _printError, printInfo } = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printInfo } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -162,6 +161,7 @@ function parseArgs(argv) {
 
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
+    // WHY: TypeScript guard - argv[i] is guaranteed by loop bounds but TS can't infer this
     if (arg === undefined) continue;
 
     if (arg === '--help' || arg === '-h') {
@@ -279,8 +279,7 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     // Specify the ID of the object to extract
     `--export-id=${objectId}`,
 
-    // ## Margin parameter - uncomment when needed
-    // `--export-margin=${MARGIN}`,
+    // NOTE: --export-margin is added dynamically below when margin is specified
 
     // Output filename
     `--export-filename=${safeOutputPath}`,
