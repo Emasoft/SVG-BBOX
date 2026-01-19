@@ -1,0 +1,236 @@
+#!/bin/sh
+#
+# Pre-push hook: COMPREHENSIVE checks before pushing to remote
+#
+# WHY comprehensive: Code reaching GitHub must pass ALL quality gates.
+# Pre-commit is lightweight (format/lint only) to enable quick "save point" commits.
+# Pre-push runs EVERYTHING to catch issues before CI/CD.
+#
+# WHAT THIS DOES:
+# 1. Linting (ESLint + Prettier check)
+# 2. Type checking (TypeScript)
+# 3. Security audit (npm audit)
+# 4. Build validation (ensures build succeeds)
+# 5. Full test suite (vitest run)
+#
+# PRINCIPLE: "Commit early, commit often, push when ready"
+#
+# INTEGRATION: This hook complements the release script.
+# - Pre-push: Quick validation before code reaches GitHub
+# - Release script: Comprehensive validation + actual release
+#
+
+set -e
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+LOG_TAIL_LINES=150  # Number of lines to show from failed output
+LOCK_FILE="/tmp/svg-bbox-pre-push.lock"
+LOCK_TIMEOUT_SECONDS=600  # 10 minutes max wait
+
+# ANSI Color Codes
+COLOR_RED='\033[0;31m'
+COLOR_GREEN='\033[0;32m'
+COLOR_YELLOW='\033[1;33m'
+COLOR_CYAN='\033[0;36m'
+COLOR_RESET='\033[0m'
+
+# ============================================================================
+# Functions
+# ============================================================================
+
+log_phase() {
+    echo "${COLOR_CYAN}→${COLOR_RESET} $1..."
+}
+
+print_status() {
+    if [ $1 -eq 0 ]; then
+        echo "${COLOR_GREEN}✓${COLOR_RESET} $2"
+    else
+        echo "${COLOR_RED}✗${COLOR_RESET} $2"
+        return 1
+    fi
+}
+
+show_time() {
+    local SECONDS_ELAPSED="$1"
+    if [ "$SECONDS_ELAPSED" -ge 60 ]; then
+        local MINS=$((SECONDS_ELAPSED / 60))
+        local SECS=$((SECONDS_ELAPSED % 60))
+        echo "${MINS}m ${SECS}s"
+    else
+        echo "${SECONDS_ELAPSED}s"
+    fi
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+echo ""
+echo "${COLOR_YELLOW}🚀 Running pre-push checks (comprehensive)...${COLOR_RESET}"
+echo "   All quality gates must pass before pushing to remote."
+echo ""
+
+START_TIME=$(date +%s)
+
+# File locking - prevent concurrent execution
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    echo "${COLOR_YELLOW}⏳${COLOR_RESET} Another pre-push hook is running. Waiting for lock..."
+    if ! flock -w "$LOCK_TIMEOUT_SECONDS" 200; then
+        echo "${COLOR_RED}✗${COLOR_RESET} Timeout waiting for lock after ${LOCK_TIMEOUT_SECONDS} seconds"
+        exit 1
+    fi
+    echo "${COLOR_GREEN}✓${COLOR_RESET} Lock acquired, proceeding..."
+    echo ""
+fi
+
+# Create temp directory for logs
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR; flock -u 200" EXIT
+
+FAILED=0
+
+# ============================================================================
+# Step 1: Linting (quick, catches obvious issues)
+# ============================================================================
+
+log_phase "Running linter check"
+LINT_LOG="$TEMP_DIR/lint.log"
+if bun run lint > "$LINT_LOG" 2>&1; then
+    print_status 0 "Linter passed"
+else
+    print_status 1 "Linter failed"
+    echo ""
+    echo "Linter output (last 50 lines):"
+    tail -50 "$LINT_LOG"
+    FAILED=1
+fi
+echo ""
+
+# ============================================================================
+# Step 2: Type checking (catches type errors)
+# ============================================================================
+
+log_phase "Running type checker"
+TYPECHECK_LOG="$TEMP_DIR/typecheck.log"
+if bun run typecheck > "$TYPECHECK_LOG" 2>&1; then
+    print_status 0 "Type checker passed"
+else
+    print_status 1 "Type checker failed"
+    echo ""
+    echo "Type checker output:"
+    cat "$TYPECHECK_LOG"
+    FAILED=1
+fi
+echo ""
+
+# Stop early if lint or typecheck failed (no point in running slower checks)
+if [ $FAILED -eq 1 ]; then
+    echo "${COLOR_RED}✗ Pre-push checks failed (lint/typecheck)${COLOR_RESET}"
+    echo ""
+    echo "Fix the issues above before pushing."
+    echo "To bypass (not recommended): git push --no-verify"
+    echo ""
+    exit 1
+fi
+
+# ============================================================================
+# Step 3: Security audit (catches vulnerable dependencies)
+# ============================================================================
+
+log_phase "Running security audit"
+AUDIT_LOG="$TEMP_DIR/audit.log"
+
+# WHY npm audit: Checks for known vulnerabilities in dependencies
+# NOTE: audit can fail with non-zero exit for informational warnings,
+# so we parse the output to distinguish real vulnerabilities
+if npm audit --audit-level=high > "$AUDIT_LOG" 2>&1; then
+    print_status 0 "Security audit passed (no high/critical vulnerabilities)"
+else
+    # Check if it's a real vulnerability or just warnings
+    if grep -q "high\|critical" "$AUDIT_LOG" 2>/dev/null; then
+        print_status 1 "Security audit found vulnerabilities"
+        echo ""
+        echo "Audit output:"
+        cat "$AUDIT_LOG"
+        echo ""
+        echo "Run 'npm audit fix' to attempt automatic fixes."
+        FAILED=1
+    else
+        # Non-zero exit but no high/critical - likely just moderate/low warnings
+        print_status 0 "Security audit passed (moderate/low warnings only)"
+    fi
+fi
+echo ""
+
+# ============================================================================
+# Step 4: Build validation (ensures build succeeds)
+# ============================================================================
+
+log_phase "Running build"
+BUILD_LOG="$TEMP_DIR/build.log"
+if bun run build > "$BUILD_LOG" 2>&1; then
+    print_status 0 "Build succeeded"
+else
+    print_status 1 "Build failed"
+    echo ""
+    echo "Build output:"
+    tail -50 "$BUILD_LOG"
+    FAILED=1
+fi
+echo ""
+
+# Stop early if audit or build failed
+if [ $FAILED -eq 1 ]; then
+    echo "${COLOR_RED}✗ Pre-push checks failed (security/build)${COLOR_RESET}"
+    echo ""
+    echo "Fix the issues above before pushing."
+    echo "To bypass (not recommended): git push --no-verify"
+    echo ""
+    exit 1
+fi
+
+# ============================================================================
+# Step 5: Full test suite (comprehensive testing)
+# WHY: Ensures all tests pass before code reaches CI
+# ============================================================================
+
+log_phase "Running FULL test suite (vitest run)"
+TESTS_LOG="$TEMP_DIR/tests.log"
+if bunx vitest run > "$TESTS_LOG" 2>&1; then
+    print_status 0 "All tests passed"
+else
+    print_status 1 "Tests failed"
+    echo ""
+    echo "Test output (last ${LOG_TAIL_LINES} lines):"
+    tail -${LOG_TAIL_LINES} "$TESTS_LOG"
+    echo ""
+    echo "Full log saved to: $TESTS_LOG"
+    FAILED=1
+fi
+echo ""
+
+# ============================================================================
+# Result
+# ============================================================================
+
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+
+if [ $FAILED -eq 0 ]; then
+    echo "${COLOR_GREEN}✓ All pre-push checks passed in $(show_time $ELAPSED)${COLOR_RESET}"
+    echo ""
+    echo "Pushing to remote..."
+    exit 0
+else
+    echo "${COLOR_RED}✗ Pre-push checks failed in $(show_time $ELAPSED)${COLOR_RESET}"
+    echo ""
+    echo "Please fix the issues above before pushing."
+    echo "If you MUST bypass (not recommended): git push --no-verify"
+    echo ""
+    exit 1
+fi

@@ -104,8 +104,11 @@ export default defineConfig({
     // Retry failed tests once
     retry: 1,
 
-    // Bail on first failure in CI
-    bail: process.env.CI ? 1 : 0,
+    // WHY bail: 0 always: Previously used bail: 1 in CI to fail fast, but this caused
+    // only the first failure to be visible in CI logs. With bail: 0, all tests run
+    // and we see ALL failures, making debugging much easier.
+    // The trade-off (slightly longer CI time on failure) is worth the debugging clarity.
+    bail: 0,
 
     // Sequence
     sequence: {

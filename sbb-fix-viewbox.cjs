@@ -474,8 +474,11 @@ ${sanitizedSvg}
 </body>
 </html>`;
 
+    // WHY 'domcontentloaded': networkidle0 can hang indefinitely for SVGs with web fonts
+    // or missing font references. domcontentloaded is sufficient - font rendering is
+    // handled separately by waitForDocumentFonts() below.
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
+      waitUntil: 'domcontentloaded',
       timeout: BROWSER_TIMEOUT_MS
     });
 

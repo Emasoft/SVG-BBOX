@@ -638,8 +638,9 @@ async function demonstrateCoordinateSystems() {
       </html>
     `;
 
-    // RACE CONDITION FIX: Wait for networkidle to ensure all resources loaded
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    // WHY 'domcontentloaded': networkidle0 can hang indefinitely for SVGs with web fonts
+    // or missing font references. Font waiting is handled explicitly below.
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
 
     // RACE CONDITION FIX: Ensure SVG is loaded before adding script
     await page.waitForSelector('svg');

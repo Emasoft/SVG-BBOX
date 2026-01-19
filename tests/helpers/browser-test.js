@@ -101,6 +101,7 @@ export function loadFixture(fixturePath) {
  * @param {object} [options]
  * @param {number} [options.fontTimeoutMs] - Timeout for font loading (defaults to FONT_TIMEOUT_MS from config)
  * @param {number} [options.pageTimeoutMs] - Timeout for page.setContent navigation (defaults to 30000ms)
+ * @param {'networkidle0'|'domcontentloaded'|'load'} [options.waitStrategy] - Page load wait strategy (defaults to 'domcontentloaded')
  * @returns {Promise<import('puppeteer').Page>}
  */
 export async function createPageWithSvg(svgContent, options = {}) {
@@ -108,7 +109,14 @@ export async function createPageWithSvg(svgContent, options = {}) {
   // Allows CI environment overrides without changing test code
   // WHY separate pageTimeoutMs: page.setContent timeout is for Puppeteer navigation,
   // while fontTimeoutMs is for library's font detection. Font tests need both longer.
-  const { fontTimeoutMs = FONT_TIMEOUT_MS, pageTimeoutMs = 30000 } = options;
+  // WHY default to 'domcontentloaded': networkidle0 waits for zero network requests for 500ms,
+  // which can hang indefinitely for tests with external fonts (Google Fonts, missing fonts).
+  // domcontentloaded is sufficient for SVG tests - fonts are handled by waitForDocumentFonts().
+  const {
+    fontTimeoutMs = FONT_TIMEOUT_MS,
+    pageTimeoutMs = 30000,
+    waitStrategy = 'domcontentloaded'
+  } = options;
 
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -142,11 +150,11 @@ ${svg}
 </body>
 </html>`;
 
-  // WHY waitUntil networkidle0 + custom timeout: For most tests, waiting for all network
-  // activity to cease ensures fonts are loaded. But for tests with external/missing fonts,
-  // the default 30s timeout is insufficient. The pageTimeoutMs option allows callers to
-  // increase the timeout for font-heavy tests.
-  await page.setContent(html, { waitUntil: 'networkidle0', timeout: pageTimeoutMs });
+  // WHY waitStrategy option: Tests with external fonts (Google Fonts, missing fonts) can hang
+  // when using 'networkidle0' because the browser waits for network requests that may never complete.
+  // Using 'domcontentloaded' as default is safer - fonts are handled separately by waitForDocumentFonts().
+  // Tests that specifically need to wait for all network activity can pass waitStrategy: 'networkidle0'.
+  await page.setContent(html, { waitUntil: waitStrategy, timeout: pageTimeoutMs });
 
   // Inject SvgVisualBBox library
   const libPath = path.resolve(PROJECT_ROOT, 'SvgVisualBBox.js');

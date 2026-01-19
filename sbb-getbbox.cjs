@@ -498,10 +498,11 @@ ${sanitizedSvg}
 </html>
     `;
 
-    // CONSISTENCY FIX 2026-01-06: Use 'networkidle0' like sbb-fix-viewbox.cjs
-    // for consistent font/resource loading behavior
+    // WHY 'domcontentloaded': networkidle0 can hang indefinitely for SVGs with web fonts
+    // or missing font references. domcontentloaded is sufficient - font rendering is
+    // handled separately by waitForDocumentFonts() below.
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
+      waitUntil: 'domcontentloaded',
       timeout: BROWSER_TIMEOUT_MS
     });
 
