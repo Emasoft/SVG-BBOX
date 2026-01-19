@@ -15,7 +15,13 @@ const { getVersion } = require('./version.cjs');
 // WHY: writeJSONOutput centralizes JSON output handling (DRY principle)
 // DO NOT: Implement custom saveJSON - use writeJSONOutput instead
 // NOTE: printSuccess removed - writeJSONOutput handles success feedback internally
-const { printError, printInfo, runCLI, writeJSONOutput } = require('./lib/cli-utils.cjs');
+const {
+  printBanner,
+  printError,
+  printInfo,
+  runCLI,
+  writeJSONOutput
+} = require('./lib/cli-utils.cjs');
 
 /**
  * @typedef {Object} BBoxRect
@@ -484,10 +490,8 @@ async function main() {
   // WHY: Parse args first to know if quiet/verbose mode is enabled before printing
   const options = parseArgs(process.argv);
 
-  // WHY: Suppress version banner in quiet mode - only show bbox values
-  if (!options.quiet) {
-    printInfo(`sbb-chrome-getbbox v${getVersion()} | svg-bbox toolkit\n`);
-  }
+  // WHY: Print banner unless in quiet/json mode
+  printBanner('sbb-chrome-getbbox', { quiet: options.quiet, json: options.json });
 
   // WHY: Verbose mode shows detailed progress information for debugging
   if (options.verbose && !options.quiet) {

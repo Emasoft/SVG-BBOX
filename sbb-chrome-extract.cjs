@@ -71,7 +71,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const { getVersion } = require('./version.cjs');
-const { printError, printSuccess, printInfo, runCLI } = require('./lib/cli-utils.cjs');
+const { printError, printSuccess, printInfo, printBanner, runCLI } = require('./lib/cli-utils.cjs');
 // SECURITY: Import security utilities
 const { SHELL_METACHARACTERS, SVGBBoxError } = require('./lib/security-utils.cjs');
 
@@ -756,10 +756,8 @@ async function main() {
   MODULE_QUIET = options.quiet;
   MODULE_VERBOSE = options.verbose;
 
-  // WHY: Version banner suppressed in quiet mode
-  if (!MODULE_QUIET) {
-    printInfo(`sbb-chrome-extract v${getVersion()} | svg-bbox toolkit\n`);
-  }
+  // WHY: Print banner unless quiet mode
+  printBanner('sbb-chrome-extract', { quiet: options.quiet, json: false });
 
   // BATCH MODE
   if (options.batch) {

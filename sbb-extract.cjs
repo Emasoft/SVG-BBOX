@@ -168,7 +168,6 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
@@ -185,7 +184,7 @@ const {
   ValidationError
 } = require('./lib/security-utils.cjs');
 
-const { runCLI, printError, printInfo, printWarning } = require('./lib/cli-utils.cjs');
+const { runCLI, printError, printInfo, printWarning, printBanner } = require('./lib/cli-utils.cjs');
 
 // -------- CLI parsing --------
 
@@ -2758,10 +2757,8 @@ async function renameIds(
 async function main() {
   const opts = parseArgs(process.argv);
 
-  // WHY: Display version header unless in quiet or json mode
-  if (!opts.quiet && !opts.json) {
-    printInfo(`sbb-extract v${getVersion()} | svg-bbox toolkit\n`);
-  }
+  // WHY: Display banner unless in quiet or json mode
+  printBanner('sbb-extract', { quiet: opts.quiet, json: opts.json });
 
   try {
     if (opts.mode === 'list') {

@@ -25,7 +25,7 @@ const {
   SVGBBoxError
 } = require('./lib/security-utils.cjs');
 
-const { runCLI, printSuccess, printInfo } = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -464,7 +464,8 @@ function readBatchFile(batchFilePath) {
 async function main() {
   const args = parseArgs(process.argv);
 
-  printInfo(`sbb-inkscape-extract v${getVersion()} | svg-bbox toolkit\n`);
+  // WHY: Display banner with tool name - this tool doesn't have quiet/json flags
+  printBanner('sbb-inkscape-extract', { quiet: false, json: false });
 
   // BATCH MODE
   if (args.batch) {

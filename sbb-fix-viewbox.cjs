@@ -37,7 +37,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion, printVersion } = require('./version.cjs');
+const { printVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
@@ -54,6 +54,7 @@ const {
 
 const {
   runCLI,
+  printBanner,
   printSuccess,
   printError,
   printInfo,
@@ -733,8 +734,8 @@ async function main() {
   MODULE_QUIET = quiet;
   MODULE_VERBOSE = verbose;
 
-  // Display version (but not in quiet mode)
-  logInfo(`sbb-fix-viewbox v${getVersion()} | svg-bbox toolkit\n`);
+  // WHY: Display banner with tool name and version (respects quiet mode)
+  printBanner('sbb-fix-viewbox', { quiet: quiet });
 
   // SECURITY: Warn when overwriting original file (always show for safety)
   if (overwrite && !batch) {

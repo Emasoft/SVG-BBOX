@@ -15,7 +15,7 @@
 
 const path = require('path');
 const { getVersion } = require('./version.cjs');
-const { printError } = require('./lib/cli-utils.cjs');
+const { printError, printBanner } = require('./lib/cli-utils.cjs');
 const readline = require('readline');
 const { spawn } = require('child_process');
 
@@ -260,6 +260,7 @@ function promptToolSelection() {
  * @returns {void}
  */
 function main() {
+  printBanner('svg-bbox', { quiet: false, json: false });
   const args = process.argv.slice(2);
 
   // Handle --version flag

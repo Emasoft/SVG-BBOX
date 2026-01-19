@@ -38,7 +38,7 @@ const {
   ValidationError
 } = require('./lib/security-utils.cjs');
 
-const { runCLI, printSuccess, printInfo } = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-utils.cjs');
 
 // Centralized timeout configuration
 const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
@@ -209,6 +209,9 @@ function showVersion() {
  */
 async function runTest() {
   const args = process.argv.slice(2);
+
+  // WHY: Print banner at the very start for consistent CLI branding
+  printBanner('sbb-test', { quiet: false, json: false });
 
   // Handle --help and --version flags FIRST (before any validation)
   if (args.includes('--help') || args.includes('-h')) {

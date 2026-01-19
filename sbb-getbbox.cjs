@@ -118,7 +118,6 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { getVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // Import security utilities
@@ -137,6 +136,7 @@ const {
 const {
   runCLI,
   createArgParser,
+  printBanner,
   printError,
   printInfo,
   createProgress,
@@ -1038,11 +1038,8 @@ async function main() {
   // Parse arguments first to check quiet/verbose flags
   const args = argParser(process.argv);
 
-  // Display version (but not in quiet mode or JSON mode)
-  // WHY: quiet mode suppresses all non-essential output
-  if (!args.flags.quiet && !args.flags.json) {
-    printInfo(`sbb-getbbox v${getVersion()} | svg-bbox toolkit\n`);
-  }
+  // WHY: Print banner before any processing, respecting quiet/json flags
+  printBanner('sbb-getbbox', { quiet: args.flags.quiet, json: args.flags.json });
 
   // Determine mode based on flags and positional args
   let mode = null;

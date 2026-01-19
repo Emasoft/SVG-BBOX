@@ -19,7 +19,7 @@ const { getVersion } = require('./version.cjs');
 // WHY: writeJSONOutput centralizes JSON output handling (DRY principle)
 // DO NOT: Implement custom saveJSON - use writeJSONOutput instead
 // NOTE: printSuccess removed - writeJSONOutput handles success feedback internally
-const { runCLI, printError, printInfo, writeJSONOutput } = require('./lib/cli-utils.cjs');
+const { runCLI, printError, printBanner, writeJSONOutput } = require('./lib/cli-utils.cjs');
 const { validateFilePath, VALID_ID_PATTERN } = require('./lib/security-utils.cjs');
 
 const execFilePromise = promisify(execFile);
@@ -492,10 +492,12 @@ function parseArgs(argv) {
  * @returns {Promise<void>}
  */
 async function main() {
-  printInfo(`sbb-inkscape-getbbox v${getVersion()} | svg-bbox toolkit\n`);
-
   // Parse args first to get custom inkscape path if provided
   const options = parseArgs(process.argv);
+
+  // WHY: Print banner after parsing args so we can check json flag
+  // Banner is suppressed in JSON mode to keep output machine-parseable
+  printBanner('sbb-inkscape-getbbox', { quiet: false, json: !!options.json });
 
   // Check if Inkscape is available (with optional custom path)
   const inkscapeCheck = await checkInkscapeAvailable(options.inkscapePath);

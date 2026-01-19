@@ -31,7 +31,7 @@ const {
   ValidationError
 } = require('./lib/security-utils.cjs');
 
-const { runCLI, printSuccess, printError, printInfo } = require('./lib/cli-utils.cjs');
+const { runCLI, printSuccess, printError, printInfo, printBanner } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -799,7 +799,8 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
 async function main() {
   const args = parseArgs(process.argv);
 
-  printInfo(`sbb-inkscape-svg2png v${getVersion()} | svg-bbox toolkit\n`);
+  // WHY: Print banner using standard utility (respects TTY detection)
+  printBanner('sbb-inkscape-svg2png', {});
 
   // BATCH MODE: Export multiple SVG files
   if (args.batch) {

@@ -139,7 +139,13 @@ const {
   ValidationError
 } = require('./lib/security-utils.cjs');
 
-const { runCLI, printSuccess, printInfo, printWarning } = require('./lib/cli-utils.cjs');
+const {
+  runCLI,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printBanner
+} = require('./lib/cli-utils.cjs');
 
 // Import EXIT_CODES for distinct exit codes (0=success, 1=differ, 2=error)
 const { EXIT_CODES } = require('./lib/security-utils.cjs');
@@ -2523,6 +2529,9 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
  */
 async function main() {
   const args = parseArgs(process.argv);
+
+  // WHY: Print banner early (respects --quiet and --json flags)
+  printBanner('sbb-compare', { quiet: args.quiet, json: args.json });
 
   // WHY: Initialize module-level timeout from args (configurable via --timeout)
   MODULE_TIMEOUT_MS = args.timeout || BROWSER_TIMEOUT_MS;

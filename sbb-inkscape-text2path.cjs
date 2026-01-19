@@ -31,7 +31,8 @@ const {
   printSuccess,
   printError,
   printInfo,
-  printWarning
+  printWarning,
+  printBanner
 } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -673,10 +674,8 @@ async function processSingleFile(inkscapePath, inputPath, outputPath, options, a
 async function main() {
   const args = parseArgs(process.argv);
 
-  // Display version (but not in JSON mode)
-  if (!args.json) {
-    printInfo(`sbb-inkscape-text2path v${getVersion()} | svg-bbox toolkit\n`);
-  }
+  // WHY: Print banner at start of main (after args parsed) for consistent CLI branding
+  printBanner('sbb-inkscape-text2path', { quiet: false, json: args.json });
 
   // SECURITY: Validate input paths BEFORE checking for Inkscape
   // This ensures security errors are caught early, even if Inkscape isn't installed

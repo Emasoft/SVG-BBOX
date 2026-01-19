@@ -71,7 +71,6 @@ const sharp = require('sharp');
  * @property {string} output - Output PNG file path
  */
 const { openInChrome } = require('./browser-utils.cjs');
-const { getVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
@@ -90,7 +89,8 @@ const {
   printSuccess,
   printError: _printError,
   printInfo,
-  printWarning
+  printWarning,
+  printBanner
 } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1180,10 +1180,8 @@ async function main() {
   MODULE_QUIET_MODE = opts.quiet;
   MODULE_VERBOSE_MODE = opts.verbose;
 
-  // Display version (but not in quiet mode)
-  if (!MODULE_QUIET_MODE) {
-    printInfo(`sbb-svg2png v${getVersion()} | svg-bbox toolkit\n`);
-  }
+  // WHY: Display banner with tool name and version (respects quiet mode)
+  printBanner('sbb-svg2png', { quiet: opts.quiet, json: false });
 
   // WHY: Initialize module-level path security from args
   // --trusted-mode allows ALL paths (disables all restrictions)

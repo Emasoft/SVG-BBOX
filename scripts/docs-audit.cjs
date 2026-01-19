@@ -31,6 +31,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// Banner file path for ASCII art logo
+const BANNER_PATH = path.join(__dirname, '..', 'assets', 'svg-bbox_logo_txt.txt');
+
 // ANSI color codes for terminal output
 const COLORS = {
   reset: '\x1b[0m',
@@ -815,11 +818,20 @@ async function main() {
     printHelp();
   }
 
-  console.log(c('bold', '\n╔═══════════════════════════════════════════════════════╗'));
-  console.log(c('bold', '║       SVG-BBOX Documentation Audit Validator          ║'));
-  console.log(c('bold', '╚═══════════════════════════════════════════════════════╝'));
-
   const version = getPackageVersion();
+
+  // Print ASCII art banner (unless --help or --json mode)
+  if (!helpMode && !jsonOutput && process.stderr.isTTY) {
+    try {
+      const banner = fs.readFileSync(BANNER_PATH, 'utf8');
+      console.error('');
+      console.error(banner);
+      console.error(`  docs-audit v${version}`);
+      console.error('');
+    } catch {
+      /* ignore if banner file missing */
+    }
+  }
   console.log(`\n${c('dim', 'Package version:')} ${c('cyan', version)}`);
 
   if (fixMode) {
