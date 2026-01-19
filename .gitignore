@@ -105,3 +105,4 @@ yarn.lock
 .tmp-compare/
 bbox_comparison_*/
 docs_dev/
+.claude/settings.local.json
