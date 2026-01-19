@@ -99,6 +99,7 @@
     "lint:fix": "prettier --write . && eslint --fix .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
+    "docs:audit": "node scripts/docs-audit.cjs",
     "ci": "bun run lint && bun run typecheck && bun run test:coverage && bun run test:e2e",
     "install-browsers": "playwright install --with-deps chromium && npx puppeteer browsers install chrome",
     "version": "node version.cjs",

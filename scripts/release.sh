@@ -5399,9 +5399,22 @@ run_all_validations() {
     validate_security_secrets || VALIDATION_FAILED=true
     echo ""
 
-    # Phase 7: Network validation (optional)
+    # Phase 7: Documentation validation (if docs-audit.cjs exists)
+    if [ -f "scripts/docs-audit.cjs" ]; then
+        log_info "┌─ Phase 7: Documentation Validation"
+        if node scripts/docs-audit.cjs 2>/dev/null; then
+            log_success "  Documentation audit passed"
+        else
+            log_warning "  Documentation audit found issues - run: node scripts/docs-audit.cjs"
+            # WHY: Documentation issues are warnings, not blocking errors
+            # Allows release to proceed but alerts maintainer to fix docs
+        fi
+        echo ""
+    fi
+
+    # Phase 8: Network validation (optional)
     if [ "$OFFLINE_MODE" != true ]; then
-        log_info "┌─ Phase 7: Network Validation"
+        log_info "┌─ Phase 8: Network Validation"
         validate_urls_reachable || true  # URL checks are warning-only
         echo ""
     fi
@@ -7045,6 +7058,20 @@ main() {
 
         # Print CI analysis
         print_ci_analysis
+
+        # Run documentation audit if script exists
+        echo ""
+        echo "Documentation Audit:"
+        echo "────────────────────"
+        if [ -f "scripts/docs-audit.cjs" ]; then
+            if node scripts/docs-audit.cjs 2>/dev/null; then
+                echo -e "  ${GREEN}✓${NC} Documentation audit passed"
+            else
+                echo -e "  ${RED}✗${NC} Documentation audit found issues - run: node scripts/docs-audit.cjs"
+            fi
+        else
+            echo -e "  ${YELLOW}!${NC} docs-audit.cjs not found - skipping documentation validation"
+        fi
 
         # Summary
         echo ""
