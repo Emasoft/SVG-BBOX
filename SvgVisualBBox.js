@@ -753,6 +753,7 @@
     }
 
     // Add all descendants of the target
+    /** @description Recursively adds a node and all its child elements to the allowed set */
     (function addDescendants(n) {
       allowed.add(n);
       const children = n.children;
@@ -956,6 +957,7 @@
           if (siblingTag === 'tspan' || siblingTag === 'textpath') {
             allowed.add(sibling);
             // Also add all descendants of sibling tspans
+            /** @description Recursively adds a node and all its child elements to the allowed set */
             (function addDescendants(n) {
               allowed.add(n);
               const children = n.children;
@@ -969,6 +971,7 @@
       }
     }
 
+    /** @description Recursively removes elements not in the allowed set, preserving defs and structure */
     (function removeIrrelevant(rootNode) {
       const children = Array.prototype.slice.call(rootNode.children);
       for (let i = 0; i < children.length; i++) {
@@ -1845,7 +1848,7 @@
    * @param {number} [options.zIndex] - Z-index for overlay (default: 999999)
    * @param {Object} [options.bboxOptions] - Options passed to getSvgElementVisualBBoxTwoPassAggressive
    *
-   * @returns {Promise<Object>} Object with {bbox, overlay, remove()} where:
+   * @returns {Promise<Object|undefined>} Object with {bbox, overlay, remove()} where:
    *   - bbox: The computed bounding box {x, y, width, height}
    *   - overlay: The DOM element showing the border
    *   - remove(): Function to remove the border overlay
@@ -1958,11 +1961,8 @@
 
     if (!bbox || bbox.width === 0 || bbox.height === 0) {
       console.warn('showTrueBBoxBorder: Element has zero-size bounding box', bbox);
-      return {
-        bbox: bbox,
-        overlay: null,
-        remove: () => {}
-      };
+      // WHY: Return undefined instead of null to satisfy JSDoc @returns {Object} type
+      return undefined;
     }
 
     // Get the root SVG element to determine coordinate system
@@ -1988,12 +1988,47 @@
     }
 
     // Calculate scale factors from viewBox to screen coordinates
-    const scaleX = svgRect.width / vbWidth;
-    const scaleY = svgRect.height / vbHeight;
+    // Account for preserveAspectRatio which affects how viewBox maps to viewport
+    let scaleX = svgRect.width / vbWidth;
+    let scaleY = svgRect.height / vbHeight;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    // Parse preserveAspectRatio to handle non-uniform scaling and alignment
+    const par = rootSvg.getAttribute('preserveAspectRatio') || 'xMidYMid meet';
+    if (par !== 'none') {
+      // When preserveAspectRatio is set (not 'none'), the aspect ratio is preserved
+      const meetOrSlice = par.includes('slice') ? 'slice' : 'meet';
+      const uniformScale =
+        meetOrSlice === 'meet' ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY);
+
+      // Calculate the offset based on alignment (xMin/xMid/xMax and yMin/yMid/yMax)
+      const scaledWidth = vbWidth * uniformScale;
+      const scaledHeight = vbHeight * uniformScale;
+
+      // X alignment
+      if (par.includes('xMid')) {
+        offsetX = (svgRect.width - scaledWidth) / 2;
+      } else if (par.includes('xMax')) {
+        offsetX = svgRect.width - scaledWidth;
+      }
+      // xMin is default (offsetX = 0)
+
+      // Y alignment
+      if (par.includes('YMid')) {
+        offsetY = (svgRect.height - scaledHeight) / 2;
+      } else if (par.includes('YMax')) {
+        offsetY = svgRect.height - scaledHeight;
+      }
+      // YMin is default (offsetY = 0)
+
+      scaleX = uniformScale;
+      scaleY = uniformScale;
+    }
 
     // Convert bbox coordinates (in SVG user space) to viewport coordinates
-    const screenX = svgRect.left + (bbox.x - vbX) * scaleX - padding;
-    const screenY = svgRect.top + (bbox.y - vbY) * scaleY - padding;
+    const screenX = svgRect.left + offsetX + (bbox.x - vbX) * scaleX - padding;
+    const screenY = svgRect.top + offsetY + (bbox.y - vbY) * scaleY - padding;
     const screenWidth = bbox.width * scaleX + padding * 2;
     const screenHeight = bbox.height * scaleY + padding * 2;
 
@@ -2181,7 +2216,7 @@
     // Parse margin (support user units, px, or screen units)
     let marginInUserUnits = 0;
     if (typeof opts.margin === 'string') {
-      const marginMatch = opts.margin.match(/^([\d.]+)(px|%)?$/);
+      const marginMatch = opts.margin.match(/^(-?[\d.]+)(px|%)?$/);
       if (marginMatch && marginMatch[1]) {
         const value = parseFloat(marginMatch[1]);
         const unit = marginMatch[2];

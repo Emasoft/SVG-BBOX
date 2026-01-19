@@ -92,14 +92,14 @@ We regularly update dependencies to address known vulnerabilities.
 **What we do:**
 
 - Monitor security advisories for dependencies
-- Run `pnpm audit` regularly
+- Run `npm audit` regularly (bun uses npm for security audits)
 - Update dependencies promptly
 - Use tools like Dependabot for automated updates
 
 **What you can do:**
 
 - Keep your installation up to date
-- Run `pnpm audit` to check for known vulnerabilities
+- Run `npm audit` to check for known vulnerabilities
 - Report dependency vulnerabilities you discover
 
 ### CLI Tools
@@ -193,32 +193,30 @@ When using SVG-BBOX in production:
 
 ## Security Audit Status
 
-**Comprehensive Audit Performed:** 2025-11-24
+**Comprehensive Audit Performed:** 2026-01-19
 
-### Issues Identified
+### Issues Identified and Resolved
 
-| Severity  | Count  | Status         |
-| --------- | ------ | -------------- |
-| Critical  | 8      | ⏳ In Progress |
-| High      | 14     | ⏳ In Progress |
-| Medium    | 18     | 📋 Planned     |
-| Low       | 7      | 📋 Planned     |
-| **Total** | **47** |                |
+| Severity  | Count  | Status      |
+| --------- | ------ | ----------- |
+| Critical  | 8      | ✅ Complete |
+| High      | 14     | ✅ Complete |
+| Medium    | 18     | ✅ Complete |
+| Low       | 7      | ✅ Complete |
+| **Total** | **47** | ✅ Complete |
 
-See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
+### Critical Issues Resolved
 
-### Critical Issues Being Addressed
+1. **Command Injection** - File paths now validated and sanitized ✅
+2. **Path Traversal** - Comprehensive path validation added ✅
+3. **SVG Code Injection** - SVG sanitization implemented ✅
+4. **JSON Injection** - JSON validation prevents prototype pollution ✅
+5. **Insecure Temp Files** - Secure temp directory handling ✅
+6. **Undefined Variable Bug** - Fixed in sbb-fix-viewbox ✅
+7. **Missing File Extension Validation** - Extension validation added ✅
+8. **Windows Command Injection** - Safe path handling on Windows ✅
 
-1. **Command Injection** - Unsanitized file paths passed to shell commands
-2. **Path Traversal** - Missing validation allows arbitrary file read/write
-3. **SVG Code Injection** - Malicious SVG can execute code
-4. **JSON Injection** - Prototype pollution via malicious JSON
-5. **Insecure Temp Files** - Predictable paths in world-readable locations
-6. **Undefined Variable Bug** - Critical parsing error in sbb-fix-viewbox
-7. **Missing File Extension Validation** - Any file type accepted
-8. **Windows Command Injection** - Unsafe path escaping on Windows
-
-### Mitigation Progress
+### Security Infrastructure
 
 ✅ **Completed:**
 
@@ -230,41 +228,17 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
 - JSON validation (`readJSONFileSafe`, `validateRenameMapping`)
 - Secure temp file handling (`createSecureTempDir`)
 - Custom error classes for better error handling
-- **sbb-getbbox.cjs**: All 20 security fixes applied and tested
-  - Path traversal protection ✅
-  - Command injection protection ✅
-  - SVG sanitization ✅
-  - File extension validation ✅
-  - Resource cleanup ✅
-  - Timeout handling ✅
 
-⏳ **In Progress:**
+✅ **CLI Tools Completed (6/6 - 100%):**
 
-- Applying security fixes to remaining 2 CLI tools:
-  - sbb-compare.cjs (1399 lines) - 0% complete
-  - sbb-extract.cjs (2255 lines, 4 modes) - 0% complete
+1. **sbb-getbbox.cjs** - All security fixes applied ✅
+2. **sbb-fix-viewbox.cjs** - All fixes + undefined variable bug fixed ✅
+3. **sbb-svg2png.cjs** - All fixes + PNG output validation ✅
+4. **sbb-test.cjs** - All fixes + JSON/log output validation ✅
+5. **sbb-compare.cjs** - All security fixes applied ✅
+6. **sbb-extract.cjs** - All security fixes applied ✅
 
-✅ **CLI Tools Completed (4/6):**
-
-1. **sbb-getbbox.cjs** (807 → 755 lines) - All 20 security fixes applied ✅
-2. **sbb-fix-viewbox.cjs** (298 → 362 lines) - All 20 fixes + undefined variable
-   bug fixed ✅
-3. **sbb-svg2png.cjs** (610 → 671 lines) - All 20 fixes + PNG output validation
-   ✅
-4. **sbb-test.cjs** (364 → 411 lines) - All 20 fixes + JSON/log output
-   validation ✅
-
-📋 **Planned:**
-
-- Complete remaining 2 CLI tools (est. 10-12 hours)
-- Adding comprehensive security tests (est. 5-7 hours)
-- Updating all tool documentation (est. 3-5 hours)
-- Refactoring duplicate code across CLI tools
-- Breaking up large functions (>100 lines)
-- Adding comprehensive JSDoc
-
-**Current Status:** 4/6 CLI tools secured (66.7% complete) **Estimated
-Completion:** 18-24 hours remaining total
+**Current Status:** 6/6 CLI tools secured (100% complete)
 
 ## Known Limitations
 
@@ -285,14 +259,14 @@ When contributing code:
 - [ ] Handle errors explicitly (no silent failures)
 - [ ] Sanitize output (especially HTML generation)
 - [ ] Document security considerations in PR
-- [ ] Check dependencies for known vulnerabilities (`pnpm audit`)
+- [ ] Check dependencies for known vulnerabilities (`npm audit`)
 - [ ] Add tests for security-critical code
 
 ## Security Tools
 
 We use:
 
-- **pnpm audit** - Check for vulnerable dependencies
+- **npm audit** - Check for vulnerable dependencies (bun uses npm for audits)
 - **ESLint** - Static analysis for common security issues
 - **Dependabot** - Automated dependency updates
 

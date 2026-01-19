@@ -21,13 +21,21 @@ const colors = {
 
 const c = colors;
 
-// Get version from package.json
-let version = '1.0.14';
+// Get version from package.json - fail-fast, no stale fallbacks
+/** @type {string} */
+let version;
 try {
   const pkg = require('../package.json');
+  if (!pkg.version) {
+    throw new Error('package.json does not contain a version field');
+  }
   version = pkg.version;
-} catch {
-  // Ignore - use default version
+} catch (err) {
+  // Fail-fast: version must come from package.json
+  // WHY: Type guard for unknown error in catch block
+  const errMsg = err instanceof Error ? err.message : String(err);
+  console.error(`Failed to read version from package.json: ${errMsg}`);
+  process.exit(1);
 }
 
 // Box drawing characters

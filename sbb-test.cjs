@@ -136,6 +136,7 @@ async function launchBrowserWithFallback(errorLogMessages) {
 /**
  * Generate a very simple HTML shell. SVG is injected later via page.evaluate()
  * using DOMParser, so this page starts empty on purpose.
+ * @returns {string} HTML document string with empty body for SVG injection
  */
 function makeHtmlShell() {
   return `<!doctype html>
@@ -204,6 +205,7 @@ function showVersion() {
 
 /**
  * Main test runner.
+ * @returns {Promise<void>} Resolves when test completes, writes results to JSON and log files
  */
 async function runTest() {
   const args = process.argv.slice(2);

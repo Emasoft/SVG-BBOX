@@ -26,6 +26,7 @@ const {
   validateFilePath,
   validateOutputPath,
   SHELL_METACHARACTERS,
+  VALID_ID_PATTERN,
   SVGBBoxError,
   ValidationError
 } = require('./lib/security-utils.cjs');
@@ -655,6 +656,14 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
 
   // Export specific object by ID (optional)
   if (objectId) {
+    // SECURITY: Validate objectId format before passing to Inkscape to prevent command injection
+    // IDs are passed via --export-id flag and could contain shell metacharacters
+    // VALID_ID_PATTERN ensures IDs match XML spec: start with letter/underscore, followed by word chars, periods, hyphens
+    if (!VALID_ID_PATTERN.test(objectId)) {
+      throw new SVGBBoxError(
+        `Invalid ID format: "${objectId}". IDs must start with a letter or underscore, followed by letters, digits, underscores, periods, or hyphens.`
+      );
+    }
     // Specify the ID of the object to export
     inkscapeArgs.push(`--export-id=${objectId}`);
     // Export only the specified object (no other objects)

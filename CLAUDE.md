@@ -79,7 +79,7 @@ python -m release status                   # Current version info
 
 **Python Tool Advantages:**
 - 188 automated tests ensuring reliability
-- 18 validators across 6 categories
+- ~40 validators across 9 categories
 - Rich terminal output with progress indicators
 - Proper error messages with fix suggestions
 
@@ -111,7 +111,7 @@ If you must release manually (script fails), follow this **exact sequence**:
 npm version patch --no-git-tag-version  # or minor/major
 
 # 2. Commit version bump
-git add package.json pnpm-lock.yaml
+git add package.json bun.lock
 git commit -m "chore(release): Bump version to X.Y.Z"
 
 # 3. Create tag

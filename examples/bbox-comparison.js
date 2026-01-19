@@ -24,6 +24,7 @@
 const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -41,9 +42,9 @@ if (!fs.existsSync(svgFile)) {
   process.exit(1);
 }
 
-// Create output directory with timestamp
+// Create output directory with timestamp in system temp dir (prevents polluting project root)
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-const outputDir = `bbox_comparison_${timestamp}`;
+const outputDir = path.join(os.tmpdir(), `bbox_comparison_${timestamp}`);
 fs.mkdirSync(outputDir, { recursive: true });
 
 console.log(`\n📊 BBox Comparison Tool\n`);

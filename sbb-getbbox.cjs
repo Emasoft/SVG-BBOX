@@ -450,6 +450,9 @@ async function detectSpriteSheet(page) {
  * @param {boolean} [outputOptions.quiet] - Minimal output mode
  * @param {boolean} [outputOptions.verbose] - Show detailed progress
  * @returns {Promise<BBoxFileResult>} Computation result with bboxes
+ * @throws {ValidationError} If svgPath is invalid, contains path traversal, or doesn't have .svg extension
+ * @throws {FileSystemError} If SVG file cannot be read, exceeds size limit, or SvgVisualBBox.js is missing
+ * @throws {Error} If browser fails to launch, page times out, or SVG content is invalid
  */
 async function computeBBox(
   svgPath,
@@ -685,6 +688,7 @@ ${sanitizedSvg}
  * @param {boolean} [outputOptions.quiet] - Minimal output mode
  * @param {boolean} [outputOptions.verbose] - Show detailed progress
  * @returns {Promise<BBoxFileResult[]>} Array of file results with bboxes
+ * @throws {ValidationError} If dirPath is invalid, doesn't exist, is not a directory, or filterRegex is invalid
  */
 async function processDirectory(
   dirPath,
@@ -859,6 +863,7 @@ function parseListFile(listPath) {
  * @param {boolean} [outputOptions.quiet] - Minimal output mode
  * @param {boolean} [outputOptions.verbose] - Show detailed progress
  * @returns {Promise<BBoxFileResult[]>} Array of file results with bboxes
+ * @throws {ValidationError} If listPath is invalid, doesn't exist, or contains no valid entries
  */
 async function processList(listPath, outputOptions = {}) {
   const { quiet = false, verbose = false } = outputOptions;

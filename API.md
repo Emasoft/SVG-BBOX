@@ -11,7 +11,9 @@ Complete API reference for using `SvgVisualBBox.js` in web browsers.
 - [Core Functions](#core-functions)
   - [waitForDocumentFonts()](#waitfordocumentfonts)
   - [getSvgElementVisualBBoxTwoPassAggressive()](#getsvgelementvisualbboxtwopassaggressive)
+  - [getSvgElementsUnionVisualBBox()](#getsvgelementsunionvisualbbox)
   - [getSvgElementVisibleAndFullBBoxes()](#getsvgelementvisibleandfullbboxes)
+  - [getSvgRootViewBoxExpansionForFullDrawing()](#getsvgrootviewboxexpansionforfulldrawing)
   - [showTrueBBoxBorder()](#showtruebboxborder)
   - [setViewBoxOnObjects()](#setviewboxonobjects)
 - [Options Reference](#options-reference)
@@ -121,7 +123,7 @@ await SvgVisualBBox.waitForDocumentFonts(document, timeoutMs);
 
 - **`document`** _(Document)_ - The document object. Default: `window.document`
 - **`timeoutMs`** _(number)_ - Maximum time to wait in milliseconds. Default:
-  `8000`
+  `5000`
 
 #### Returns
 
@@ -130,11 +132,11 @@ await SvgVisualBBox.waitForDocumentFonts(document, timeoutMs);
 #### Example
 
 ```javascript
-// Wait for fonts with default 8-second timeout
+// Wait for fonts with default 5-second timeout
 await SvgVisualBBox.waitForDocumentFonts();
 
-// Wait with custom timeout
-await SvgVisualBBox.waitForDocumentFonts(document, 5000);
+// Wait with custom timeout (10 seconds)
+await SvgVisualBBox.waitForDocumentFonts(document, 10000);
 ```
 
 #### Why This Matters
@@ -231,6 +233,80 @@ const rotatedBBox =
 
 ---
 
+### `getSvgElementsUnionVisualBBox()`
+
+Computes the **union bounding box** for multiple SVG elements. The union bbox is
+the smallest rectangle that contains all specified elements.
+
+#### Syntax
+
+```javascript
+const bbox = await SvgVisualBBox.getSvgElementsUnionVisualBBox(
+  targets,
+  options
+);
+```
+
+#### Parameters
+
+- **`targets`** _(Array<string | Element>)_ - Array of CSS selectors, element
+  IDs, or DOM elements. Must be non-empty.
+- **`options`** _(Object)_ - Configuration options (same as
+  `getSvgElementVisualBBoxTwoPassAggressive`)
+
+#### Returns
+
+- **`Promise<BBox | null>`** - Union bounding box object or `null` if all
+  elements are invisible
+
+#### Example
+
+**Compute union of multiple elements:**
+
+```javascript
+const unionBBox = await SvgVisualBBox.getSvgElementsUnionVisualBBox([
+  '#header',
+  '#logo',
+  '#title'
+]);
+console.log('Union bbox:', unionBBox);
+// {x: 10, y: 5, width: 380, height: 95}
+```
+
+**With options:**
+
+```javascript
+const unionBBox = await SvgVisualBBox.getSvgElementsUnionVisualBBox(
+  ['#elem1', '#elem2', '#elem3'],
+  {
+    mode: 'unclipped',
+    coarseFactor: 3,
+    fineFactor: 24
+  }
+);
+```
+
+#### Error Handling
+
+```javascript
+// ❌ Throws error if targets is empty
+await SvgVisualBBox.getSvgElementsUnionVisualBBox([]);
+
+// ❌ Throws error if elements are in different SVG roots
+await SvgVisualBBox.getSvgElementsUnionVisualBBox([
+  '#elemInSvg1',
+  '#elemInSvg2'
+]);
+```
+
+#### Use Cases
+
+- Compute bounding box for a group of elements
+- Determine the extent of a selection
+- Calculate the area needed to contain multiple objects
+
+---
+
 ### `getSvgElementVisibleAndFullBBoxes()`
 
 Computes **two** bounding boxes:
@@ -304,6 +380,96 @@ if (visible && full) {
   }
 }
 ```
+
+---
+
+### `getSvgRootViewBoxExpansionForFullDrawing()`
+
+Computes the **viewBox expansion** needed to include all content that extends
+beyond the current viewBox. Useful for determining how much to expand the
+viewBox to show the complete drawing.
+
+#### Syntax
+
+```javascript
+const expansion = await SvgVisualBBox.getSvgRootViewBoxExpansionForFullDrawing(
+  svgRootOrId,
+  options
+);
+```
+
+#### Parameters
+
+- **`svgRootOrId`** _(string | SVGSVGElement)_ - The root `<svg>` element or its
+  ID. Must have a valid viewBox attribute.
+- **`options`** _(Object)_ - Configuration options (same as
+  `getSvgElementVisualBBoxTwoPassAggressive`)
+
+#### Returns
+
+```typescript
+{
+  top: number,      // Expansion needed above current viewBox
+  right: number,    // Expansion needed to the right
+  bottom: number,   // Expansion needed below
+  left: number,     // Expansion needed to the left
+  fullBBox: BBox    // The full drawing bounding box
+}
+```
+
+#### Example
+
+**Check if content extends beyond viewBox:**
+
+```javascript
+const svg = document.getElementById('mySvg');
+const expansion =
+  await SvgVisualBBox.getSvgRootViewBoxExpansionForFullDrawing(svg);
+
+if (
+  expansion.top > 0 ||
+  expansion.right > 0 ||
+  expansion.bottom > 0 ||
+  expansion.left > 0
+) {
+  console.log('Content extends beyond viewBox by:', expansion);
+}
+```
+
+**Expand viewBox to fit all content:**
+
+```javascript
+const svg = document.getElementById('mySvg');
+const expansion =
+  await SvgVisualBBox.getSvgRootViewBoxExpansionForFullDrawing(svg);
+const vb = svg.viewBox.baseVal;
+
+// Apply expansion
+svg.setAttribute(
+  'viewBox',
+  `${vb.x - expansion.left} ${vb.y - expansion.top} ` +
+    `${vb.width + expansion.left + expansion.right} ` +
+    `${vb.height + expansion.top + expansion.bottom}`
+);
+```
+
+#### Error Handling
+
+```javascript
+// ❌ Throws error if not an SVG element
+await SvgVisualBBox.getSvgRootViewBoxExpansionForFullDrawing('#myDiv');
+
+// ❌ Throws error if SVG has no viewBox
+await SvgVisualBBox.getSvgRootViewBoxExpansionForFullDrawing(
+  '#svgWithoutViewBox'
+);
+```
+
+#### Use Cases
+
+- Detect clipped content in SVG files
+- Auto-expand viewBox to show complete drawing
+- Validate SVG viewBox coverage
 
 ---
 
@@ -423,9 +589,27 @@ await SvgVisualBBox.setViewBoxOnObjects(svgElement, objectIds, options);
 
 ```typescript
 {
-  aspect: 'stretch' | 'meet' | 'slice',  // How to fit objects
-  margin: string | number,                 // Margin around objects ('10px' or 10)
-  animate: boolean                         // Smooth transition (default: false)
+  aspect: 'stretch' | 'meet' | 'slice',    // Legacy option for fitting (default: 'stretch')
+  aspectRatioMode: 'meet' | 'slice',       // preserveAspectRatio mode (default: 'meet')
+  align: string,                            // preserveAspectRatio alignment (default: 'xMidYMid')
+  margin: number,                           // Margin around objects in SVG units (default: 0)
+  visibility: 'unchanged' | 'show' | 'hide', // How to handle non-target visibility (default: 'unchanged')
+  visibilityList: Object | null,           // Custom visibility map {id: 'visible'|'hidden'} (default: null)
+  saveVisibilityList: boolean,             // Return visibility states for restoration (default: false)
+  dryRun: boolean,                         // Compute but don't apply changes (default: false)
+  bboxOptions: Object                      // Options passed to bbox computation (default: {})
+}
+```
+
+#### Returns
+
+```typescript
+{
+  newViewBox: string,                      // The new viewBox value
+  oldViewBox: string,                      // The previous viewBox value
+  bbox: BBox,                              // Computed bounding box
+  visibilityList: Object | null,          // Saved visibility states (if saveVisibilityList: true)
+  restore: () => void                      // Function to restore original state
 }
 ```
 
@@ -435,8 +619,8 @@ await SvgVisualBBox.setViewBoxOnObjects(svgElement, objectIds, options);
 
 ```javascript
 await SvgVisualBBox.setViewBoxOnObjects('svg', 'importantElement', {
-  aspect: 'meet',
-  margin: '10px'
+  aspectRatioMode: 'meet',
+  margin: 10
 });
 ```
 
@@ -444,19 +628,40 @@ await SvgVisualBBox.setViewBoxOnObjects('svg', 'importantElement', {
 
 ```javascript
 await SvgVisualBBox.setViewBoxOnObjects('svg', ['elem1', 'elem2', 'elem3'], {
-  aspect: 'stretch',
+  aspectRatioMode: 'meet',
+  align: 'xMidYMid',
   margin: 20
 });
 ```
 
-**Smooth animated transition:**
+**Dry run to preview changes:**
 
 ```javascript
-await SvgVisualBBox.setViewBoxOnObjects('#mySvg', 'targetElement', {
-  aspect: 'meet',
-  margin: '15px',
-  animate: true
-});
+const result = await SvgVisualBBox.setViewBoxOnObjects(
+  '#mySvg',
+  'targetElement',
+  {
+    margin: 15,
+    dryRun: true
+  }
+);
+console.log('Would set viewBox to:', result.newViewBox);
+```
+
+**Hide other elements while focusing:**
+
+```javascript
+const result = await SvgVisualBBox.setViewBoxOnObjects(
+  '#mySvg',
+  'focusElement',
+  {
+    visibility: 'hide',
+    saveVisibilityList: true
+  }
+);
+
+// Later, restore original visibility
+result.restore();
 ```
 
 ---
@@ -709,9 +914,8 @@ document.querySelectorAll('.zoomable').forEach((element) => {
   element.addEventListener('click', async () => {
     const svg = element.closest('svg');
     await SvgVisualBBox.setViewBoxOnObjects(svg, element.id, {
-      aspect: 'meet',
-      margin: '20px',
-      animate: true
+      aspectRatioMode: 'meet',
+      margin: 20
     });
   });
 });

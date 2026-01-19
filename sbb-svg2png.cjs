@@ -1033,8 +1033,12 @@ ${sanitizedSvg}
         const realParent = fs.realpathSync(parentDir);
         resolvedOutput = path.join(realParent, path.basename(output));
       }
-    } catch {
+    } catch (err) {
       // If parent doesn't exist, use original path
+      // WHY: Log the error in verbose mode for debugging path resolution issues
+      // WHY: Type guard for unknown error in catch block
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logVerbose('Symlink resolution failed:', errMsg);
     }
     // WHY: Only allow .jpg/.jpeg output extensions when --jpg flag is present
     // Screenshot is always PNG format; .jpg output requires --jpg for conversion
@@ -1145,8 +1149,12 @@ ${sanitizedSvg}
     if (browser) {
       try {
         await browser.close();
-      } catch {
+      } catch (err) {
         // Force kill if close fails
+        // WHY: Log the error in verbose mode for debugging browser cleanup issues
+        // WHY: Type guard for unknown error in catch block
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logVerbose('Browser close failed, force killing:', errMsg);
         // WHY: browser.process() can return null if browser was not launched
         const browserProcess = browser.process();
         if (browserProcess) {

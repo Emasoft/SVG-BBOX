@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * sbb-chrome-getbbox.cjs - Get bounding box using Chrome's native .get BBox()
+ * sbb-chrome-getbbox.cjs - Get bounding box using Chrome's native .getBBox()
  *
  * This tool demonstrates the standard SVG .getBBox() method's behavior for comparison
  * with SvgVisualBBox algorithm. It returns bbox information without extraction.

@@ -3,11 +3,13 @@
  * Compatible with Playwright 1.x in ESM mode
  * @type {import('@playwright/test').PlaywrightTestConfig}
  */
+import { PLAYWRIGHT_TEST_TIMEOUT_MS, PLAYWRIGHT_ACTION_TIMEOUT_MS } from './config/timeouts.js';
+
 export default {
   testDir: './tests/e2e',
 
-  // Maximum time one test can run for
-  timeout: 120 * 1000,
+  // Maximum time one test can run for (imported from centralized config)
+  timeout: PLAYWRIGHT_TEST_TIMEOUT_MS,
 
   // Test execution settings
   fullyParallel: true,
@@ -35,8 +37,8 @@ export default {
     // Ignore HTTPS errors for local testing
     ignoreHTTPSErrors: true,
 
-    // Timeout for each action (e.g., click, fill)
-    actionTimeout: 10 * 1000
+    // Timeout for each action (e.g., click, fill) - imported from centralized config
+    actionTimeout: PLAYWRIGHT_ACTION_TIMEOUT_MS
   },
 
   // Configure projects for major browsers

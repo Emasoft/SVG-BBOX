@@ -93,7 +93,7 @@
  * @typedef {Object} ImageCompareResult
  * @property {number} totalPixels - Total pixels in the image
  * @property {number} differentPixels - Number of different pixels
- * @property {string} diffPercentage - Difference percentage: (differentPixels / totalPixels) * 100
+ * @property {string} diffPercentage - Difference percentage as string from toFixed(2), e.g. "0.00" or "12.34"
  */
 
 /**
@@ -2608,9 +2608,13 @@ async function main() {
       if (fs.existsSync(tempDir)) {
         try {
           fs.rmdirSync(tempDir);
-          // eslint-disable-next-line no-unused-vars
-        } catch (_err) {
-          // Directory not empty or other error - ignore
+        } catch (err) {
+          // WHY: Log cleanup failures in verbose mode for debugging
+          // WHY: Type guard for unknown error in catch block
+          if (args.verbose) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.error('Cleanup failed:', errMsg);
+          }
         }
       }
 
@@ -2663,9 +2667,13 @@ async function main() {
     if (fs.existsSync(tempDir)) {
       try {
         fs.rmdirSync(tempDir);
-        // eslint-disable-next-line no-unused-vars
-      } catch (_err) {
-        // Directory not empty or other error - ignore
+      } catch (err) {
+        // WHY: Log cleanup failures in verbose mode for debugging
+        // WHY: Type guard for unknown error in catch block
+        if (args.verbose) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error('Cleanup failed:', errMsg);
+        }
       }
     }
 

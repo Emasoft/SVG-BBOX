@@ -75,9 +75,15 @@ async function build() {
 function getVersion() {
   try {
     const pkg = require('../package.json');
+    if (!pkg.version) {
+      throw new Error('package.json does not contain a version field');
+    }
     return pkg.version;
-  } catch {
-    return '1.0.1';
+  } catch (err) {
+    // Fail-fast: version must come from package.json, no stale fallbacks
+    // WHY: Type guard for unknown error in catch block
+    const errMsg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to read version from package.json: ${errMsg}`);
   }
 }
 

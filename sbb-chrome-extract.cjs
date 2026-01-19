@@ -261,6 +261,15 @@ ${defsContent}${/** @type {Element} */ (clone).outerHTML}
 async function renderToPng(page, svgContent, outputPath, options) {
   const { width, height, scale, background, viewBox } = options;
 
+  // SECURITY FIX (S9): Check for zero-dimension viewBox to prevent division by zero
+  // WHY: If viewBox.width or viewBox.height is 0, division would produce NaN or Infinity,
+  // leading to invalid PNG dimensions or Puppeteer errors
+  if (viewBox.width === 0 || viewBox.height === 0) {
+    throw new SVGBBoxError(
+      `Cannot render PNG: viewBox has zero ${viewBox.width === 0 ? 'width' : 'height'} (element may have no visible content)`
+    );
+  }
+
   // Calculate dimensions
   let pngWidth, pngHeight;
   if (width && height) {
@@ -707,6 +716,22 @@ function parseArgs(argv) {
     }
 
     options.input = positional[0];
+
+    // SECURITY FIX (S10): Validate paths for shell metacharacters in single mode
+    // WHY: Same security validation applied to batch mode should apply to single mode
+    // Prevents command injection if paths are ever used in shell contexts
+    if (options.input && SHELL_METACHARACTERS.test(options.input)) {
+      printError('Invalid input path: contains shell metacharacters');
+      process.exit(1);
+    }
+    if (options.output && SHELL_METACHARACTERS.test(options.output)) {
+      printError('Invalid output path: contains shell metacharacters');
+      process.exit(1);
+    }
+    if (options.png && SHELL_METACHARACTERS.test(options.png)) {
+      printError('Invalid PNG path: contains shell metacharacters');
+      process.exit(1);
+    }
 
     // Check input file exists
     // WHY: TypeScript needs explicit null check since options.input is string | undefined

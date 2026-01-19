@@ -206,7 +206,7 @@ function printVersionInfo() {
 
 /**
  * Interactive tool selection prompt.
- * Asks user to enter a tool number (1-16) and displays help for that tool.
+ * Asks user to enter a tool number (1-12, matching TOOLS.length) and displays help for that tool.
  * Only works in TTY (terminal) mode; exits silently if not a TTY.
  * @returns {void}
  */

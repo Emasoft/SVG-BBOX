@@ -655,7 +655,7 @@ ${sanitizedSvg}
         svg.setAttribute('height', newHeight);
       }
 
-      // 4) Serialize the fixed <svg> back to string
+      // 5) Serialize the fixed <svg> back to string
       const serializer = new XMLSerializer();
       // In case the original file had extra stuff around the root, we just output the <svg> itself.
       /* eslint-enable no-undef */

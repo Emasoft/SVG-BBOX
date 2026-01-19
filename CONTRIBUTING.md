@@ -238,13 +238,26 @@ if (!svgElement) return null;
 
 ## Release Process
 
-Releases are managed by maintainers:
+Releases are managed by maintainers using the unified release pipeline:
 
-1. Update version in `package.json`
-2. Update `CHANGELOG.md`
-3. Create git tag
-4. Publish to npm
-5. Create GitHub release
+```bash
+./scripts/release.sh patch   # For bug fixes (1.0.10 → 1.0.11)
+./scripts/release.sh minor   # For new features (1.0.10 → 1.1.0)
+./scripts/release.sh major   # For breaking changes (1.0.10 → 2.0.0)
+```
+
+The release script handles everything automatically:
+
+- Version bump in `package.json`
+- Changelog update with git-cliff
+- Git commit and tag creation
+- Push to GitHub
+- Wait for CI to pass
+- Create GitHub Release
+- Publish to npm via trusted publishing
+- Verify package installation
+
+**Never** perform release steps manually - always use the unified pipeline.
 
 ## Questions?
 

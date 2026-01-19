@@ -16,13 +16,14 @@ languages.
 3. [The Two-Stage Commit/Push Model](#the-two-stage-commitpush-model)
 4. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
 
-**Part II: Implementation** 5.
-[Pipeline Architecture](#pipeline-architecture) 6.
-[Current Implementation (svg-bbox)](#current-implementation-svg-bbox) 7.
-[Monorepo Patterns](#monorepo-patterns) 8.
-[Language-Specific Configurations](#language-specific-configurations) 9.
-[Troubleshooting Guide](#troubleshooting-guide) 10.
-[Quick Reference](#quick-reference)
+**Part II: Implementation**
+
+5. [Pipeline Architecture](#pipeline-architecture)
+6. [Current Implementation (svg-bbox)](#current-implementation-svg-bbox)
+7. [Monorepo Patterns](#monorepo-patterns)
+8. [Language-Specific Configurations](#language-specific-configurations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Quick Reference](#quick-reference)
 
 ---
 

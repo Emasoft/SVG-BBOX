@@ -2,7 +2,27 @@
   "permissions": {
     "allow": [
       "Bash(check-aimaestro-messages.sh:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(npm view:*)",
+      "Bash(bunx vitest run:*)",
+      "Bash(chmod:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(tldr structure:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(python -m pytest:*)",
+      "Bash(node --check:*)",
+      "Bash(node scripts/postinstall.cjs:*)",
+      "Bash(npx eslint:*)",
+      "Bash(node scripts/build-min.cjs:*)",
+      "Bash(bun run eslint:*)",
+      "Bash(bun run typecheck:*)",
+      "Bash(bun run tsc:*)",
+      "Bash(bun run lint:*)",
+      "Bash(bun run lint:fix:*)"
     ]
   }
 }

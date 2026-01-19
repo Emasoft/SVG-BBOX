@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Centralized Timeout Configuration
  *
@@ -166,6 +165,43 @@ const TEST_TIMEOUT_MS = 60000;
 const HOOK_TIMEOUT_MS = 60000;
 
 /**
+ * PLAYWRIGHT_TEST_TIMEOUT_MS: 120 seconds
+ *
+ * WHY 120 seconds:
+ * - E2E tests are longer than unit tests (multiple page interactions)
+ * - Browser launch: 2-5 seconds
+ * - Page navigations: 2-5 seconds each
+ * - Multiple user interactions: 1-2 seconds each
+ * - Assertions and waits: variable
+ * - Safety margin: 60+ seconds for slow CI
+ *
+ * Used for:
+ * - Playwright test timeout configuration
+ *
+ * WHAT NOT TO DO:
+ * - Don't reduce below 60s (E2E tests need time for full flows)
+ * - Don't increase arbitrarily (indicates flaky or slow tests)
+ */
+const PLAYWRIGHT_TEST_TIMEOUT_MS = 120000;
+
+/**
+ * PLAYWRIGHT_ACTION_TIMEOUT_MS: 10 seconds
+ *
+ * WHY 10 seconds:
+ * - Individual actions (click, fill, etc.) should be fast
+ * - Element should be ready within 2-3 seconds
+ * - Safety margin for slow rendering
+ *
+ * Used for:
+ * - Playwright actionTimeout (click, fill, etc.)
+ *
+ * WHAT NOT TO DO:
+ * - Don't increase above 30s (indicates selector issues)
+ * - Don't reduce below 5s (animations may need time)
+ */
+const PLAYWRIGHT_ACTION_TIMEOUT_MS = 10000;
+
+/**
  * VITEST_RUN_TIMEOUT_MS: 10 minutes (600 seconds)
  *
  * WHY 10 minutes:
@@ -300,6 +336,8 @@ module.exports = {
   // Test execution
   TEST_TIMEOUT_MS,
   HOOK_TIMEOUT_MS,
+  PLAYWRIGHT_TEST_TIMEOUT_MS,
+  PLAYWRIGHT_ACTION_TIMEOUT_MS,
   VITEST_RUN_TIMEOUT_MS,
 
   // File locking

@@ -21,6 +21,7 @@ const {
   validateFilePath,
   validateOutputPath,
   SHELL_METACHARACTERS,
+  VALID_ID_PATTERN,
   SVGBBoxError
 } = require('./lib/security-utils.cjs');
 
@@ -253,6 +254,15 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     requiredExtensions: ['.svg']
   });
 
+  // SECURITY: Validate objectId format before passing to Inkscape to prevent command injection
+  // IDs are passed via --export-id flag and could contain shell metacharacters
+  // VALID_ID_PATTERN ensures IDs match XML spec: start with letter/underscore, followed by word chars, periods, hyphens
+  if (!VALID_ID_PATTERN.test(objectId)) {
+    throw new SVGBBoxError(
+      `Invalid ID format: "${objectId}". IDs must start with a letter or underscore, followed by letters, digits, underscores, periods, or hyphens.`
+    );
+  }
+
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
   // Non-commented parameters are the defaults that are ALWAYS used
@@ -297,8 +307,15 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
 
   // Add margin if specified (optional parameter)
   if (margin !== null && margin !== undefined) {
-    // Insert margin after export-id and before export-filename
-    inkscapeArgs.splice(6, 0, `--export-margin=${margin}`);
+    // Find the index of --export-filename to insert margin before it
+    // This is more robust than using a hardcoded index in case args are reordered
+    const exportFilenameIndex = inkscapeArgs.findIndex((arg) =>
+      arg.startsWith('--export-filename=')
+    );
+    if (exportFilenameIndex !== -1) {
+      // Insert margin after export-id and before export-filename
+      inkscapeArgs.splice(exportFilenameIndex, 0, `--export-margin=${margin}`);
+    }
   }
 
   try {
