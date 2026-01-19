@@ -491,7 +491,7 @@ async function main() {
   const options = parseArgs(process.argv);
 
   // WHY: Print banner unless in quiet/json mode
-  printBanner('sbb-chrome-getbbox', { quiet: options.quiet, json: options.json });
+  printBanner('sbb-chrome-getbbox', { quiet: options.quiet, json: !!options.json });
 
   // WHY: Verbose mode shows detailed progress information for debugging
   if (options.verbose && !options.quiet) {
