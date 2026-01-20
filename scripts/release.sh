@@ -4757,7 +4757,7 @@ validate_deps_lockfile() {
                     "pnpm-lock.yaml is out of sync with package.json" \
                     "CI will fail with 'ERR_PNPM_OUTDATED_LOCKFILE'" \
                     "Regenerate lockfile and commit" \
-                    "pnpm install && git add pnpm-lock.yaml && git commit -m 'chore: update lockfile'"
+                    "bun install && git add bun.lock && git commit -m 'chore: update lockfile'"
                 HAS_ERRORS=true
             fi
             ;;
@@ -5463,12 +5463,12 @@ run_quality_checks() {
 
     # Check that pnpm lockfile is in sync with package.json
     log_info "  → Verifying lockfile integrity..."
-    if ! pnpm install --frozen-lockfile --prefer-offline 2>&1 | tail -5; then
+    if ! bun install --frozen-lockfile 2>&1 | tail -5; then
         error_with_guidance \
-            "pnpm lockfile is out of sync with package.json" \
-            "CI runs 'pnpm install --frozen-lockfile' which fails if lockfile doesn't match package.json" \
+            "bun lockfile is out of sync with package.json" \
+            "CI runs 'bun install --frozen-lockfile' which fails if lockfile doesn't match package.json" \
             "Regenerate the lockfile and commit it" \
-            "pnpm install && git add pnpm-lock.yaml && git commit -m 'chore: update lockfile'"
+            "bun install && git add bun.lock && git commit -m 'chore: update lockfile'"
         exit 1
     fi
     log_success "  Lockfile is in sync with package.json"
