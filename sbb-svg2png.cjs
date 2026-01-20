@@ -652,16 +652,9 @@ async function renderSvgWithModes(opts) {
     mustExist: true
   });
 
-  // SECURITY: Read SVG with size limit (50MB max)
+  // NOTE: File size limit removed to support large SVG files with embedded content (hundreds of MB)
   // WHY: We already validated the path above, so we read directly to avoid
   // readSVGFileSafe re-validating with default allowedDirs (which ignores our flags)
-  const MAX_SVG_SIZE = 50 * 1024 * 1024;
-  const stats = fs.statSync(safePath);
-  if (stats.size > MAX_SVG_SIZE) {
-    throw new FileSystemError(
-      `SVG file too large: ${stats.size} bytes (maximum: ${MAX_SVG_SIZE} bytes)`
-    );
-  }
   const svgContent = fs.readFileSync(safePath, 'utf8');
   if (!svgContent.trim().startsWith('<') || !svgContent.includes('<svg')) {
     throw new _ValidationError('File does not appear to be valid SVG');
