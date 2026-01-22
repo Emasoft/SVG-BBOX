@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.11] - 2026-01-22
+
+### ✗ Bug Fixes
+
+- **cli**: Support optional --json flag with 3 modes
+
+### Build
+
+- Regenerate minified file with v1.1.10 preamble
+
+## [1.1.10] - 2026-01-22
+
+### ✗ Bug Fixes
+
+- **audit**: Address 52 minor issues from codebase audit
+- **ci**: Improve CI reliability and add comprehensive pipeline documentation
+- **audit**: Address 52 minor issues from codebase audit
+- **typecheck**: Resolve TypeScript errors in CLI scripts
+- **release**: Use bun instead of pnpm for lockfile verification
+
+### ★ New Features
+
+- **release**: Add comprehensive documentation audit validator
+- **cli**: Add ASCII art banner to all CLI tools
+- **security**: Remove file size limits for large SVG support
+
+### Miscellaneous Tasks
+
+- Ignore local Claude settings
+- Stop tracking local Claude settings
+- **release**: Bump version to 1.1.10
+
+### ✓ Testing
+
+- **fixtures**: Add text-sample-paths.svg test fixture
+- **security**: Update tests for removed file size limits
+- **integration**: Update tests for removed file size limits
+
 ## [1.1.9] - 2026-01-18
 
 ### ✗ Bug Fixes
@@ -12,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **release**: Comprehensive audit and improvements to release pipeline
 - **hooks**: Re-stage formatted files in pre-commit hook
 - **audit**: Comprehensive codebase audit fixes
+- **ci**: Install Chrome before running tests in publish workflow
+- **test**: Update trusted-mode test to check success rather than warning message
 
 ### ◆ Documentation
 
@@ -24,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **release**: Add workflow version validation and bun verification
 - **release**: Auto-update CHANGELOG.md during releases
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.1.9
 
 ### ◇ Styling
 
