@@ -164,17 +164,20 @@ describe('Security Utils', () => {
       assert.throws(() => securityUtils.readSVGFileSafe(testPath), /not appear to be valid SVG/);
     });
 
-    it('should reject files exceeding size limit', () => {
-      /**Test that oversized SVG files are rejected*/
+    it('should accept large SVG files (size limits removed)', () => {
+      /**Test that large SVG files are accepted since size limits were removed
+       * to support SVG files with embedded content (hundreds of MB)*/
       const testPath = path.join(process.cwd(), 'test-security-large.svg');
       testFiles.push(testPath);
 
-      // Create an 11MB file (exceeds 10MB limit)
+      // Create a 5MB file - should be accepted (no size limit)
       const largeContent =
-        '<svg xmlns="http://www.w3.org/2000/svg">' + 'A'.repeat(11 * 1024 * 1024) + '</svg>';
+        '<svg xmlns="http://www.w3.org/2000/svg">' + 'A'.repeat(5 * 1024 * 1024) + '</svg>';
       fs.writeFileSync(testPath, largeContent);
 
-      assert.throws(() => securityUtils.readSVGFileSafe(testPath), /SVG file too large/);
+      // Should not throw - size limits are removed
+      const content = securityUtils.readSVGFileSafe(testPath);
+      assert.ok(content.includes('<svg'));
     });
 
     it('should reject non-existent files', () => {
@@ -288,18 +291,21 @@ describe('Security Utils', () => {
       assert.throws(() => securityUtils.readJSONFileSafe(testPath), /prototype pollution detected/);
     });
 
-    it('should reject files exceeding size limit', () => {
-      /**Test that oversized JSON files are rejected*/
+    it('should accept large JSON files (size limits removed)', () => {
+      /**Test that large JSON files are accepted since size limits were removed
+       * to support large configuration and data files*/
       const testPath = path.join(process.cwd(), 'test-security-large.json');
       testFiles.push(testPath);
 
-      // Create a 2MB file (exceeds 1MB limit)
+      // Create a 2MB file - should be accepted (no size limit)
       const largeContent = JSON.stringify({
         data: 'A'.repeat(2 * 1024 * 1024)
       });
       fs.writeFileSync(testPath, largeContent);
 
-      assert.throws(() => securityUtils.readJSONFileSafe(testPath), /JSON file too large/);
+      // Should not throw - size limits are removed
+      const parsed = securityUtils.readJSONFileSafe(testPath);
+      assert.ok(parsed.data.length > 2 * 1024 * 1024 - 100);
     });
 
     it('should use custom validator if provided', () => {
@@ -663,9 +669,11 @@ describe('Security Utils', () => {
 
   describe('Constants', () => {
     it('should export correct constants', () => {
-      /**Test that security constants are properly exported*/
-      assert.strictEqual(securityUtils.MAX_SVG_SIZE, 10 * 1024 * 1024);
-      assert.strictEqual(securityUtils.MAX_JSON_SIZE, 1 * 1024 * 1024);
+      /**Test that security constants are properly exported
+       * NOTE: MAX_SVG_SIZE and MAX_JSON_SIZE are Infinity since size limits were removed
+       * to support large files with embedded content (hundreds of MB)*/
+      assert.strictEqual(securityUtils.MAX_SVG_SIZE, Infinity);
+      assert.strictEqual(securityUtils.MAX_JSON_SIZE, Infinity);
       assert.deepStrictEqual(securityUtils.VALID_SVG_EXTENSIONS, ['.svg']);
       assert.deepStrictEqual(securityUtils.VALID_JSON_EXTENSIONS, ['.json']);
       assert.ok(securityUtils.SHELL_METACHARACTERS instanceof RegExp);
