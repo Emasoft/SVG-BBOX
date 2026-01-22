@@ -204,8 +204,8 @@ const argParser = createArgParser({
     {
       name: 'json',
       alias: 'j',
-      description: 'Save results as JSON to specified file (use - for stdout)',
-      type: 'string'
+      description: 'Output as JSON: no value=auto-filename, path=save there, -=stdout',
+      type: 'optional-string'
     },
     {
       name: 'quiet',
@@ -1053,11 +1053,33 @@ async function main() {
     throw new ValidationError('No input specified. Use --help for usage information.');
   }
 
+  // Determine JSON output path based on --json flag value
+  // WHY: Support three modes:
+  //   --json (no value) → auto-generate timestamped filename
+  //   --json path.json → save to specified path
+  //   --json - → output to stdout
+  let jsonOutputPath = null;
+  if (args.flags.json === true) {
+    // Auto-generate filename: <input-basename>-bbox-<timestamp>.json
+    // WHY: Provides predictable output filename without requiring user to specify
+    const inputPath = args.flags.dir || args.flags.list || args.positional[0];
+    if (inputPath) {
+      const baseName = path.basename(inputPath, path.extname(inputPath));
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      jsonOutputPath = `${baseName}-bbox-${timestamp}.json`;
+    } else {
+      jsonOutputPath = `bbox-results-${Date.now()}.json`;
+    }
+  } else if (typeof args.flags.json === 'string') {
+    // Use specified path (including '-' for stdout)
+    jsonOutputPath = args.flags.json;
+  }
+
   /** @type {CLIOptions} */
   const options = {
     ignoreViewBox: args.flags['ignore-vbox'] || false,
     spriteMode: args.flags.sprite || false,
-    jsonOutput: args.flags.json || null,
+    jsonOutput: jsonOutputPath,
     quiet: args.flags.quiet || false,
     verbose: args.flags.verbose || false
   };
