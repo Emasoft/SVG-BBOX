@@ -176,29 +176,37 @@ describe('CLI Security Integration Tests', () => {
   // FILE SIZE LIMIT TESTS
   // ============================================================================
 
-  describe('File Size Limit Enforcement', () => {
-    it('sbb-extract should reject oversized SVG files', async () => {
-      /**Test that sbb-extract enforces file size limits*/
+  describe('Large File Support (Size Limits Removed)', () => {
+    it('sbb-extract should accept large SVG files', async () => {
+      /**Test that sbb-extract accepts large SVG files since size limits were removed
+       * to support SVG files with embedded content (hundreds of MB)*/
       const largePath = path.join(testDir, 'large.svg');
       testFiles.push(largePath);
 
-      // Create an 11MB SVG file (exceeds 10MB limit)
+      // Create a 5MB SVG file - should be accepted (no size limit)
+      // Use a valid SVG structure with an element that has an ID
       const largeContent =
-        '<svg xmlns="http://www.w3.org/2000/svg">' + 'A'.repeat(11 * 1024 * 1024) + '</svg>';
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+        '<rect id="large-element" width="100" height="100"/>' +
+        '<!-- ' +
+        'A'.repeat(5 * 1024 * 1024) +
+        ' --></svg>';
       fs.writeFileSync(largePath, largeContent);
 
-      try {
-        await execFilePromise('node', [CLI_TOOLS.extractor, largePath, '--list', '--json'], {
+      // Should succeed - size limits are removed
+      const { stdout } = await execFilePromise(
+        'node',
+        [CLI_TOOLS.extractor, largePath, '--list', '--json'],
+        {
           timeout: CLI_TIMEOUT_MS
-        });
-        assert.fail('Should have rejected oversized file');
-      } catch (err) {
-        const errorOutput = (err.stderr || '') + (err.message || '');
-        assert.ok(
-          errorOutput.includes('too large'),
-          `Should reject with size limit error. Got: ${errorOutput}`
-        );
-      }
+        }
+      );
+
+      // Verify the file was processed (should list the element)
+      assert.ok(
+        stdout.includes('large-element') || stdout.includes('elements'),
+        'Should process large file'
+      );
     });
   });
 

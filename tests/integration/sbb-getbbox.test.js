@@ -499,8 +499,8 @@ describe('sbb-getbbox CLI Integration Tests', () => {
           timeout: CLI_EXEC_TIMEOUT
         });
 
-        // Verbose mode shows version info and file details
-        expect(stdout).toContain('sbb-getbbox v');
+        // Verbose mode shows file path and details (version shown in banner)
+        expect(stdout).toContain('SVG:');
         expect(stdout).toContain('verbose.svg');
         // Should still contain bbox output
         expect(stdout).toMatch(/width:\s*80/);
