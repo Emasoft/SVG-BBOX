@@ -10,6 +10,11 @@
  *     [--width W --height H] \
  *     [--background white|transparent|#rrggbb|...] \
  *     [--margin N] \
+ *     [--fbf-frame N | LIST | RANGE] \
+ *     [--jpg [--delete-png-after]] \
+ *     [--batch <file>] \
+ *     [--allow-paths <dirs> | --trusted-mode] \
+ *     [--quiet | --verbose] \
  *     [--auto-open]  # Opens PNG in Chrome/Chromium ONLY (not Safari!)
  *
  * Modes:
@@ -36,6 +41,22 @@
  *      Extra padding in SVG user units around the computed bbox.
  *      For "visible" mode, this padding is clamped to the original viewBox so
  *      objects outside the viewBox remain ignored.
+ *
+ * FBF.SVG frame extraction (--fbf-frame):
+ *   Renders one or more frames from a Frame-By-Frame SVG produced by
+ *   svg2fbf (https://github.com/Emasoft/svg2fbf). Pins PROSKENION's
+ *   <use xlink:href> to #FRAME0000N and drops the swap <animate> child
+ *   before rendering, so the screenshot captures exactly the requested
+ *   frame independently of any SMIL timeline state. Examples:
+ *     --fbf-frame 7              one frame
+ *     --fbf-frame 7,23,87,345    explicit list  (auto-named outputs)
+ *     --fbf-frame 1-30           inclusive range
+ *     --fbf-frame 1-3,10,20-22   any mix of lists and ranges
+ *   Multi-frame requests derive per-frame output paths from the supplied
+ *   one (e.g. out.png + frames 7,23 -> out-FRAME00007.png,
+ *   out-FRAME00023.png) or honour {frame}/{n} placeholders.
+ *
+ * See `node sbb-svg2png.cjs --help` for the full help screen.
  */
 
 const puppeteer = require('puppeteer');
