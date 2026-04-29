@@ -523,8 +523,8 @@ describe('CLI Security Integration Tests', () => {
           assert.ok(err);
         }
       },
-      CLI_TIMEOUT_MS + 5000
-    ); // Vitest timeout
+      CLI_EXEC_TIMEOUT + 10000
+    ); // Vitest timeout: must exceed CLI_EXEC_TIMEOUT (120s) so the CLI subprocess gets its full chance to either complete or fail gracefully. Was CLI_TIMEOUT_MS+5000 (35s) when Puppeteer's default 30s protocolTimeout would terminate things faster — now that protocolTimeout is 120s (see config/timeouts.cjs), this needs the matching budget.
   });
 
   // ============================================================================
