@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   10,20-22`). Multi-frame requests auto-derive per-frame output names
   (`out.png` → `out-FRAME00007.png`, …) or honour `{frame}`/`{n}`
   placeholders in the supplied output path.
+- **sbb-compare**: `--fbf-frame N`, `--fbf-frame-a N`, and
+  `--fbf-frame-b N` make the same FBF.SVG frame extraction available to
+  the visual diff tool. Each side of the comparison can be independently
+  pinned, so you can compare a static SVG/PNG against frame N of an
+  animation, or diff two specific frames of the same FBF. Aspect-ratio
+  enforcement (`--aspect-ratio-threshold`) is unchanged — the pinned
+  side inherits the FBF's `viewBox`/`width`/`height` verbatim.
 - **lib/fbf.cjs**: New helper module — `describeFbf(svg)`,
   `pinFrame(svg, n)`, `formatFrameId(n, padWidth)`, `resolveFrameId(...)` —
   for programmatic FBF.SVG inspection and frame extraction.

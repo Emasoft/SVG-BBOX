@@ -60,6 +60,9 @@
  * @property {boolean} trustedMode - Trust all file paths without CWD restriction
  * @property {boolean} [headless] - Alias for no-html
  * @property {boolean} [noHtml] - Do not open HTML report
+ * @property {number|null} [fbfFrame] - 1-based FBF.SVG frame to pin on any FBF input (global)
+ * @property {number|null} [fbfFrameA] - 1-based FBF.SVG frame to pin on side A only (overrides fbfFrame for side A)
+ * @property {number|null} [fbfFrameB] - 1-based FBF.SVG frame to pin on side B only (overrides fbfFrame for side B)
  */
 
 /**
@@ -294,6 +297,34 @@ OPTIONS:
   --verbose                 Show detailed progress information
   --no-html                 Do not open HTML report in browser (report is still generated)
   --headless                Alias for --no-html (do not open browser)
+
+  --fbf-frame <N>           FBF.SVG (svg2fbf format) frame pinning.
+                            When ANY input is an FBF.SVG, pin its PROSKENION
+                            <use xlink:href> to #FRAME0000N and drop the swap
+                            <animate> child before rendering, so the
+                            comparison sees exactly that frame instead of
+                            whatever the SMIL timeline lands on.
+                            • If only one side is FBF, only that side is
+                              pinned. The other side is compared verbatim.
+                            • If BOTH sides are FBF, both are pinned to N
+                              (use --fbf-frame-a / --fbf-frame-b for
+                              different frames per side).
+                            • Errors loudly when NEITHER input is FBF
+                              (likely user mistake).
+
+  --fbf-frame-a <N>         Pin frame N on the FIRST input only.
+                            Errors if side A is not an FBF.SVG.
+                            Overrides --fbf-frame for side A only.
+
+  --fbf-frame-b <N>         Pin frame N on the SECOND input only.
+                            Errors if side B is not an FBF.SVG.
+                            Overrides --fbf-frame for side B only.
+
+                            Aspect-ratio enforcement is unchanged: pinning
+                            inherits the FBF's viewBox/width/height
+                            verbatim, so --aspect-ratio-threshold continues
+                            to apply to the pinned side.
+
   --help                    Show this help
   --version                 Show version
 
@@ -329,6 +360,16 @@ EXAMPLES:
 
   # Compare PNG against SVG (order doesn't matter)
   node sbb-compare.cjs screenshot.png expected.svg --threshold 5
+
+  # FBF.SVG: compare a static reference against frame 7 of an animation
+  node sbb-compare.cjs reference.svg anim.fbf.svg --fbf-frame-b 7
+
+  # FBF.SVG: compare a rendered PNG against frame 7
+  node sbb-compare.cjs png-ref.png anim.fbf.svg --fbf-frame-b 7
+
+  # FBF.SVG: compare two frames of the SAME animation (regression test)
+  node sbb-compare.cjs anim.fbf.svg anim.fbf.svg \\
+    --fbf-frame-a 5 --fbf-frame-b 5
 
 OUTPUT:
   Returns:
@@ -460,6 +501,24 @@ function parseArgs(argv) {
         name: 'trusted-mode',
         type: 'boolean',
         description: 'Trust all file paths without CWD restriction (WARNING: security risk)'
+      },
+      {
+        name: 'fbf-frame',
+        type: 'number',
+        description:
+          'FBF.SVG: 1-based frame number to pin on any input that is an FBF.SVG (svg2fbf format)'
+      },
+      {
+        name: 'fbf-frame-a',
+        type: 'number',
+        description:
+          'FBF.SVG: pin frame N on the FIRST input only (overrides --fbf-frame for side A)'
+      },
+      {
+        name: 'fbf-frame-b',
+        type: 'number',
+        description:
+          'FBF.SVG: pin frame N on the SECOND input only (overrides --fbf-frame for side B)'
       }
     ],
     modes: {
@@ -515,12 +574,31 @@ function parseArgs(argv) {
     // WHY: Trusted mode disables path restrictions (use with caution)
     trustedMode: result.flags['trusted-mode'] || false,
     headless: result.flags.headless || false,
-    noHtml: result.flags['no-html'] || false
+    noHtml: result.flags['no-html'] || false,
+    // WHY: FBF.SVG (svg2fbf) frame pinning. Numbers are validated below;
+    // null means the user did not pass the flag for that scope.
+    fbfFrame: typeof result.flags['fbf-frame'] === 'number' ? result.flags['fbf-frame'] : null,
+    fbfFrameA: typeof result.flags['fbf-frame-a'] === 'number' ? result.flags['fbf-frame-a'] : null,
+    fbfFrameB: typeof result.flags['fbf-frame-b'] === 'number' ? result.flags['fbf-frame-b'] : null
   };
 
   // Validate threshold range (1-255)
   if (args.threshold < 1 || args.threshold > 255) {
     throw new Error('--threshold must be between 1 and 255');
+  }
+
+  // Validate FBF frame numbers (must be positive integers)
+  // WHY: Catch garbage input at parse time so we never spawn a browser
+  // for an obviously invalid request.
+  for (const [key, val] of /** @type {const} */ ([
+    ['--fbf-frame', args.fbfFrame],
+    ['--fbf-frame-a', args.fbfFrameA],
+    ['--fbf-frame-b', args.fbfFrameB]
+  ])) {
+    if (val === null || val === undefined) continue;
+    if (!Number.isFinite(val) || !Number.isInteger(val) || val < 1) {
+      throw new Error(`${key} expects a positive integer (1-based), got: ${val}`);
+    }
   }
 
   // Validate aspectRatioThreshold range (0-1)
@@ -985,22 +1063,189 @@ async function performFileComparison(file1Path, file2Path, args, browser) {
     console.log(`File 2: ${file2Path} (${type2})`);
   }
 
-  // Route to appropriate comparison function
-  if (type1 === 'svg' && type2 === 'svg') {
-    // SVG vs SVG: Use full SVG comparison with all features
-    return performSingleComparison(file1Path, file2Path, args, browser);
-  } else if (type1 === 'png' && type2 === 'png') {
-    // PNG vs PNG: Direct comparison (dimensions must match)
-    return comparePngToPng(file1Path, file2Path, args);
-  } else if (type1 === 'svg' && type2 === 'png') {
-    // SVG vs PNG: Render SVG at PNG resolution
-    return compareSvgToPng(file1Path, file2Path, args, browser, true);
-  } else if (type1 === 'png' && type2 === 'svg') {
-    // PNG vs SVG: Render SVG at PNG resolution (order flipped)
-    return compareSvgToPng(file2Path, file1Path, args, browser, false);
-  } else {
-    throw new ValidationError(`Unsupported file type combination: ${type1} vs ${type2}`);
+  // FBF.SVG preprocessing: if --fbf-frame / --fbf-frame-a / --fbf-frame-b
+  // were passed, pin the corresponding side(s) to a temp .svg file written
+  // alongside the source. The temp paths are substituted in place so every
+  // downstream comparison routine works unchanged. Temp files are cleaned
+  // up in the finally block, even on failure. Aspect ratio is unchanged
+  // by pinning (the FBF's viewBox/width/height are inherited verbatim),
+  // so the existing aspect-ratio enforcement (further down the pipeline)
+  // continues to apply to the pinned side just as it would to any SVG.
+  /** @type {string[]} */
+  const fbfTempFiles = [];
+  try {
+    const pinned1 = await maybeApplyFbfPin({
+      side: 'A',
+      filePath: file1Path,
+      fileType: type1,
+      perSideFrame: args.fbfFrameA ?? null,
+      globalFrame: args.fbfFrame ?? null,
+      args
+    });
+    if (pinned1.tempPath) {
+      file1Path = pinned1.path;
+      fbfTempFiles.push(pinned1.tempPath);
+    }
+    const pinned2 = await maybeApplyFbfPin({
+      side: 'B',
+      filePath: file2Path,
+      fileType: type2,
+      perSideFrame: args.fbfFrameB ?? null,
+      globalFrame: args.fbfFrame ?? null,
+      args
+    });
+    if (pinned2.tempPath) {
+      file2Path = pinned2.path;
+      fbfTempFiles.push(pinned2.tempPath);
+    }
+
+    // If --fbf-frame (global) was passed but neither side was an FBF.SVG,
+    // that's almost certainly a user mistake — fail loud so we don't
+    // silently compare two non-FBF inputs and pretend the flag did
+    // something.
+    if (
+      args.fbfFrame !== null &&
+      args.fbfFrame !== undefined &&
+      !pinned1.tempPath &&
+      !pinned2.tempPath
+    ) {
+      throw new ValidationError(
+        `--fbf-frame ${args.fbfFrame} was supplied but neither input is an FBF.SVG ` +
+          `(use --fbf-frame-a / --fbf-frame-b for per-side overrides, or omit --fbf-frame).`
+      );
+    }
+
+    // Route to appropriate comparison function (paths may now point at
+    // pinned temp files written next to the originals).
+    if (type1 === 'svg' && type2 === 'svg') {
+      // SVG vs SVG: Use full SVG comparison with all features
+      return await performSingleComparison(file1Path, file2Path, args, browser);
+    } else if (type1 === 'png' && type2 === 'png') {
+      // PNG vs PNG: Direct comparison (dimensions must match)
+      return await comparePngToPng(file1Path, file2Path, args);
+    } else if (type1 === 'svg' && type2 === 'png') {
+      // SVG vs PNG: Render SVG at PNG resolution
+      return await compareSvgToPng(file1Path, file2Path, args, browser, true);
+    } else if (type1 === 'png' && type2 === 'svg') {
+      // PNG vs SVG: Render SVG at PNG resolution (order flipped)
+      return await compareSvgToPng(file2Path, file1Path, args, browser, false);
+    } else {
+      throw new ValidationError(`Unsupported file type combination: ${type1} vs ${type2}`);
+    }
+  } finally {
+    // Best-effort cleanup of pinned temp files. Failures here are
+    // logged in verbose mode but never propagate — leaving a 1-frame
+    // SVG behind is harmless and shouldn't mask a real comparison error.
+    for (const tmp of fbfTempFiles) {
+      try {
+        fs.unlinkSync(tmp);
+      } catch (err) {
+        if (args.verbose) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error(`Could not remove FBF temp file ${tmp}: ${errMsg}`);
+        }
+      }
+    }
   }
+}
+
+/**
+ * If the side-specific or global FBF frame is set AND the input is a real
+ * FBF.SVG, write a pinned static SVG to a temp file next to the source
+ * and return its path. Otherwise return the original path unchanged.
+ *
+ * Errors loudly when a per-side flag (--fbf-frame-a/--fbf-frame-b) is
+ * passed but the corresponding input is not an FBF.SVG — that's a clear
+ * user mistake worth catching early. The global --fbf-frame flag, by
+ * contrast, applies opportunistically and never errors when one side
+ * happens not to be FBF (the caller validates that at least ONE side
+ * was pinned, after both have been processed).
+ *
+ * @param {object} opts
+ * @param {'A'|'B'} opts.side
+ * @param {string} opts.filePath
+ * @param {FileType} opts.fileType
+ * @param {number|null} opts.perSideFrame
+ * @param {number|null} opts.globalFrame
+ * @param {ComparisonArgs} opts.args
+ * @returns {Promise<{ path: string, tempPath: string|null, frameId: string|null }>}
+ */
+async function maybeApplyFbfPin({ side, filePath, fileType, perSideFrame, globalFrame, args }) {
+  const explicit = perSideFrame !== null && perSideFrame !== undefined;
+  const requestedFrame = explicit ? perSideFrame : globalFrame;
+  if (requestedFrame === null || requestedFrame === undefined) {
+    return { path: filePath, tempPath: null, frameId: null };
+  }
+
+  if (fileType !== 'svg') {
+    if (explicit) {
+      throw new ValidationError(
+        `--fbf-frame-${side.toLowerCase()} requires side ${side} to be an FBF.SVG, ` +
+          `but ${path.basename(filePath)} is a ${fileType.toUpperCase()} file.`
+      );
+    }
+    // Global flag: silently skip non-SVG sides.
+    return { path: filePath, tempPath: null, frameId: null };
+  }
+
+  // Lazy require to keep the script's startup cost flat for users who
+  // never touch FBF inputs.
+  const { describeFbf, pinFrame: pinFbfFrame } = require('./lib/fbf.cjs');
+
+  // Validate + read the source through the existing security-validated
+  // path, so allowedDirs / shell-meta checks run before we touch disk.
+  const safePath = validateFilePath(filePath, {
+    allowedDirs: getAllowedDirs(),
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const content = readSVGFileSafe(safePath);
+  const desc = describeFbf(content);
+
+  if (!desc.isFbf) {
+    if (explicit) {
+      throw new ValidationError(
+        `--fbf-frame-${side.toLowerCase()} requires side ${side} to be an FBF.SVG, ` +
+          `but ${path.basename(filePath)} does not contain a <use id="PROSKENION"> ` +
+          `with <g id="FRAMEnnnnn"> definitions.`
+      );
+    }
+    return { path: filePath, tempPath: null, frameId: null };
+  }
+
+  // Pin the requested frame (this throws with a clear message if the
+  // frame is out of range, and the message names the available range).
+  const pinned = pinFbfFrame(content, requestedFrame);
+
+  // Write the pinned content alongside the source so the temp file
+  // lives in an already-allowed directory (no need to widen
+  // allowedDirs). The basename embeds enough provenance to be obvious
+  // if cleanup ever fails: <stem>.fbf-pin-side<A|B>-<frame>-<random>.svg
+  const sourceDir = path.dirname(safePath);
+  const stem = path.basename(safePath, '.svg');
+  const rand = Math.random().toString(36).slice(2, 8);
+  const tempPath = path.join(
+    sourceDir,
+    `${stem}.fbf-pin-side${side}-${pinned.frameId}-${rand}.svg`
+  );
+  // WHY: Validate the temp path through the same security gate that
+  // input paths use, so we never write to a directory the user hasn't
+  // implicitly authorized via --allow-paths or --trusted-mode (the
+  // source dir is always allowed since we just read from it above).
+  const safeTempPath = validateOutputPath(tempPath, {
+    requiredExtensions: ['.svg'],
+    allowedDirs: getAllowedDirs()
+  });
+  writeFileSafe(safeTempPath, pinned.svg, 'utf-8');
+
+  if (args.verbose && !args.json && !args.quiet) {
+    console.log(
+      `FBF pin: side ${side} '${path.basename(filePath)}' -> frame ${pinned.frameNumber} ` +
+        `(#${pinned.frameId} of ${pinned.totalFrames}) via ${path.basename(tempPath)}`
+    );
+  }
+
+  return { path: tempPath, tempPath, frameId: pinned.frameId };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

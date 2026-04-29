@@ -514,23 +514,23 @@ browsers and Node.js (via Puppeteer).
 
 ### 2. CLI Tools
 
-| Tool                                              | <div align="center">Source</div>                                                                                        | Description                                                                     | Example Usage                                            |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Core Tools (Our Visual BBox Algorithm)**        |                                                                                                                         |                                                                                 |                                                          |
-| `sbb-getbbox`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-getbbox.cjs)</div>            | Get bbox info using our pixel-accurate visual algorithm                         | `sbb-getbbox drawing.svg`                                |
-| `sbb-extract`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-extract.cjs)</div>            | List/rename/extract/export SVG objects with visual catalog                      | `sbb-extract sprites.svg --list`                         |
-| `sbb-svg2png`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-svg2png.cjs)</div>            | Render SVG to PNG with accurate bbox; supports FBF.SVG frames via `--fbf-frame` | `sbb-svg2png input.svg output.png`                       |
-| `sbb-fix-viewbox`                                 | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-fix-viewbox.cjs)</div>        | Repair missing/broken viewBox using visual bbox                                 | `sbb-fix-viewbox broken.svg fixed.svg`                   |
-| `sbb-compare`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-compare.cjs)</div>            | Visual diff between images (SVG/PNG pixel comparison)                           | `sbb-compare a.svg b.png --out-diff diff.png`            |
-| `sbb-test`                                        | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-test.cjs)</div>               | Test bbox accuracy across methods                                               | `sbb-test sample.svg`                                    |
-| **Chrome Comparison Tools (Chrome's .getBBox())** |                                                                                                                         |                                                                                 |                                                          |
-| `sbb-chrome-getbbox`                              | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-chrome-getbbox.cjs)</div>     | Get bbox info using Chrome's .getBBox()                                         | `sbb-chrome-getbbox drawing.svg`                         |
-| `sbb-chrome-extract`                              | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-chrome-extract.cjs)</div>     | Extract using Chrome's .getBBox()                                               | `sbb-chrome-extract file.svg --id obj1 --output out.svg` |
-| **Inkscape Comparison Tools (Inkscape CLI)**      |                                                                                                                         |                                                                                 |                                                          |
-| `sbb-inkscape-getbbox`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-getbbox.cjs)</div>   | Get bbox info using Inkscape's query commands                                   | `sbb-inkscape-getbbox drawing.svg`                       |
-| `sbb-inkscape-extract`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-extract.cjs)</div>   | Extract by ID using Inkscape                                                    | `sbb-inkscape-extract file.svg --id obj1`                |
-| `sbb-inkscape-text2path`                          | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-text2path.cjs)</div> | Convert text to paths using Inkscape                                            | `sbb-inkscape-text2path input.svg output.svg`            |
-| `sbb-inkscape-svg2png`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-svg2png.cjs)</div>   | SVG to PNG export using Inkscape                                                | `sbb-inkscape-svg2png input.svg output.png`              |
+| Tool                                              | <div align="center">Source</div>                                                                                        | Description                                                                                      | Example Usage                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| **Core Tools (Our Visual BBox Algorithm)**        |                                                                                                                         |                                                                                                  |                                                          |
+| `sbb-getbbox`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-getbbox.cjs)</div>            | Get bbox info using our pixel-accurate visual algorithm                                          | `sbb-getbbox drawing.svg`                                |
+| `sbb-extract`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-extract.cjs)</div>            | List/rename/extract/export SVG objects with visual catalog                                       | `sbb-extract sprites.svg --list`                         |
+| `sbb-svg2png`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-svg2png.cjs)</div>            | Render SVG to PNG with accurate bbox; supports FBF.SVG frames via `--fbf-frame`                  | `sbb-svg2png input.svg output.png`                       |
+| `sbb-fix-viewbox`                                 | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-fix-viewbox.cjs)</div>        | Repair missing/broken viewBox using visual bbox                                                  | `sbb-fix-viewbox broken.svg fixed.svg`                   |
+| `sbb-compare`                                     | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-compare.cjs)</div>            | Visual diff between images (SVG/PNG pixel comparison); supports FBF.SVG frames via `--fbf-frame` | `sbb-compare a.svg b.png --out-diff diff.png`            |
+| `sbb-test`                                        | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-test.cjs)</div>               | Test bbox accuracy across methods                                                                | `sbb-test sample.svg`                                    |
+| **Chrome Comparison Tools (Chrome's .getBBox())** |                                                                                                                         |                                                                                                  |                                                          |
+| `sbb-chrome-getbbox`                              | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-chrome-getbbox.cjs)</div>     | Get bbox info using Chrome's .getBBox()                                                          | `sbb-chrome-getbbox drawing.svg`                         |
+| `sbb-chrome-extract`                              | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-chrome-extract.cjs)</div>     | Extract using Chrome's .getBBox()                                                                | `sbb-chrome-extract file.svg --id obj1 --output out.svg` |
+| **Inkscape Comparison Tools (Inkscape CLI)**      |                                                                                                                         |                                                                                                  |                                                          |
+| `sbb-inkscape-getbbox`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-getbbox.cjs)</div>   | Get bbox info using Inkscape's query commands                                                    | `sbb-inkscape-getbbox drawing.svg`                       |
+| `sbb-inkscape-extract`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-extract.cjs)</div>   | Extract by ID using Inkscape                                                                     | `sbb-inkscape-extract file.svg --id obj1`                |
+| `sbb-inkscape-text2path`                          | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-text2path.cjs)</div> | Convert text to paths using Inkscape                                                             | `sbb-inkscape-text2path input.svg output.svg`            |
+| `sbb-inkscape-svg2png`                            | <div align="center">[<ins>source</ins>](https://github.com/Emasoft/SVG-BBOX/blob/main/sbb-inkscape-svg2png.cjs)</div>   | SVG to PNG export using Inkscape                                                                 | `sbb-inkscape-svg2png input.svg output.png`              |
 
 **Naming Convention:**
 
@@ -1301,6 +1301,11 @@ Where `file1` and `file2` can be `.svg` or `.png` files.
 - `--quiet` - Minimal output - only prints diff percentage
 - `--json` - Output results as JSON
 - `--verbose` - Show detailed progress
+- `--fbf-frame <N>` - Pin any FBF.SVG input to frame N before comparison
+- `--fbf-frame-a <N>` - Pin frame N on the FIRST input only (overrides
+  `--fbf-frame` for side A)
+- `--fbf-frame-b <N>` - Pin frame N on the SECOND input only (overrides
+  `--fbf-frame` for side B)
 - `--help` - Display help text with usage examples
 - `--version` - Display version number
 
@@ -1360,6 +1365,43 @@ node sbb-compare.cjs test1.svg test2.svg --json
 **Note:** For PNG vs PNG comparison, both images must have identical dimensions.
 For SVG vs PNG comparison, the SVG is automatically rendered at the PNG's exact
 resolution to ensure accurate pixel-by-pixel comparison.
+
+#### FBF.SVG frame extraction (`--fbf-frame`)
+
+`sbb-compare` recognises the
+[FBF.SVG format](https://github.com/Emasoft/svg2fbf) and can compare any single
+frame of an FBF animation against a static SVG, a PNG, or another FBF frame. The
+targeted side is pinned to the requested frame (PROSKENION's `<use xlink:href>`
+is set to `#FRAME0000N` and the swap `<animate>` child is dropped) before
+rendering, so the comparison sees exactly that frame.
+
+| Flag              | Scope                             | Behaviour                               |
+| ----------------- | --------------------------------- | --------------------------------------- |
+| `--fbf-frame N`   | global — applies to any FBF input | Errors loudly when neither input is FBF |
+| `--fbf-frame-a N` | side A only (overrides global)    | Errors when side A is not an FBF.SVG    |
+| `--fbf-frame-b N` | side B only (overrides global)    | Errors when side B is not an FBF.SVG    |
+
+Aspect-ratio enforcement is unchanged: the pinned SVG inherits the FBF's
+`viewBox` / `width` / `height` verbatim, so `--aspect-ratio-threshold` continues
+to apply to the pinned side. If the static reference doesn't match the FBF's
+aspect ratio, the comparison is rejected with a 100% difference, exactly as for
+any other SVG-vs-SVG mismatch.
+
+```bash
+# Compare a static reference SVG against frame 7 of an animation
+node sbb-compare.cjs reference.svg anim.fbf.svg --fbf-frame-b 7
+
+# Compare a rendered PNG against the same frame (PNG can be on either side)
+node sbb-compare.cjs frame-7.png anim.fbf.svg --fbf-frame-b 7
+
+# Regression-check an FBF against itself, both pinned to the same frame
+node sbb-compare.cjs anim.fbf.svg anim.fbf.svg \
+  --fbf-frame-a 5 --fbf-frame-b 5
+
+# Diff between two different frames of the same animation
+node sbb-compare.cjs anim.fbf.svg anim.fbf.svg \
+  --fbf-frame-a 1 --fbf-frame-b 30 --out-diff frame-drift.png
+```
 
 #### Output
 
