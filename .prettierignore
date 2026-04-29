@@ -29,3 +29,9 @@ CHANGELOG.md
 
 # Type checking cache
 .mypy_cache/
+
+# Claude Code plugin caches and session state (private to local install)
+.janitor/
+.rechecker/
+.tldr/
+.tldrignore

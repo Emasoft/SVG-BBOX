@@ -106,3 +106,9 @@ yarn.lock
 bbox_comparison_*/
 docs_dev/
 .claude/settings.local.json
+
+# Claude Code plugin caches and session state (private to local install)
+.janitor/
+.rechecker/
+.tldr/
+.tldrignore
