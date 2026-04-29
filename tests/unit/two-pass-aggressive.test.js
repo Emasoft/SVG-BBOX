@@ -129,12 +129,12 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
       expect(bbox.height).toBeGreaterThan(30);
 
       await page.close();
-    }, 60000); // WHY 60s: CJK font loading can be slow in CI with parallel tests
+    }, 180000); // WHY 180s (was 60s): CJK font loading takes 30-60s under parallel load. Release pipeline runs many test files in parallel — concurrent Puppeteer + font discovery contention pushes total beyond 60s. 180s gives headroom; tests run fast (<10s) under normal load.
 
     it('should compute bbox for Arabic RTL text', async () => {
-      // WHY pageTimeoutMs 60000: Arabic fonts and RTL shaping may take longer to load.
-      // In CI with parallel tests, the default 30s timeout can be exceeded.
-      const page = await createPageWithSvg('text/arabic-rtl.svg', { pageTimeoutMs: 60000 });
+      // WHY pageTimeoutMs 90000 (was 60000): Arabic fonts and RTL shaping may take longer to load.
+      // Under release-pipeline parallel load, the page-level network idle wait can exceed 60s.
+      const page = await createPageWithSvg('text/arabic-rtl.svg', { pageTimeoutMs: 90000 });
       const bbox = await getBBoxById(page, 'arabic-text', { fontTimeoutMs: 5000 });
 
       expect(bbox).toBeTruthy();
@@ -144,7 +144,7 @@ describe('getSvgElementVisualBBoxTwoPassAggressive', () => {
       expect(bbox.height).toBeGreaterThan(20);
 
       await page.close();
-    }, 60000); // WHY 60s: Arabic RTL font loading can be slow in CI with parallel tests
+    }, 180000); // WHY 180s (was 60s): Arabic RTL font loading + shaping under parallel load can exceed 60s. 180s = pageTimeoutMs (90s) + bbox compute (~30s) + safety margin.
 
     it('should compute bbox for text with ligatures', async () => {
       const page = await createPageWithSvg('text/ligatures.svg');

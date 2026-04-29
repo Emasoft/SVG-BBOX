@@ -101,7 +101,7 @@ describe('Diff Score Accuracy Tests', () => {
       expect(result.diffPercentage).toBe(0);
       expect(result.differentPixels).toBe(0);
       expect(result.totalPixels).toBe(100); // 10x10
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should return 100% diff for completely different SVGs (red vs blue)', async () => {
       // Compare red-full.svg with blue-full.svg
@@ -129,7 +129,7 @@ describe('Diff Score Accuracy Tests', () => {
       expect(result.diffPercentage).toBe(100);
       expect(result.differentPixels).toBe(100);
       expect(result.totalPixels).toBe(100);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should return 50% diff for half-different SVGs (red vs half-red-half-blue)', async () => {
       // Compare red-full.svg with half-red-half-blue.svg
@@ -158,7 +158,7 @@ describe('Diff Score Accuracy Tests', () => {
       expect(result.diffPercentage).toBe(50);
       expect(result.differentPixels).toBe(50);
       expect(result.totalPixels).toBe(100);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should return 50% diff for complementary halves (blue vs half-red-half-blue)', async () => {
       // Compare blue-full.svg with half-red-half-blue.svg
@@ -187,7 +187,7 @@ describe('Diff Score Accuracy Tests', () => {
       expect(result.diffPercentage).toBe(50);
       expect(result.differentPixels).toBe(50);
       expect(result.totalPixels).toBe(100);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
   });
 
   describe('Diff Score Formula Verification', () => {
@@ -218,7 +218,7 @@ describe('Diff Score Accuracy Tests', () => {
 
       // The stored diffPercentage should match the calculated value
       expect(result.diffPercentage).toBeCloseTo(calculatedPercentage, 2);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should handle threshold correctly (pixels within threshold are identical)', async () => {
       // With threshold=1, pixels must differ by MORE than 1 to be counted as different

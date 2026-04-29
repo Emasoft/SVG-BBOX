@@ -436,7 +436,7 @@ describe('Rasterization Pipeline Tests', () => {
       expect(result.totalPixels).toBe(100);
       expect(result.differentPixels).toBe(84);
       expect(result.diffPercentage).toBe(84);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should correctly compare images with transparent regions', async () => {
       // Compare red-center-transparent-bg with itself
@@ -462,7 +462,7 @@ describe('Rasterization Pipeline Tests', () => {
       // This verifies transparent pixels (alpha=0) are compared correctly
       expect(result.diffPercentage).toBe(0);
       expect(result.differentPixels).toBe(0);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
   });
 
   describe('Extended Color Accuracy Tests', () => {
@@ -774,7 +774,7 @@ describe('Rasterization Pipeline Tests', () => {
       expect(result.totalPixels).toBe(100);
       expect(result.differentPixels).toBe(100);
       expect(result.diffPercentage).toBe(100);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should detect red vs green as 100% different', async () => {
       // Red (255,0,0) vs Green (0,255,0)
@@ -800,7 +800,7 @@ describe('Rasterization Pipeline Tests', () => {
       expect(result.totalPixels).toBe(100);
       expect(result.differentPixels).toBe(100);
       expect(result.diffPercentage).toBe(100);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should detect difference only in alpha channel', async () => {
       // Semi-transparent blue (alpha ~128) vs opaque blue (alpha 255)
@@ -826,7 +826,7 @@ describe('Rasterization Pipeline Tests', () => {
       expect(result.totalPixels).toBe(100);
       expect(result.differentPixels).toBe(100);
       expect(result.diffPercentage).toBe(100);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
 
     it('should correctly compare layered images (blue+red vs red-only)', async () => {
       // Blue background + red center vs solid red
@@ -852,6 +852,6 @@ describe('Rasterization Pipeline Tests', () => {
       expect(result.totalPixels).toBe(100);
       expect(result.differentPixels).toBe(84);
       expect(result.diffPercentage).toBe(84);
-    }, 60000);
+    }, 120000); // WHY 120s (was 60s): sbb-compare under release-pipeline parallel load can exceed 60s due to browser-pool contention.
   });
 });

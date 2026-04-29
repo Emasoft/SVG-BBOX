@@ -141,10 +141,11 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
        * Verifies font-family parsing handles special characters (quotes, spaces, commas).
        * Tests that unusual font names don't break bbox calculation.
        */
-      // WHY pageTimeoutMs 60000: Font-family parsing tests may trigger font loading attempts.
-      // In CI with parallel tests, the default 30s timeout can be exceeded.
+      // WHY pageTimeoutMs 90000 (was 60000): Font-family parsing tests may trigger font loading
+      // attempts. Under release-pipeline parallel load, the page-level network idle wait can
+      // exceed 60s when concurrent vitest workers contend for network bandwidth.
       const page = await createPageWithSvg('edge-cases/fonts/special-chars-font-name.svg', {
-        pageTimeoutMs: 60000
+        pageTimeoutMs: 90000
       });
       try {
         const bbox = await getBBoxById(page, 'special-font-text');
@@ -159,7 +160,7 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         // WHY try/finally: Ensure page cleanup even if test fails
         await page.close();
       }
-    }, 60000); // WHY 60s: Font loading and parsing can be slow in CI with parallel tests
+    }, 180000); // WHY 180s (was 60s): Font loading + parsing under parallel load can exceed 60s; matches sibling tests in this file.
   });
 
   describe('Broken References', () => {
