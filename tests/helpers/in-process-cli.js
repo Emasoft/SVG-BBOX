@@ -191,11 +191,11 @@ export async function runCliInProcess(cliName, args, options = {}) {
    * @param {unknown[]} args
    * @returns {string}
    */
-  const formatArgs = (args) => {
+  const formatArgs = (args) =>
     // Lightweight alternative to util.format — handles the common cases
     // (string, number, object). For full fidelity, callers can use
     // util.format directly, but this avoids the require cost.
-    return args
+    args
       .map((/** @type {unknown} */ a) => {
         if (typeof a === 'string') return a;
         if (a instanceof Error) return a.stack || a.message;
@@ -206,7 +206,6 @@ export async function runCliInProcess(cliName, args, options = {}) {
         }
       })
       .join(' ');
-  };
   console.log = (...args) => {
     stdoutChunks.push(formatArgs(args) + '\n');
   };
