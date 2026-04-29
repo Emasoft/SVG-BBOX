@@ -122,38 +122,50 @@ const GIT_DIFF_TIMEOUT_MS = 30000;
 // ============================================================================
 
 /**
- * TEST_TIMEOUT_MS: 60 seconds
+ * TEST_TIMEOUT_MS: 120 seconds
  *
- * WHY 60 seconds:
- * - I/O-bound Puppeteer tests (not CPU-bound)
- * - Browser launch: 2-5 seconds
- * - Page operations: 1-3 seconds per operation
- * - Multiple operations per test: 5-15 seconds total
- * - Safety margin: 40+ seconds for slow CI
+ * WHY 120 seconds (was 60):
+ * - Integration tests use CLI_EXEC_TIMEOUT (CLI_TIMEOUT_MS * 2 = 60s) for the
+ *   CLI subprocess. If TEST_TIMEOUT_MS is also 60s, vitest's test timeout
+ *   races the CLI subprocess timeout — vitest wins (kills the test) before
+ *   the CLI process can complete cleanly, even when the CLI would have
+ *   finished in time. Setting TEST_TIMEOUT_MS to 2× CLI_EXEC_TIMEOUT gives
+ *   the CLI its full subprocess budget PLUS test setup/assertion overhead.
+ * - Under heavy parallel load (vitest concurrency 5, browser pool 2-3),
+ *   tests queue waiting for browser slots. A queued test can wait 30-60s
+ *   for a browser before its CLI subprocess even starts. 120s headroom
+ *   covers worst-case browser-pool contention without masking real bugs.
+ * - v1.2.1 release blocked at 60s by exactly this race ("should handle SVG
+ *   with text elements" timed out 3× in a row even with retry: 2). 120s
+ *   is the empirical floor that survives the full integration suite under
+ *   release-script load (build + lint + typecheck + tests in series).
  *
  * Reduced from 30 minutes (1800000ms) - original was far too conservative.
- * If a test takes >60s, it indicates a real problem (hanging browser, infinite loop).
+ * If a test takes >120s, it indicates a real problem (hanging browser,
+ * infinite loop, or missing browser-pool slot release).
  *
  * Used for:
  * - vitest testTimeout configuration
  *
  * WHAT NOT TO DO:
  * - Don't increase to hide slow tests (fix the test instead)
- * - Don't reduce below 30s (CI environments need buffer)
+ * - Don't reduce below 2× CLI_EXEC_TIMEOUT (race condition returns)
  * - Don't use same timeout for unit vs integration tests (different characteristics)
  */
-const TEST_TIMEOUT_MS = 60000;
+const TEST_TIMEOUT_MS = 120000;
 
 /**
- * HOOK_TIMEOUT_MS: 60 seconds
+ * HOOK_TIMEOUT_MS: 120 seconds
  *
- * WHY 60 seconds:
- * - Test setup/teardown includes:
- *   * Browser launch: 2-5 seconds
- *   * Font discovery: 1-3 seconds
- *   * Shared browser initialization: 1-2 seconds
- * - Critical path operations that MUST complete before tests run
- * - Same timing constraints as individual tests
+ * WHY 120 seconds (was 60):
+ * - beforeAll/afterAll hooks launch shared browsers and discover system
+ *   fonts. Under release-script load (multiple test files running serially
+ *   right after a fresh build), the first beforeAll can take 30-90s as
+ *   Puppeteer warms up, font cache rebuilds, and browser pool initializes.
+ * - Same race-condition rationale as TEST_TIMEOUT_MS: must exceed any
+ *   CLI subprocess timeout invoked from within a hook.
+ * - Matches TEST_TIMEOUT_MS for symmetry — hooks are conceptually "tests
+ *   that run before tests" and need the same headroom.
  *
  * Used for:
  * - vitest hookTimeout configuration (beforeAll, afterAll, beforeEach, afterEach)
@@ -162,7 +174,7 @@ const TEST_TIMEOUT_MS = 60000;
  * - Don't reduce below TEST_TIMEOUT_MS (hooks can be as complex as tests)
  * - Don't do heavy work in hooks (keep them fast, use lazy initialization)
  */
-const HOOK_TIMEOUT_MS = 60000;
+const HOOK_TIMEOUT_MS = 120000;
 
 /**
  * PLAYWRIGHT_TEST_TIMEOUT_MS: 120 seconds
