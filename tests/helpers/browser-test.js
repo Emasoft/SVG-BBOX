@@ -9,7 +9,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { FONT_TIMEOUT_MS, CLI_TIMEOUT_MS } from '../../config/timeouts.js';
+import { FONT_TIMEOUT_MS, CLI_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +34,12 @@ export async function getBrowser() {
         '--disable-setuid-sandbox',
         '--disable-web-security', // Allow local file loading
         '--allow-file-access-from-files'
-      ]
+      ],
+      // WHY protocolTimeout: see config/timeouts.js (PROTOCOL_TIMEOUT_MS).
+      // Default 30s for CDP RPC calls is too short under parallel test load.
+      // Without this, beforeAll hooks that call browser.newPage() can hang
+      // for 30s+ before failing with "Hook timed out", masking real bugs.
+      protocolTimeout: PROTOCOL_TIMEOUT_MS
     });
   }
   return sharedBrowser;

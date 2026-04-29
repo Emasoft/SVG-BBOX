@@ -41,7 +41,7 @@ const {
 const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-utils.cjs');
 
 // Centralized timeout configuration
-const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const { BROWSER_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // ========================= JSDoc Type Definitions =========================
 
@@ -85,7 +85,10 @@ async function launchBrowserWithFallback(errorLogMessages) {
   try {
     const browser = await puppeteer.launch({
       // @ts-ignore - 'new' is valid for newer puppeteer versions
-      headless: 'new' // new headless mode in recent Chrome versions
+      headless: 'new', // new headless mode in recent Chrome versions
+      // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+      // Default 30s for CDP RPC calls is too short under parallel test load.
+      protocolTimeout: PROTOCOL_TIMEOUT_MS
     });
     return browser;
   } catch (err) {
@@ -121,7 +124,10 @@ async function launchBrowserWithFallback(errorLogMessages) {
     const browser = await puppeteer.launch({
       // @ts-ignore - 'new' is valid for newer puppeteer versions
       headless: 'new',
-      executablePath: chosen
+      executablePath: chosen,
+      // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+      // Default 30s for CDP RPC calls is too short under parallel test load.
+      protocolTimeout: PROTOCOL_TIMEOUT_MS
     });
     return browser;
   } catch (err) {

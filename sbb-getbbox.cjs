@@ -118,7 +118,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // Import security utilities
 const {
@@ -151,7 +151,10 @@ const {
 const PUPPETEER_OPTIONS = {
   headless: true,
   args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  timeout: BROWSER_TIMEOUT_MS
+  timeout: BROWSER_TIMEOUT_MS,
+  // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+  // Default 30s for CDP RPC calls is too short under parallel test load.
+  protocolTimeout: PROTOCOL_TIMEOUT_MS
 };
 
 // ============================================================================

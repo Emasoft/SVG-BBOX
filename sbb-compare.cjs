@@ -127,7 +127,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const puppeteer = require('puppeteer');
 const { getVersion } = require('./version.cjs');
-const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 const execFilePromise = promisify(execFile);
 
@@ -2854,7 +2854,10 @@ async function main() {
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      timeout: MODULE_TIMEOUT_MS
+      timeout: MODULE_TIMEOUT_MS,
+      // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+      // Default 30s for CDP RPC calls is too short under parallel test load.
+      protocolTimeout: PROTOCOL_TIMEOUT_MS
     });
 
     // BATCH MODE: Process multiple comparisons from file

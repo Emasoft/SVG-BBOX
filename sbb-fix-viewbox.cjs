@@ -38,7 +38,7 @@ const path = require('path');
 const puppeteer = require('puppeteer');
 const { openInChrome } = require('./browser-utils.cjs');
 const { printVersion } = require('./version.cjs');
-const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -414,11 +414,14 @@ function readBatchFile(batchFilePath) {
  * - --no-sandbox: Required for running in Docker/CI environments
  * - --disable-setuid-sandbox: Disable setuid sandbox (not needed in containerized envs)
  * - --disable-dev-shm-usage: Prevent /dev/shm memory issues in constrained environments
- * @type {{ headless: boolean, args: string[] }}
+ * @type {{ headless: boolean, args: string[], protocolTimeout: number }}
  */
 const PUPPETEER_OPTIONS = {
   headless: true,
-  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+  // Default 30s for CDP RPC calls is too short under parallel test load.
+  protocolTimeout: PROTOCOL_TIMEOUT_MS
 };
 
 /**

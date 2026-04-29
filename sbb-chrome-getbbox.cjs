@@ -10,6 +10,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const { getVersion } = require('./version.cjs');
+const { PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // Import CLI utilities including shared JSON output function
 // WHY: writeJSONOutput centralizes JSON output handling (DRY principle)
@@ -86,7 +87,10 @@ async function getBBoxWithChrome(options) {
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+    // Default 30s for CDP RPC calls is too short under parallel test load.
+    protocolTimeout: PROTOCOL_TIMEOUT_MS
   });
 
   try {

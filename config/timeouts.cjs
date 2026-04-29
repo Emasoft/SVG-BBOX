@@ -70,6 +70,38 @@ const BROWSER_TIMEOUT_MS = 30000;
  */
 const FONT_TIMEOUT_MS = 8000;
 
+/**
+ * PROTOCOL_TIMEOUT_MS: 120 seconds
+ *
+ * WHY 120 seconds (Puppeteer's default is 30s — too short under load):
+ * - Puppeteer protocolTimeout governs HOW LONG a single CDP RPC call may
+ *   take before failing with "Runtime.callFunctionOn timed out". Examples
+ *   of CDP calls: page.evaluate(), page.screenshot(), getComputedStyle.
+ * - Default 30s is plenty when Chrome is the only thing on the box, but
+ *   under heavy parallel load (3-5 vitest workers each spawning their
+ *   own Puppeteer + Chromium), GPU and rendering bandwidth get
+ *   contended. A "snapshot DOM and return JSON" call that normally
+ *   takes 50ms can take 40-90s when Chrome is fighting for resources.
+ * - 120s matches TEST_TIMEOUT_MS so the slowest CDP call still finishes
+ *   inside the test budget. Under normal local/CI load the CDP overhead
+ *   is unchanged (most calls finish in <1s); the 120s ceiling only
+ *   kicks in for the genuine outlier under contention.
+ * - v1.2.1 release attempts hit this at 30s default — failures were
+ *   "Runtime.callFunctionOn timed out" inside sbb-extract.cjs and
+ *   "Hook timed out in 180000ms" inside html-preview-rendering.test.js
+ *   (the hook waited on browser.newPage() which timed out internally).
+ *
+ * Used for:
+ * - Puppeteer launch options (protocolTimeout field)
+ *
+ * WHAT NOT TO DO:
+ * - Don't omit this option from puppeteer.launch() — Puppeteer's 30s
+ *   default IS the bug we're fixing.
+ * - Don't reduce below 60s — flake risk under load is a strong dollar
+ *   cost in CI minutes; 120s headroom buys reliability cheaply.
+ */
+const PROTOCOL_TIMEOUT_MS = 120000;
+
 // ============================================================================
 // CLI Operation Timeouts
 // ============================================================================
@@ -338,6 +370,7 @@ module.exports = {
   // Browser operations
   BROWSER_TIMEOUT_MS,
   FONT_TIMEOUT_MS,
+  PROTOCOL_TIMEOUT_MS,
 
   // CLI operations
   CLI_TIMEOUT_MS,

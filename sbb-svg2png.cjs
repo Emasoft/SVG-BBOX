@@ -93,7 +93,7 @@ const sharp = require('sharp');
  * @property {string} output - Output PNG file path
  */
 const { openInChrome } = require('./browser-utils.cjs');
-const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -843,11 +843,14 @@ function readBatchFile(batchFilePath) {
  * - --no-sandbox - Required when running as root in Docker/CI (Chrome sandbox conflicts with container sandbox)
  * - --disable-setuid-sandbox - Disables setuid sandbox (not available in containers)
  * - --disable-dev-shm-usage - Uses /tmp instead of /dev/shm (avoids shared memory issues in Docker)
- * @type {{headless: boolean, args: string[]}}
+ * @type {{headless: boolean, args: string[], protocolTimeout: number}}
  */
 const PUPPETEER_OPTIONS = {
   headless: true,
-  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+  // Default 30s for CDP RPC calls is too short under parallel test load.
+  protocolTimeout: PROTOCOL_TIMEOUT_MS
 };
 
 /**

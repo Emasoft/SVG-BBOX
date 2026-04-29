@@ -21,6 +21,11 @@ const execFilePromise = promisify(execFile);
 
 // WHY: Helper that handles exit code 1 (files differ) without throwing
 // sbb-compare exit codes: 0 = match, 1 = differ (success), 2 = error
+/**
+ * @param {string} cmd - The command to execute (e.g. 'node')
+ * @param {string[]} args - Command arguments
+ * @returns {{ stdout: string, stderr: string, exitCode: number | null }}
+ */
 function runCommandWithExitCode(cmd, args) {
   const result = spawnSync(cmd, args, { encoding: 'utf8' });
   if (result.error) {
@@ -28,6 +33,7 @@ function runCommandWithExitCode(cmd, args) {
   }
   // Exit code 2 means error, throw with stderr
   if (result.status === 2) {
+    /** @type {Error & { stderr?: string, stdout?: string, exitCode?: number | null }} */
     const err = new Error(result.stderr || 'Command failed with exit code 2');
     err.stderr = result.stderr;
     err.stdout = result.stdout;

@@ -168,7 +168,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { openInChrome } = require('./browser-utils.cjs');
-const { BROWSER_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const { BROWSER_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -550,7 +550,11 @@ async function withPageForSvg(inputPath, handler, options = {}) {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    timeout: BROWSER_TIMEOUT_MS
+    timeout: BROWSER_TIMEOUT_MS,
+    // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
+    // Default 30s for CDP RPC calls is too short under parallel test load —
+    // bump to 120s to prevent "Runtime.callFunctionOn timed out" failures.
+    protocolTimeout: PROTOCOL_TIMEOUT_MS
   });
 
   try {
