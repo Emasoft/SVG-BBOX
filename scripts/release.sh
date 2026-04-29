@@ -7308,9 +7308,31 @@ main() {
     # USER CONFIRMATION
     # ══════════════════════════════════════════════════════════════════
 
-    # Confirm with user (unless --yes flag)
+    # Confirm with user (unless --yes flag).
+    #
+    # WHY the TTY guard: `read -p` reads from stdin, and on a non-TTY
+    # stdin it returns 1 (failure). Under `set -e` that silently kills
+    # the script BETWEEN the "tag does not exist" log and any
+    # user-visible error, leaving the package.json bumped but no commit
+    # / tag / release made — exactly the partial-state failure mode
+    # we want to avoid. Detect the missing TTY explicitly and bail
+    # with an actionable message that points the user at --yes.
     if [ "$SKIP_CONFIRMATION" = false ]; then
-        read -p "$(echo -e "${YELLOW}Do you want to release v${NEW_VERSION}? [y/N]${NC} ")" -n 1 -r
+        if [ ! -t 0 ]; then
+            log_error "No TTY available for the interactive confirmation prompt."
+            log_error "When running this script non-interactively (CI, AI tools,"
+            log_error "shell pipes, etc.) pass --yes to skip the prompt:"
+            log_error "    ./scripts/release.sh ${RELEASE_TYPE:-$1} --yes"
+            log_info "Restoring package.json..."
+            git checkout package.json pnpm-lock.yaml 2>/dev/null || true
+            exit 1
+        fi
+        # `read` itself can still fail on weird stdin configurations
+        # (closed pipe, EOF, signal). Capture the failure with `||`
+        # so `set -e` doesn't kill us between the prompt and the
+        # explicit-cancellation handling below.
+        REPLY=""
+        read -p "$(echo -e "${YELLOW}Do you want to release v${NEW_VERSION}? [y/N]${NC} ")" -n 1 -r || true
         echo
         # NOTE: Quote $REPLY for robustness (handles empty/unset REPLY from read failure)
         if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
