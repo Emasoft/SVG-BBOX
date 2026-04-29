@@ -157,27 +157,37 @@ const GIT_DIFF_TIMEOUT_MS = 30000;
 // ============================================================================
 
 /**
- * TEST_TIMEOUT_MS: 120 seconds
+ * TEST_TIMEOUT_MS: 240 seconds
  *
- * WHY 120 seconds (was 60):
+ * WHY 240 seconds (was 120):
  * - Integration tests use CLI_EXEC_TIMEOUT (CLI_TIMEOUT_MS * 2 = 60s) for the
  *   CLI subprocess. If TEST_TIMEOUT_MS is also 60s, vitest's test timeout
  *   races the CLI subprocess timeout — vitest wins (kills the test) before
  *   the CLI process can complete cleanly, even when the CLI would have
- *   finished in time. Setting TEST_TIMEOUT_MS to 2× CLI_EXEC_TIMEOUT gives
- *   the CLI its full subprocess budget PLUS test setup/assertion overhead.
+ *   finished in time. Setting TEST_TIMEOUT_MS to a multiple of
+ *   CLI_EXEC_TIMEOUT gives the CLI its full subprocess budget PLUS test
+ *   setup/assertion overhead.
+ * - The four `sbb-inkscape-*` tools now apply up to 5 s of startup jitter
+ *   under VITEST/CI to stagger parallel inkscape launches and avoid the
+ *   font-cache lock-contention flake (see lib/inkscape-utils.cjs).
+ *   The inkscape binary itself can take 60–90 s for the first cold launch
+ *   on font-heavy systems (10 000+ fonts on macOS); the per-call
+ *   inkscape timeout was bumped to 2–3 minutes (see
+ *   INKSCAPE_*_TIMEOUT_MS in lib/inkscape-utils.cjs). 240 s vitest
+ *   timeout covers (jitter + cold-launch + actual work + assertion
+ *   overhead) with comfortable headroom.
  * - Under heavy parallel load (vitest concurrency 5, browser pool 2-3),
- *   tests queue waiting for browser slots. A queued test can wait 30-60s
- *   for a browser before its CLI subprocess even starts. 120s headroom
- *   covers worst-case browser-pool contention without masking real bugs.
- * - v1.2.1 release blocked at 60s by exactly this race ("should handle SVG
- *   with text elements" timed out 3× in a row even with retry: 2). 120s
- *   is the empirical floor that survives the full integration suite under
- *   release-script load (build + lint + typecheck + tests in series).
+ *   tests queue waiting for browser slots. A queued test can wait 30-60 s
+ *   for a browser before its CLI subprocess even starts.
+ * - v1.2.1 release blocked at 60s by exactly this race; 120 s blocked again
+ *   for inkscape parallel-launch flakes during the v1.3.0 release. 240 s
+ *   is the new empirical floor that survives the full integration suite
+ *   under release-script load with the inkscape staggering in place.
  *
  * Reduced from 30 minutes (1800000ms) - original was far too conservative.
- * If a test takes >120s, it indicates a real problem (hanging browser,
- * infinite loop, or missing browser-pool slot release).
+ * If a test takes >240 s, it indicates a real problem (hanging browser,
+ * infinite loop, missing browser-pool slot release, or a misconfigured
+ * inkscape jitter override).
  *
  * Used for:
  * - vitest testTimeout configuration
@@ -187,7 +197,7 @@ const GIT_DIFF_TIMEOUT_MS = 30000;
  * - Don't reduce below 2× CLI_EXEC_TIMEOUT (race condition returns)
  * - Don't use same timeout for unit vs integration tests (different characteristics)
  */
-const TEST_TIMEOUT_MS = 120000;
+const TEST_TIMEOUT_MS = 240000;
 
 /**
  * HOOK_TIMEOUT_MS: 120 seconds

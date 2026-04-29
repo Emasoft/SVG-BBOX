@@ -32,15 +32,22 @@ const { validateFilePath, VALID_ID_PATTERN } = require('./lib/security-utils.cjs
 // `finally` (even on Inkscape failure).
 const { extractFbfFrame } = require('./lib/fbf.cjs');
 
+// Shared inkscape startup-jitter + generous timeouts. The jitter
+// staggers parallel tool invocations under test/CI load so they don't
+// all fight the font-cache lock at the same wall-clock instant; the
+// timeouts give Inkscape enough headroom on font-heavy systems where a
+// cold launch can take a minute or more (10 000+ fonts on macOS).
+// See `lib/inkscape-utils.cjs` for the full rationale.
+const {
+  applyStartupJitter,
+  INKSCAPE_DETECT_TIMEOUT_MS,
+  INKSCAPE_QUERY_TIMEOUT_MS
+} = require('./lib/inkscape-utils.cjs');
+
 const execFilePromise = promisify(execFile);
 
-// WHY 15000ms timeout: Inkscape can take 10+ seconds to start on systems with many fonts
-// as it needs to build/load the font cache on first run
-const INKSCAPE_VERSION_TIMEOUT = 15000;
-
-// WHY 15000ms timeout: Inkscape queries can hang indefinitely if the file is malformed
-// or if Inkscape encounters an internal error during rendering
-const INKSCAPE_QUERY_TIMEOUT = 15000;
+const INKSCAPE_VERSION_TIMEOUT = INKSCAPE_DETECT_TIMEOUT_MS;
+const INKSCAPE_QUERY_TIMEOUT = INKSCAPE_QUERY_TIMEOUT_MS;
 
 // WHY: Common installation paths for Inkscape across different platforms
 // Users may have Inkscape installed in non-PATH locations
@@ -104,6 +111,10 @@ let discoveredInkscapePath = null;
  */
 async function getBBoxWithInkscape(options) {
   const { inputFile, elementIds, fbfFrame = null } = options;
+
+  // Stagger parallel inkscape launches under test/CI to avoid font-cache
+  // lock contention. No-op for interactive CLI use. See lib/inkscape-utils.cjs.
+  await applyStartupJitter();
 
   // Validate input file
   const safePath = validateFilePath(inputFile, {

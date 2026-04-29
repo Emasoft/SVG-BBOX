@@ -42,6 +42,14 @@ const { runCLI, printSuccess, printError, printInfo, printBanner } = require('./
 // `finally`, even on Inkscape failure).
 const { extractFbfFrame } = require('./lib/fbf.cjs');
 
+// Shared inkscape startup-jitter + generous timeout. The jitter staggers
+// parallel tool invocations under test/CI load so they don't all fight
+// the font-cache lock at the same wall-clock instant; the timeout gives
+// Inkscape enough headroom on font-heavy systems where a cold launch can
+// take a minute or more (10 000+ fonts on macOS). See
+// `lib/inkscape-utils.cjs` for the full rationale.
+const { applyStartupJitter, INKSCAPE_EXPORT_TIMEOUT_MS } = require('./lib/inkscape-utils.cjs');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -615,6 +623,10 @@ function readBatchFile(batchFilePath) {
  * @returns {Promise<ExportResult>} Export result with file info
  */
 async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
+  // Stagger parallel inkscape launches under test/CI to avoid font-cache
+  // lock contention. No-op for interactive CLI use. See lib/inkscape-utils.cjs.
+  await applyStartupJitter();
+
   // SECURITY: Validate input file path
   const safeInputPath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
@@ -788,9 +800,10 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
   inkscapeArgs.push(pathForInkscape);
 
   try {
-    // Execute Inkscape with timeout
+    // Execute Inkscape with generous timeout. See lib/inkscape-utils.cjs:
+    // cold first launches on font-heavy systems can take a minute or more.
     const { stdout, stderr } = await execFilePromise('inkscape', inkscapeArgs, {
-      timeout: 30000, // 30 second timeout
+      timeout: INKSCAPE_EXPORT_TIMEOUT_MS,
       maxBuffer: 10 * 1024 * 1024 // 10MB buffer
     });
 

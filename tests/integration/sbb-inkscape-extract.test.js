@@ -61,7 +61,12 @@ async function runExtract(inputSvg, objectId, args = []) {
     'node',
     [EXTRACT_PATH, inputPath, '--id', objectId, '--output', outputPath, ...args],
     {
-      timeout: 30000 // 30 seconds timeout
+      // Use the CLI-wide timeout (120 s) instead of a hardcoded 30 s. The
+      // tool now applies up-to-5 s startup jitter under VITEST/CI to
+      // stagger parallel inkscape launches (see lib/inkscape-utils.cjs),
+      // and Inkscape itself can take 60+ s for the first cold launch on
+      // font-heavy systems — 30 s wasn't enough headroom.
+      timeout: CLI_EXEC_TIMEOUT
     }
   );
 

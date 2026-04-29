@@ -44,6 +44,18 @@ const {
 // `finally`, even on Inkscape failure).
 const { extractFbfFrame } = require('./lib/fbf.cjs');
 
+// Shared inkscape startup-jitter + generous timeouts. The jitter
+// staggers parallel tool invocations under test/CI load so they don't
+// all fight the font-cache lock at the same wall-clock instant; the
+// timeouts give Inkscape enough headroom on font-heavy systems where a
+// cold launch can take a minute or more (10 000+ fonts on macOS).
+// See `lib/inkscape-utils.cjs` for the full rationale.
+const {
+  applyStartupJitter,
+  INKSCAPE_DETECT_TIMEOUT_MS,
+  INKSCAPE_EXPORT_TIMEOUT_MS
+} = require('./lib/inkscape-utils.cjs');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -255,9 +267,11 @@ async function findInkscape() {
     );
   }
 
-  // WHY 15000ms timeout: Inkscape can take 10+ seconds to start on systems with many fonts
-  // as it needs to build/load the font cache on first run
-  const INKSCAPE_VERSION_TIMEOUT = 15000;
+  // Generous detect timeout — see lib/inkscape-utils.cjs. On font-heavy
+  // systems (e.g. macOS with 10 000+ fonts) the first cold launch can
+  // take 60+ s while the font cache is built; the env-var override
+  // (SBB_INKSCAPE_DETECT_TIMEOUT_MS) lets users tune even higher.
+  const INKSCAPE_VERSION_TIMEOUT = INKSCAPE_DETECT_TIMEOUT_MS;
 
   // Check each candidate path
   for (const candidate of candidatePaths) {
@@ -454,6 +468,10 @@ async function runComparison(originalPath, convertedPath, jsonMode) {
  * @returns {Promise<InkscapeOutput>} Inkscape stdout and stderr
  */
 async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
+  // Stagger parallel inkscape launches under test/CI to avoid font-cache
+  // lock contention. No-op for interactive CLI use. See lib/inkscape-utils.cjs.
+  await applyStartupJitter();
+
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
   // Using separate arguments (not --arg=value syntax) for reliable path handling
@@ -503,13 +521,13 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
     if (inkscapePath.includes('flatpak')) {
       const flatpakArgs = ['run', 'org.inkscape.Inkscape'].concat(inkscapeArgs);
       const { stdout, stderr } = await execFilePromise('flatpak', flatpakArgs, {
-        timeout: 60000,
+        timeout: INKSCAPE_EXPORT_TIMEOUT_MS,
         maxBuffer: 10 * 1024 * 1024 // 10MB buffer for output
       });
       return { stdout, stderr };
     } else {
       const { stdout, stderr } = await execFilePromise(inkscapePath, inkscapeArgs, {
-        timeout: 60000,
+        timeout: INKSCAPE_EXPORT_TIMEOUT_MS,
         maxBuffer: 10 * 1024 * 1024 // 10MB buffer for output
       });
       return { stdout, stderr };

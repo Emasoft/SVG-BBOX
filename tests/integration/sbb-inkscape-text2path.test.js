@@ -17,13 +17,16 @@ const execFilePromise = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// INKSCAPE_EXEC_TIMEOUT: Timeout for Inkscape-based operations
-// WHY use CLI_TIMEOUT_MS * 4: Inkscape operations are much slower than browser-based ones
-// - Inkscape launch: 2-5 seconds
-// - Text-to-path conversion: 1-3 seconds per SVG
-// - Comparison operations: 5-15 seconds
-// CI environments need extra buffer
-const INKSCAPE_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
+// INKSCAPE_EXEC_TIMEOUT: Timeout for Inkscape-based operations.
+// WHY 8× CLI_TIMEOUT_MS (= 240 s): On font-heavy systems (10 000+ fonts),
+// the first cold Inkscape launch can take 60–90 s while the font cache is
+// rebuilt; the tool also applies up to 5 s of startup jitter under
+// VITEST/CI to stagger parallel inkscape launches (see
+// lib/inkscape-utils.cjs). 240 s gives both layers comfortable headroom.
+const INKSCAPE_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 8;
+// PER_TEST_TIMEOUT: Override vitest's default 120 s test timeout for
+// tests that wait on this whole pipeline (jitter → font cache → conversion).
+const PER_TEST_TIMEOUT = INKSCAPE_EXEC_TIMEOUT + 30000;
 
 const TEXT2PATH_PATH = path.join(__dirname, '../../sbb-inkscape-text2path.cjs');
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
@@ -112,30 +115,34 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
   });
 
   describe('Basic Text to Path Conversion', () => {
-    it('should convert text elements to paths', async () => {
-      if (!inkscapeAvailable) {
-        console.warn('⚠️  Skipping test: Inkscape not installed');
-        return;
-      }
+    it(
+      'should convert text elements to paths',
+      async () => {
+        if (!inkscapeAvailable) {
+          console.warn('⚠️  Skipping test: Inkscape not installed');
+          return;
+        }
 
-      const { outputPath } = await runText2Path('text-sample.svg');
+        const { outputPath } = await runText2Path('text-sample.svg');
 
-      // Check output file exists
-      expect(fs.existsSync(outputPath)).toBe(true);
+        // Check output file exists
+        expect(fs.existsSync(outputPath)).toBe(true);
 
-      // Verify output is valid SVG
-      const outputContent = fs.readFileSync(outputPath, 'utf-8');
-      expect(outputContent).toContain('<svg');
-      expect(outputContent).toContain('</svg>');
+        // Verify output is valid SVG
+        const outputContent = fs.readFileSync(outputPath, 'utf-8');
+        expect(outputContent).toContain('<svg');
+        expect(outputContent).toContain('</svg>');
 
-      // Text should be converted to paths
-      // The output should have <path> elements instead of <text>
-      expect(outputContent).toContain('<path');
+        // Text should be converted to paths
+        // The output should have <path> elements instead of <text>
+        expect(outputContent).toContain('<path');
 
-      // Should NOT contain <text> elements anymore (or very few if any metadata)
-      const textMatches = outputContent.match(/<text/g);
-      expect(textMatches === null || textMatches.length === 0).toBe(true);
-    });
+        // Should NOT contain <text> elements anymore (or very few if any metadata)
+        const textMatches = outputContent.match(/<text/g);
+        expect(textMatches === null || textMatches.length === 0).toBe(true);
+      },
+      PER_TEST_TIMEOUT
+    );
 
     it('should handle SVG without text elements', async () => {
       if (!inkscapeAvailable) {
