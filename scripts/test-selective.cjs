@@ -211,11 +211,30 @@ const LIBRARY_DEPENDENT_TESTS = [
   // NOTE: sbb-compare.test.js is NOT included - sbb-compare doesn't use SvgVisualBBox.js
 ];
 
+// Tests that ACTUALLY load or inspect SvgVisualBBox.min.js (the minified
+// bundle published to npm + CDN). Only the packaging-verification suites
+// touch the bundle file directly; nothing in the run-time CLI tools loads
+// it (they all `require` SvgVisualBBox.js source).
+//
+// WHY this matters: when ONLY the .min.js changes (release bumps the
+// version preamble; build scripts regenerate the bundle), there is no
+// behavioral delta in the source code. Triggering the entire
+// LIBRARY_DEPENDENT_TESTS suite on a min.js-only change is wasteful AND
+// runs the known-flaky font / browser-pool tests, exactly the failure
+// mode that hit CI after v1.2.0. Limiting min.js to packaging tests
+// keeps coverage honest (the bundle is still verified to exist, parse,
+// and contain the right preamble) without dragging the rest of the
+// suite into the blast radius.
+const MIN_JS_DEPENDENT_TESTS = [
+  'tests/integration/package-installation.test.js', // verifies bundle is in tarball + parseable
+  'tests/integration/registry-installation.test.js' // verifies bundle on npm + version preamble
+];
+
 /** @type {TestDependencyMap} */
 const TEST_DEPENDENCIES = {
   // TESTING RULE 1: Core library affects ONLY tests for tools that import it
   'SvgVisualBBox.js': LIBRARY_DEPENDENT_TESTS,
-  'SvgVisualBBox.min.js': LIBRARY_DEPENDENT_TESTS,
+  'SvgVisualBBox.min.js': MIN_JS_DEPENDENT_TESTS,
 
   // TESTING RULE 2: Tool-specific tests
   'sbb-compare.cjs': ['tests/integration/sbb-compare.test.js'],
