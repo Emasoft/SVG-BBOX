@@ -69,7 +69,7 @@ if (nodeVersion === 18) {
         '--out-html',
         TEST_HTML
       ]);
-    }, 300000); // WHY 300s: Under heavy parallelism (10 concurrent tests), subprocess may wait for resources
+    }, 600000); // WHY 600s (was 300s): Even at concurrency 1, this hook can be slow when run after many CLI integration tests because orphan Chromium processes from CLI subprocesses accumulate and consume system resources. sbb-extract.cjs runs in <20s in isolation but can take 5+ min under that pressure. 600s is the empirical safety margin from v1.2.1 release attempts.
 
     afterAll(async () => {
       // Clean up temp directory

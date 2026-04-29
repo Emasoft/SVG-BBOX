@@ -116,7 +116,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
       availableFonts.slice(0, 10).join(', '),
       '...'
     );
-  }, 180000); // WHY 180s: Puppeteer launch extremely slow when running full suite in parallel with many browser instances
+  }, 600000); // WHY 600s (was 180s): When this hook runs late in the full suite, the shared browser inherited from browser-test.js may have accumulated state from previous test files (orphan tabs, font cache, etc.). Browser acquisition + font discovery can take 5+ minutes under that condition. 600s is an extreme safety margin; in isolation the hook completes in <2s.
 
   afterAll(async () => {
     // WHY NOT close browser: The shared browser is managed by browser-test.js
