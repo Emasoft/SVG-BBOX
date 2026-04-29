@@ -68,7 +68,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected malicious path');
       } catch (err) {
@@ -91,7 +91,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.comparer, validPath, maliciousPath], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected malicious path');
       } catch (err) {
@@ -110,7 +110,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.textToPath, maliciousPath, outputPath], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected malicious path');
       } catch (err) {
@@ -133,7 +133,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.extractor, traversalPath, '--list', '--json'], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected traversal attempt');
       } catch (err) {
@@ -157,7 +157,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.comparer, validPath, traversalPath], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected traversal attempt');
       } catch (err) {
@@ -198,7 +198,7 @@ describe('CLI Security Integration Tests', () => {
         'node',
         [CLI_TOOLS.extractor, largePath, '--list', '--json'],
         {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -230,7 +230,7 @@ describe('CLI Security Integration Tests', () => {
         'node',
         [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'],
         {
-          timeout: CLI_TIMEOUT_MS,
+          timeout: CLI_EXEC_TIMEOUT,
           maxBuffer: 20 * 1024 * 1024
         }
       );
@@ -260,7 +260,7 @@ describe('CLI Security Integration Tests', () => {
         'node',
         [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'],
         {
-          timeout: CLI_TIMEOUT_MS,
+          timeout: CLI_EXEC_TIMEOUT,
           maxBuffer: 20 * 1024 * 1024
         }
       );
@@ -285,7 +285,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.extractor, nullBytePath, '--list', '--json'], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected null byte path');
       } catch (err) {
@@ -311,7 +311,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.extractor, txtPath, '--list', '--json'], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected non-SVG file');
       } catch (err) {
@@ -334,7 +334,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.comparer, validPath, txtPath], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected non-SVG file');
       } catch (err) {
@@ -364,7 +364,7 @@ describe('CLI Security Integration Tests', () => {
           'node',
           [CLI_TOOLS.textToPath, '--batch', batchPath, '--skip-comparison'],
           {
-            timeout: CLI_TIMEOUT_MS
+            timeout: CLI_EXEC_TIMEOUT
           }
         );
         assert.fail('Should have rejected batch with malicious paths');
@@ -389,7 +389,7 @@ describe('CLI Security Integration Tests', () => {
           'node',
           [CLI_TOOLS.textToPath, '--batch', batchPath, '--skip-comparison'],
           {
-            timeout: CLI_TIMEOUT_MS
+            timeout: CLI_EXEC_TIMEOUT
           }
         );
         // May succeed if it skips invalid files - that's acceptable
@@ -431,7 +431,7 @@ describe('CLI Security Integration Tests', () => {
         'node',
         [CLI_TOOLS.extractor, testPath, '--list', '--json'],
         {
-          timeout: CLI_TIMEOUT_MS,
+          timeout: CLI_EXEC_TIMEOUT,
           maxBuffer: 20 * 1024 * 1024
         }
       );
@@ -514,7 +514,7 @@ describe('CLI Security Integration Tests', () => {
           // This might timeout or complete - both are acceptable
           // The important thing is it doesn't hang forever
           await execFilePromise('node', [CLI_TOOLS.extractor, complexPath, '--list', '--json'], {
-            timeout: CLI_TIMEOUT_MS,
+            timeout: CLI_EXEC_TIMEOUT,
             maxBuffer: 20 * 1024 * 1024
           });
           // If it completes, that's fine too (browser has internal timeout)
@@ -540,7 +540,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.extractor, fakePath, '--list', '--json'], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected non-SVG content');
       } catch (err) {
@@ -560,7 +560,7 @@ describe('CLI Security Integration Tests', () => {
 
       try {
         await execFilePromise('node', [CLI_TOOLS.extractor, emptyPath, '--list', '--json'], {
-          timeout: CLI_TIMEOUT_MS
+          timeout: CLI_EXEC_TIMEOUT
         });
         assert.fail('Should have rejected empty file');
       } catch (err) {
@@ -596,7 +596,7 @@ describe('CLI Security Integration Tests', () => {
           'node',
           [CLI_TOOLS.extractor, svgPath, '--rename', jsonPath, outPath, '--json'],
           {
-            timeout: CLI_TIMEOUT_MS
+            timeout: CLI_EXEC_TIMEOUT
           }
         );
         assert.fail('Should have rejected invalid ID in mapping');
@@ -627,7 +627,7 @@ describe('CLI Security Integration Tests', () => {
           'node',
           [CLI_TOOLS.extractor, svgPath, '--rename', jsonPath, outPath, '--json'],
           {
-            timeout: CLI_TIMEOUT_MS
+            timeout: CLI_EXEC_TIMEOUT
           }
         );
         assert.fail('Should have rejected prototype pollution');
@@ -659,7 +659,7 @@ describe('CLI Security Integration Tests', () => {
           'node',
           [CLI_TOOLS.textToPath, validPath, dangerousOutput, '--skip-comparison'],
           {
-            timeout: CLI_TIMEOUT_MS
+            timeout: CLI_EXEC_TIMEOUT
           }
         );
         assert.fail('Should have rejected dangerous output path');
@@ -688,7 +688,7 @@ describe('CLI Security Integration Tests', () => {
         'node',
         [CLI_TOOLS.extractor, validPath, '--list', '--json'],
         {
-          timeout: CLI_TIMEOUT_MS,
+          timeout: CLI_EXEC_TIMEOUT,
           maxBuffer: 20 * 1024 * 1024
         }
       );
