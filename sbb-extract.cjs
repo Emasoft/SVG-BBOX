@@ -560,8 +560,10 @@ async function withPageForSvg(inputPath, handler, options = {}) {
     protocolTimeout: PROTOCOL_TIMEOUT_MS
   });
 
+  /** @type {import('puppeteer').Page | null} */
+  let page = null;
   try {
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
     // SECURITY: Set browser timeout
     page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
@@ -689,7 +691,7 @@ ${sanitizedSvg}
     // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await safeShutdown(browser);
+        await safeShutdown(browser, page || undefined);
       } catch {
         // Force kill if shutdown fails (only relevant in launch mode)
         const browserProcess = browser.process();

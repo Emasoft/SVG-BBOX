@@ -599,7 +599,7 @@ async function runTest() {
     // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await safeShutdown(browser);
+        await safeShutdown(browser, page);
       } catch {
         // WHY: safeShutdown can throw if browser crashed or connection was
         // lost. Force-killing ensures no zombie Chrome processes remain. We

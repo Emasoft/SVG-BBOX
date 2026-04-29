@@ -122,8 +122,10 @@ async function extractWithGetBBox(options) {
     protocolTimeout: PROTOCOL_TIMEOUT_MS
   });
 
+  /** @type {import('puppeteer').Page | null} */
+  let page = null;
   try {
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
     // Read the SVG file
     const svgContent = fs.readFileSync(inputFile, 'utf-8');
@@ -251,7 +253,7 @@ ${defsContent}${/** @type {Element} */ (clone).outerHTML}
   } finally {
     // WHY safeShutdown: closes if launched, disconnects if connected
     // to shared Chromium (test mode).
-    await safeShutdown(browser);
+    await safeShutdown(browser, page || undefined);
   }
 }
 

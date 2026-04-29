@@ -940,10 +940,12 @@ async function renderSvgWithModes(opts) {
   const bgCSS = validColorPattern.test(rawBgColor) ? rawBgColor : 'white';
 
   let browser = null;
+  /** @type {import('puppeteer').Page | null} */
+  let page = null;
 
   try {
     browser = await launchOrConnect(PUPPETEER_OPTIONS);
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
     // SECURITY: Set page timeout
     page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
@@ -1409,7 +1411,7 @@ ${sanitizedSvg}
     // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await safeShutdown(browser);
+        await safeShutdown(browser, page || undefined);
       } catch (err) {
         // Force kill if shutdown fails (only relevant in launch mode)
         // WHY: Log the error in verbose mode for debugging browser cleanup issues

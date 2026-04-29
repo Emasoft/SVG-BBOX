@@ -485,9 +485,11 @@ async function computeBBox(
   const sanitizedSvg = sanitizeSVGContent(svgContent);
 
   let browser = null;
+  /** @type {import('puppeteer').Page | null} */
+  let page = null;
   try {
     browser = await launchOrConnect(PUPPETEER_OPTIONS);
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
     // SECURITY: Set page timeout
     page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
@@ -672,7 +674,7 @@ ${sanitizedSvg}
     // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await safeShutdown(browser);
+        await safeShutdown(browser, page || undefined);
       } catch {
         // Force kill if shutdown fails (only relevant in launch mode)
         // WHY: Store process reference to avoid calling browser.process() twice

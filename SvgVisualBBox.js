@@ -1071,6 +1071,34 @@
         img.onerror = /** @type {OnErrorEventHandler} */ (onerror);
       });
 
+      // CRITICAL FIX: img.decoding='async' (set above) means the onload event
+      // can fire BEFORE the image is fully decoded. Calling drawImage() on a
+      // partially-decoded image silently produces a blank canvas — there is
+      // no error, just transparent pixels. Under low load this race is rare
+      // (<1% of calls); under heavy CDP load (vitest concurrency 15 sharing
+      // one Chromium across 30+ subprocess CLI tabs), it spikes to ~1% per
+      // call which compounds across the suite into 4-7 failed tests with
+      // "Visible bbox is empty (nothing inside viewBox)".
+      //
+      // img.decode() resolves only when the image is FULLY decoded and
+      // ready for drawImage. For an already-decoded image it resolves
+      // immediately, so the happy path stays fast. For a still-decoding
+      // image it waits — which is exactly what we want.
+      //
+      // Compatibility: HTMLImageElement.decode() is supported in Chrome 64+,
+      // Safari 14.1+, Firefox 78+. Falls back gracefully if missing because
+      // we only enter this path when puppeteer-driven Chromium is in use,
+      // and that always ships a recent Chrome.
+      if (typeof img.decode === 'function') {
+        try {
+          await img.decode();
+        } catch {
+          // decode() can reject if the image was already destroyed or the
+          // SVG content is malformed. Either way, drawImage will produce
+          // empty pixels and the caller will get null — same as before.
+        }
+      }
+
       canvas = document.createElement('canvas');
       canvas.width = pixelWidth;
       canvas.height = pixelHeight;
