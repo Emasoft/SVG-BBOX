@@ -5,35 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-04-29
+
+### ✗ Bug Fixes
+
+- **release**: Detect non-TTY confirmation prompt instead of failing silently
+
+### ◆ Documentation
+
+- **sbb-svg2png**: Document --fbf-frame in script header and README reference
+- **changelog**: Fix multiline inline-code that broke markdown audit
 
 ### ★ New Features
 
-- **sbb-svg2png**: `--fbf-frame N` renders an arbitrary frame from a
-  Frame-By-Frame SVG ([FBF.SVG](https://github.com/Emasoft/svg2fbf)) by
-  pinning the PROSKENION `<use xlink:href>` to `#FRAME0000N` and
-  dropping the swap `<animate>` child before rendering. Closes #3.
-- **sbb-svg2png**: `--fbf-frame` accepts a comma-separated list and
-  inclusive range syntax — for example `--fbf-frame 7,23,87` or
-  `--fbf-frame 1-30,10,20-22`. Multi-frame requests auto-derive
-  per-frame output names (`out.png` → `out-FRAME00007.png`, …) or
-  honour `{frame}` / `{n}` placeholders in the supplied output path.
-- **sbb-compare**: `--fbf-frame N`, `--fbf-frame-a N`, and
-  `--fbf-frame-b N` make the same FBF.SVG frame extraction available to
-  the visual diff tool. Each side of the comparison can be independently
-  pinned, so you can compare a static SVG/PNG against frame N of an
-  animation, or diff two specific frames of the same FBF. Aspect-ratio
-  enforcement (`--aspect-ratio-threshold`) is unchanged — the pinned
-  side inherits the FBF's `viewBox`/`width`/`height` verbatim.
-- **lib/fbf.cjs**: New helper module — `describeFbf(svg)`,
-  `pinFrame(svg, n)`, `formatFrameId(n, padWidth)`, `resolveFrameId(...)` —
-  for programmatic FBF.SVG inspection and frame extraction.
+- **sbb-svg2png**: Add --fbf-frame for rendering FBF.SVG frames to PNG
+- **sbb-compare**: Add --fbf-frame for FBF.SVG frame-aware comparison
+
+### Miscellaneous Tasks
+
+- Ignore Claude Code plugin caches in git and prettier
+- **release**: Bump version to 1.2.0
 
 ## [1.1.11] - 2026-01-22
 
 ### ✗ Bug Fixes
 
 - **cli**: Support optional --json flag with 3 modes
+
+### Miscellaneous Tasks
+
+- **release**: Bump version to 1.1.11
 
 ### Build
 

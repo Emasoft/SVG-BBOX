@@ -5886,20 +5886,37 @@ update_changelog() {
     local CLIFF_OUTPUT=""
     local CLIFF_EXIT_CODE=0
 
-    # Validate VERSION parameter (same pattern as other functions)
-    # WHY: Empty or ANSI-contaminated version strings cause tag creation failures
-    if [ -z "$VERSION" ]; then
-        log_error "update_changelog called without VERSION parameter"
-        return 0  # Non-fatal, but log the error
+    # WHY: An empty or contaminated VERSION argument used to be silently
+    # accepted with `return 0`. That allowed releases to ship without
+    # a CHANGELOG update — exactly what happened in v1.2.0, where the
+    # caller's $NEW_VERSION reached this function as an empty string but
+    # was 1.2.0 by the time commit_version_bump ran two lines later. We
+    # never figured out the variable-leak path, but the fix is to stop
+    # depending on the caller and read the version straight from
+    # package.json, which by this point in the pipeline is the
+    # already-bumped, authoritative source of truth.
+    if [ -z "$VERSION" ] || ! validate_version "$VERSION" 2>/dev/null; then
+        local FALLBACK_VERSION
+        FALLBACK_VERSION=$(get_current_version 2>/dev/null || echo "")
+        if [ -n "$FALLBACK_VERSION" ] && validate_version "$FALLBACK_VERSION" 2>/dev/null; then
+            log_warning "update_changelog: caller passed an invalid/empty VERSION ('$VERSION')"
+            log_warning "  Falling back to package.json version: $FALLBACK_VERSION"
+            VERSION="$FALLBACK_VERSION"
+        else
+            log_error "update_changelog: VERSION parameter is invalid and package.json has no usable version"
+            log_error "  Got VERSION='$VERSION', package.json version='$FALLBACK_VERSION'"
+            log_error "  Refusing to proceed — a release without a changelog update is a bug."
+            return 1
+        fi
     fi
 
     # Strip any ANSI codes that might have leaked in (paranoid safeguard)
     VERSION=$(echo "$VERSION" | strip_ansi)
 
-    # Validate version format
+    # Re-validate after strip_ansi (defense in depth)
     if ! validate_version "$VERSION"; then
-        log_error "Invalid version format in update_changelog: $VERSION"
-        return 0  # Non-fatal, but log the error
+        log_error "Invalid version format in update_changelog after strip_ansi: $VERSION"
+        return 1
     fi
 
     log_info "Updating CHANGELOG.md with git-cliff for v${VERSION}..."
@@ -7365,7 +7382,11 @@ main() {
     # Update CHANGELOG.md before committing
     # WHY: Changelog must be updated at every release to maintain accurate history
     # WHY: This must happen BEFORE commit_version_bump() so CHANGELOG.md is included in the commit
-    update_changelog "$NEW_VERSION"
+    # WHY rollback on failure: A release without a changelog update silently ships
+    #   stale [Unreleased] notes and breaks the audit trail. v1.2.0 hit exactly this
+    #   bug — update_changelog logged an error but `return 0`-ed and the release
+    #   proceeded. The function now `return 1`s on real failures, so check it.
+    update_changelog "$NEW_VERSION" || rollback_release "$NEW_VERSION" "update-changelog"
 
     # Commit version bump
     commit_version_bump "$NEW_VERSION" || rollback_release "$NEW_VERSION" "commit-version"
