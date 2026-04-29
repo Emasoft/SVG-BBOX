@@ -29,16 +29,31 @@ const TEXT2PATH_PATH = path.join(__dirname, '../../sbb-inkscape-text2path.cjs');
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
 const TEMP_DIR = path.join(__dirname, '../.tmp-inkscape-text2path-tests');
 
-// Check if Inkscape is available
+// Check if Inkscape is available WITHOUT launching it.
+// WHY: `inkscape --version` is slow on macOS power-user setups (10k+ fonts
+// → 30-60s cold start to build font cache). Under parallel test load that
+// easily exceeds any timeout, producing false negatives that skip the
+// entire test file even though Inkscape is fully installed.
+// WHY check filesystem paths in addition to PATH: macOS users routinely
+// install Inkscape as an .app bundle (/Applications/Inkscape.app/...)
+// without adding the binary to $PATH. We mirror the path list that
+// sbb-inkscape-getbbox.cjs uses for actual invocation, with macOS .app
+// bundle first since that's the most common install location.
 async function checkInkscapeAvailable() {
   try {
-    // WHY CLI_TIMEOUT_MS / 2: Inkscape can take 10+ seconds to start on systems with many fonts
-    // as it needs to build/load the font cache on first run
-    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 2 });
+    await execFilePromise('which', ['inkscape'], { timeout: 5000 });
     return true;
   } catch {
-    return false;
+    // Fall through to filesystem check.
   }
+  const commonPaths = [
+    '/Applications/Inkscape.app/Contents/MacOS/inkscape', // macOS .app bundle
+    '/opt/homebrew/bin/inkscape', // macOS Homebrew ARM
+    '/usr/local/bin/inkscape', // macOS Homebrew Intel / generic Linux
+    '/usr/bin/inkscape', // Linux distro packages
+    'C:\\Program Files\\Inkscape\\bin\\inkscape.exe' // Windows
+  ];
+  return commonPaths.some((p) => fs.existsSync(p));
 }
 
 // Helper to run sbb-inkscape-text2path
