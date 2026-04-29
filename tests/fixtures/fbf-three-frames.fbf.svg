@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tiny Frame-By-Frame SVG fixture for sbb-svg2png --fbf-frame integration tests.
+
+  Mirrors the structural contract documented at
+  https://github.com/Emasoft/svg2fbf and in svg-bbox issue #3:
+    - Single PROSKENION <use> with a discrete xlink:href animate
+    - Three full-viewBox FRAME definitions in <defs>
+    - SHARED_DEFINITIONS / STAGE_FOREGROUND / OVERLAY_LAYER stubs
+
+  Each frame paints the entire 100x100 viewBox a distinct solid color
+  (red / green / blue) so a corner-pixel sample proves which frame the
+  renderer actually pinned.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 100 100" width="100" height="100">
+  <desc>FBF.SVG test fixture — 3 single-color frames</desc>
+
+  <g id="ANIMATION_BACKDROP">
+    <g id="STAGE_BACKGROUND"/>
+    <g id="ANIMATION_STAGE">
+      <g id="ANIMATED_GROUP">
+        <use id="PROSKENION" xlink:href="#FRAME00001" overflow="visible">
+          <animate attributeName="xlink:href"
+                   values="#FRAME00001;#FRAME00002;#FRAME00003"
+                   begin="0s" calcMode="discrete" dur="3s" repeatCount="indefinite"/>
+        </use>
+      </g>
+    </g>
+    <g id="STAGE_FOREGROUND"/>
+  </g>
+  <g id="OVERLAY_LAYER"/>
+
+  <defs>
+    <g id="SHARED_DEFINITIONS"/>
+    <g id="FRAME00001">
+      <rect x="0" y="0" width="100" height="100" fill="rgb(220,30,30)"/>
+    </g>
+    <g id="FRAME00002">
+      <rect x="0" y="0" width="100" height="100" fill="rgb(30,180,30)"/>
+    </g>
+    <g id="FRAME00003">
+      <rect x="0" y="0" width="100" height="100" fill="rgb(30,60,220)"/>
+    </g>
+  </defs>
+</svg>

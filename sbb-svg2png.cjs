@@ -61,6 +61,7 @@ const sharp = require('sharp');
  * @property {boolean} trustedMode - Disable all path security restrictions
  * @property {boolean} quiet - Minimal output mode (only essential info)
  * @property {boolean} verbose - Detailed progress information
+ * @property {number[] | null} fbfFrames - 1-based frame numbers to render from an FBF.SVG (null = no FBF handling)
  * @property {string} [input] - Input SVG file path (single file mode)
  * @property {string} [output] - Output PNG file path (single file mode)
  */
@@ -92,6 +93,12 @@ const {
   printWarning,
   printBanner
 } = require('./lib/cli-utils.cjs');
+
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helpers.
+// Used by --fbf-frame N to pin PROSKENION to a specific frame and drop the
+// <animate> child before rendering, so the screenshot captures exactly that
+// frame instead of whatever frame the SMIL timeline happens to be on.
+const { describeFbf, pinFrame: pinFbfFrame } = require('./lib/fbf.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE-LEVEL STATE FOR PATH VALIDATION
@@ -163,6 +170,116 @@ function logVerbose(...args) {
 }
 
 // ---------- CLI parsing ----------
+
+/**
+ * Parse a --fbf-frame value into a list of unique 1-based frame numbers.
+ *
+ * Accepts:
+ *   "7"                → [7]
+ *   "7,23,87"          → [7, 23, 87]
+ *   "1-5"              → [1, 2, 3, 4, 5]
+ *   "1-3,10,20-22"     → [1, 2, 3, 10, 20, 21, 22]
+ *
+ * Throws with a user-facing message on any invalid fragment so the CLI
+ * can echo it under "Error: --fbf-frame ..." without further wrapping.
+ *
+ * @param {string} raw
+ * @returns {number[]}
+ */
+function parseFbfFrameList(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) {
+    throw new Error('expects a positive integer or list, got an empty value');
+  }
+  // WHY: Cap the input length so a malicious or accidental --fbf-frame
+  // with megabytes of digits cannot starve the parser. 4 KB is room for
+  // ~1000 explicit frame numbers — well past anything reasonable.
+  if (text.length > 4096) {
+    throw new Error('value too long (max 4096 chars)');
+  }
+  /** @type {number[]} */
+  const out = [];
+  const seen = new Set();
+  const fragments = text.split(',');
+  for (const frag of fragments) {
+    const piece = frag.trim();
+    if (!piece) {
+      throw new Error(`empty fragment in "${text}"`);
+    }
+    if (piece.includes('-')) {
+      // Range form: "low-high"
+      const dashCount = (piece.match(/-/g) || []).length;
+      if (dashCount !== 1) {
+        throw new Error(`invalid range "${piece}" (use low-high, e.g. 1-5)`);
+      }
+      const [loStr, hiStr] = piece.split('-');
+      const lo = parseInt((loStr ?? '').trim(), 10);
+      const hi = parseInt((hiStr ?? '').trim(), 10);
+      if (
+        !Number.isFinite(lo) ||
+        !Number.isFinite(hi) ||
+        String(lo) !== (loStr ?? '').trim() ||
+        String(hi) !== (hiStr ?? '').trim() ||
+        lo < 1 ||
+        hi < 1
+      ) {
+        throw new Error(`invalid range "${piece}" — both endpoints must be positive integers`);
+      }
+      if (lo > hi) {
+        throw new Error(`invalid range "${piece}" — low (${lo}) > high (${hi})`);
+      }
+      // WHY: Hard cap on range size to avoid accidental "1-1000000" runaway.
+      if (hi - lo + 1 > 100000) {
+        throw new Error(`range "${piece}" too large (max 100000 frames per fragment)`);
+      }
+      for (let n = lo; n <= hi; n++) {
+        if (!seen.has(n)) {
+          seen.add(n);
+          out.push(n);
+        }
+      }
+    } else {
+      const n = parseInt(piece, 10);
+      if (!Number.isFinite(n) || n < 1 || String(n) !== piece) {
+        throw new Error(`expects positive integers (1-based), got "${piece}" in "${text}"`);
+      }
+      if (!seen.has(n)) {
+        seen.add(n);
+        out.push(n);
+      }
+    }
+  }
+  if (out.length === 0) {
+    throw new Error(`no frames parsed from "${text}"`);
+  }
+  return out;
+}
+
+/**
+ * Derive a per-frame output path from a base output path and a frame id.
+ *
+ * Substitution rules:
+ *   - If the path contains "{frame}", it's replaced with the literal
+ *     frame id (e.g. "FRAME00007"). This is the explicit, predictable
+ *     form for power users.
+ *   - If the path contains "{n}", it's replaced with the bare frame
+ *     number (e.g. "7" — no zero padding).
+ *   - Otherwise, "-FRAME00007" is inserted before the file extension
+ *     (e.g. "out.png" → "out-FRAME00007.png").
+ *
+ * @param {string} basePath
+ * @param {string} frameId - Full id such as "FRAME00007"
+ * @param {number} frameNumber - 1-based number such as 7
+ * @returns {string}
+ */
+function deriveFramePath(basePath, frameId, frameNumber) {
+  if (basePath.includes('{frame}') || basePath.includes('{n}')) {
+    return basePath.replace(/\{frame\}/g, frameId).replace(/\{n\}/g, String(frameNumber));
+  }
+  const ext = path.extname(basePath);
+  const base = ext ? basePath.slice(0, -ext.length) : basePath;
+  return `${base}-${frameId}${ext}`;
+}
 
 /**
  * Print CLI help message with usage instructions and examples
@@ -277,6 +394,28 @@ OPTIONS:
       Show detailed progress information
       Includes mode, viewBox, bbox details, dimensions, background, margin
 
+  --fbf-frame <N | LIST | RANGE>
+      Render one or more frames from a Frame-By-Frame SVG (FBF.SVG)
+      produced by https://github.com/Emasoft/svg2fbf.
+      Accepted forms (1-based, all values must be positive integers):
+        --fbf-frame 7              one frame
+        --fbf-frame 7,23,87,345    explicit list
+        --fbf-frame 1-5            inclusive range
+        --fbf-frame 1-3,10,20-22   any mix of lists and ranges
+      The tool pins PROSKENION's <use xlink:href> to #FRAME0000N and drops
+      the swap <animate> child for each requested frame, then renders the
+      resulting static scene. All other rendering options (--mode, --scale,
+      --background, --margin, --width/--height) apply to every frame.
+      Errors clearly when input is not FBF or any frame is out of range.
+
+      Output naming for multi-frame requests (and single frames with a
+      placeholder):
+        out.png + frames 7,23   →  out-FRAME00007.png, out-FRAME00023.png
+        out-{frame}.png         →  out-FRAME00007.png  (literal id)
+        out-{n}.png             →  out-7.png           (bare number)
+      For a single frame without a placeholder, the output path is used
+      verbatim — same behaviour as v1.1.x.
+
   --help, -h
       Show this help message
 
@@ -303,6 +442,16 @@ EXAMPLES:
 
   # Render and immediately view
   node sbb-svg2png.cjs drawing.svg preview.png --auto-open
+
+  # Render frame 7 of a Frame-By-Frame SVG (svg2fbf output)
+  node sbb-svg2png.cjs animation.fbf.svg frame-007.png --fbf-frame 7
+
+  # Render an explicit set of frames in one command — outputs are
+  # auto-named: frames-FRAME00007.png, frames-FRAME00023.png, ...
+  node sbb-svg2png.cjs anim.fbf.svg frames.png --fbf-frame 7,23,87,345
+
+  # Render a range of frames using a placeholder for the output name
+  node sbb-svg2png.cjs anim.fbf.svg "thumb-{n}.png" --fbf-frame 1-30 --scale 2
 
   # Batch render with shared settings
   node sbb-svg2png.cjs --batch files.txt \\
@@ -370,7 +519,8 @@ function parseArgs(argv) {
     allowPaths: null,
     trustedMode: false,
     quiet: false,
-    verbose: false
+    verbose: false,
+    fbfFrames: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -458,6 +608,25 @@ function parseArgs(argv) {
           // WHY: Detailed progress information
           options.verbose = true;
           break;
+        case 'fbf-frame': {
+          // WHY: 1-based frame number(s) for FBF.SVG inputs (svg2fbf format).
+          // Accepts a single number, a comma-separated list, or ranges:
+          //   --fbf-frame 7
+          //   --fbf-frame 7,23,87,345
+          //   --fbf-frame 1-5,10,20-22
+          // All non-positive-integer fragments are rejected at parse time
+          // so we never silently render the wrong frame.
+          const raw = next ?? '';
+          try {
+            options.fbfFrames = parseFbfFrameList(raw);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`Error: --fbf-frame ${msg}`);
+            process.exit(1);
+          }
+          useNext();
+          break;
+        }
         default:
           console.warn('Unknown option:', key);
       }
@@ -634,6 +803,7 @@ const PUPPETEER_OPTIONS = {
  * @property {boolean} autoOpen - Open PNG after rendering
  * @property {boolean} jpg - Also produce a JPEG version at 100% quality
  * @property {boolean} deletePngAfter - Delete PNG after creating JPG (requires --jpg)
+ * @property {number | null | undefined} [fbfFrame] - 1-based FBF.SVG frame number to pin before rendering (single frame only — the multi-frame loop is at the CLI layer)
  */
 
 /**
@@ -655,9 +825,34 @@ async function renderSvgWithModes(opts) {
   // NOTE: File size limit removed to support large SVG files with embedded content (hundreds of MB)
   // WHY: We already validated the path above, so we read directly to avoid
   // readSVGFileSafe re-validating with default allowedDirs (which ignores our flags)
-  const svgContent = fs.readFileSync(safePath, 'utf8');
+  let svgContent = fs.readFileSync(safePath, 'utf8');
   if (!svgContent.trim().startsWith('<') || !svgContent.includes('<svg')) {
     throw new _ValidationError('File does not appear to be valid SVG');
+  }
+
+  // FBF.SVG: pin a specific frame before rendering.
+  // WHY: This must happen BEFORE sanitization so the helper sees the
+  // original PROSKENION/animate structure as-authored. The sanitizer
+  // does not strip <animate> or normal #FRAME0000N references, but doing
+  // the pin first keeps the helper's input contract trivial to reason
+  // about. The pinned SVG is still a normal SVG, so the rest of the
+  // pipeline (sanitize, sanitizeSVGContent, render) needs no changes.
+  if (typeof opts.fbfFrame === 'number' && opts.fbfFrame >= 1) {
+    const desc = describeFbf(svgContent);
+    if (!desc.isFbf) {
+      throw new _ValidationError(
+        `--fbf-frame requires an FBF.SVG (Frame-By-Frame SVG from svg2fbf), but ` +
+          `${path.basename(safePath)} does not contain a <use id="PROSKENION"> with ` +
+          `<g id="FRAMEnnnnn"> definitions.`
+      );
+    }
+    const pinned = pinFbfFrame(svgContent, opts.fbfFrame);
+    svgContent = pinned.svg;
+    if (MODULE_VERBOSE_MODE && !MODULE_QUIET_MODE) {
+      printInfo(
+        `FBF: pinned frame ${pinned.frameNumber} (#${pinned.frameId}) of ${pinned.totalFrames}`
+      );
+    }
   }
 
   // SECURITY: Sanitize SVG content (remove scripts, event handlers)
@@ -1243,21 +1438,41 @@ async function main() {
           throw new _SVGBBoxError(`Input file not found: ${svgPath}`);
         }
 
-        // Use the same rendering options for all files in batch
-        await renderSvgWithModes({
-          input: svgPath,
-          output: pngPath,
-          mode: opts.mode,
-          elementId: opts.elementId,
-          scale: opts.scale,
-          width: opts.width,
-          height: opts.height,
-          background: opts.background,
-          margin: opts.margin,
-          autoOpen: false, // Never auto-open in batch mode
-          jpg: opts.jpg,
-          deletePngAfter: opts.deletePngAfter
-        });
+        // Use the same rendering options for all files in batch.
+        // WHY: When --fbf-frame is a list, render each requested frame
+        // and derive a per-frame output path. Single-frame requests
+        // (and non-FBF inputs, opts.fbfFrames === null) keep the
+        // original 1:1 behaviour and write directly to pngPath.
+        const frames = opts.fbfFrames && opts.fbfFrames.length > 0 ? opts.fbfFrames : [null];
+        for (const frame of frames) {
+          /** @type {string} */
+          let perFrameOut = pngPath;
+          if (frame !== null && frames.length > 1) {
+            // Auto-derive — the user only supplied one path but asked
+            // for multiple frames. Use the FBF id format for clarity.
+            const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
+            perFrameOut = deriveFramePath(pngPath, frameIdGuess, frame);
+          } else if (frame !== null && /\{frame\}|\{n\}/.test(pngPath)) {
+            // User-supplied placeholder, even with a single frame.
+            const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
+            perFrameOut = deriveFramePath(pngPath, frameIdGuess, frame);
+          }
+          await renderSvgWithModes({
+            input: svgPath,
+            output: perFrameOut,
+            mode: opts.mode,
+            elementId: opts.elementId,
+            scale: opts.scale,
+            width: opts.width,
+            height: opts.height,
+            background: opts.background,
+            margin: opts.margin,
+            autoOpen: false, // Never auto-open in batch mode
+            jpg: opts.jpg,
+            deletePngAfter: opts.deletePngAfter,
+            fbfFrame: frame
+          });
+        }
 
         results.push({
           success: true,
@@ -1293,20 +1508,40 @@ async function main() {
   if (!opts.input || !opts.output) {
     throw new Error('Input and output paths are required in single file mode');
   }
-  await renderSvgWithModes({
-    input: opts.input,
-    output: opts.output,
-    mode: opts.mode,
-    elementId: opts.elementId,
-    scale: opts.scale,
-    width: opts.width,
-    height: opts.height,
-    background: opts.background,
-    margin: opts.margin,
-    autoOpen: opts.autoOpen,
-    jpg: opts.jpg,
-    deletePngAfter: opts.deletePngAfter
-  });
+  // WHY: Multi-frame rendering loops at the CLI layer so renderSvgWithModes
+  // stays single-frame. With one --fbf-frame value (or none) this loop
+  // runs exactly once and writes to opts.output as before. With a list,
+  // it derives a per-frame output path from opts.output (or applies a
+  // user-supplied {frame}/{n} placeholder).
+  const baseOutput = opts.output;
+  const frames = opts.fbfFrames && opts.fbfFrames.length > 0 ? opts.fbfFrames : [null];
+  for (const frame of frames) {
+    /** @type {string} */
+    let perFrameOut = baseOutput;
+    if (frame !== null && frames.length > 1) {
+      const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
+      perFrameOut = deriveFramePath(baseOutput, frameIdGuess, frame);
+    } else if (frame !== null && /\{frame\}|\{n\}/.test(baseOutput)) {
+      const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
+      perFrameOut = deriveFramePath(baseOutput, frameIdGuess, frame);
+    }
+    await renderSvgWithModes({
+      input: opts.input,
+      output: perFrameOut,
+      mode: opts.mode,
+      elementId: opts.elementId,
+      scale: opts.scale,
+      width: opts.width,
+      height: opts.height,
+      background: opts.background,
+      margin: opts.margin,
+      // Auto-open only the LAST frame to avoid spamming Chrome with N tabs.
+      autoOpen: opts.autoOpen && frame === frames[frames.length - 1],
+      jpg: opts.jpg,
+      deletePngAfter: opts.deletePngAfter,
+      fbfFrame: frame
+    });
+  }
 }
 
 runCLI(main);

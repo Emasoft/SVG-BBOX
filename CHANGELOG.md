@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ★ New Features
+
+- **sbb-svg2png**: `--fbf-frame N` renders an arbitrary frame from a
+  Frame-By-Frame SVG ([FBF.SVG](https://github.com/Emasoft/svg2fbf)) by
+  pinning the PROSKENION `<use xlink:href>` to `#FRAME0000N` and
+  dropping the swap `<animate>` child before rendering. Closes #3.
+- **sbb-svg2png**: `--fbf-frame` accepts a comma-separated list and
+  inclusive range syntax (`--fbf-frame 7,23,87` or `--fbf-frame 1-30,
+  10,20-22`). Multi-frame requests auto-derive per-frame output names
+  (`out.png` → `out-FRAME00007.png`, …) or honour `{frame}`/`{n}`
+  placeholders in the supplied output path.
+- **lib/fbf.cjs**: New helper module — `describeFbf(svg)`,
+  `pinFrame(svg, n)`, `formatFrameId(n, padWidth)`, `resolveFrameId(...)` —
+  for programmatic FBF.SVG inspection and frame extraction.
+
 ## [1.1.11] - 2026-01-22
 
 ### ✗ Bug Fixes

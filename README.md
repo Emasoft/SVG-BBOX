@@ -567,6 +567,35 @@ npx sbb-svg2png input.svg output.png --mode full --scale 4
 - Sets an appropriate `viewBox`.
 - Renders to PNG at 4 px per SVG unit.
 
+#### Render specific frames from a Frame-By-Frame SVG (FBF.SVG)
+
+`sbb-svg2png` knows about the
+[FBF.SVG format](https://github.com/Emasoft/svg2fbf) produced by `svg2fbf`. Use
+`--fbf-frame` to snapshot any frame (or set of frames) without manually editing
+the SVG. The tool pins the PROSKENION `<use xlink:href>` to `#FRAME0000N` and
+drops the swap `<animate>` child before rendering, so you get exactly the frame
+you asked for.
+
+```bash
+# Single frame
+npx sbb-svg2png anim.fbf.svg frame-007.png --fbf-frame 7
+
+# Explicit list — auto-derived per-frame outputs
+# (frames-FRAME00007.png, frames-FRAME00023.png, ...)
+npx sbb-svg2png anim.fbf.svg frames.png --fbf-frame 7,23,87,345
+
+# Inclusive range with a {n} placeholder for the bare frame number
+# (thumb-1.png, thumb-2.png, ..., thumb-30.png)
+npx sbb-svg2png anim.fbf.svg "thumb-{n}.png" --fbf-frame 1-30 --scale 2
+
+# Mix lists and ranges
+npx sbb-svg2png anim.fbf.svg out.png --fbf-frame 1-3,10,20-22
+```
+
+All other rendering options (`--mode`, `--scale`, `--background`, `--margin`,
+`--width`/`--height`, `--jpg`) apply to every pinned frame. Errors are clear
+when the input is not an FBF.SVG or any frame number is out of range.
+
 ---
 
 ### 3. Fix an SVG that has no `viewBox` / `width` / `height`
