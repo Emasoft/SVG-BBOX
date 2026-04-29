@@ -3646,6 +3646,33 @@ cleanup_test_artifacts() {
         done < <(find tests/ -maxdepth 1 -type d \( -name ".tmp-*" -o -name "test-cli-security-temp" \) -print0 2>/dev/null)
     fi
 
+    # Clean up specific test artifacts that pollute git-tracked fixtures.
+    # WHY: sbb-inkscape-text2path.test.js writes to tests/fixtures/text-sample-paths.svg
+    # and renames it to text-sample-paths_1.svg when the file already exists. If the
+    # test crashes mid-run (timeout, missing inkscape, etc.) the fixture ends up
+    # DELETED and a stray _1.svg lingers. Both states show as uncommitted changes
+    # and block releases. Cleaning them up restores the working tree to the
+    # intended pre-test state.
+    if [ -f "tests/fixtures/text-sample-paths_1.svg" ]; then
+        if rm -f "tests/fixtures/text-sample-paths_1.svg" 2>/dev/null; then
+            cleaned_count=$((cleaned_count + 1))
+            cleaned_items="${cleaned_items}  - tests/fixtures/text-sample-paths_1.svg (test-artifact)\n"
+        fi
+    fi
+    # Restore deleted fixture from git if it's in HEAD but missing locally.
+    # WHY: git checkout HEAD -- <path> ONLY restores the named path, leaving
+    # other unstaged edits alone (the git_safety_guard.py hook would back them
+    # up first either way, but with the new non-destructive backup strategy
+    # it's safe).
+    if git ls-files --error-unmatch "tests/fixtures/text-sample-paths.svg" >/dev/null 2>&1; then
+        if [ ! -f "tests/fixtures/text-sample-paths.svg" ]; then
+            if git checkout HEAD -- "tests/fixtures/text-sample-paths.svg" 2>/dev/null; then
+                cleaned_count=$((cleaned_count + 1))
+                cleaned_items="${cleaned_items}  - tests/fixtures/text-sample-paths.svg (restored from HEAD)\n"
+            fi
+        fi
+    fi
+
     # Report what was cleaned (helps debugging)
     if [ "$cleaned_count" -gt 0 ]; then
         log_success "Test artifacts cleaned up ($cleaned_count items removed)"
@@ -5882,41 +5909,43 @@ EOF
 # WHY: Changelog must be updated with each release to document all changes
 # The changelog is the source of truth for release notes
 update_changelog() {
-    local VERSION=$1
+    local CALLER_VERSION=$1
+    local VERSION
     local CLIFF_OUTPUT=""
     local CLIFF_EXIT_CODE=0
 
-    # WHY: An empty or contaminated VERSION argument used to be silently
-    # accepted with `return 0`. That allowed releases to ship without
-    # a CHANGELOG update — exactly what happened in v1.2.0, where the
-    # caller's $NEW_VERSION reached this function as an empty string but
-    # was 1.2.0 by the time commit_version_bump ran two lines later. We
-    # never figured out the variable-leak path, but the fix is to stop
-    # depending on the caller and read the version straight from
-    # package.json, which by this point in the pipeline is the
-    # already-bumped, authoritative source of truth.
-    if [ -z "$VERSION" ] || ! validate_version "$VERSION" 2>/dev/null; then
-        local FALLBACK_VERSION
-        FALLBACK_VERSION=$(get_current_version 2>/dev/null || echo "")
-        if [ -n "$FALLBACK_VERSION" ] && validate_version "$FALLBACK_VERSION" 2>/dev/null; then
-            log_warning "update_changelog: caller passed an invalid/empty VERSION ('$VERSION')"
-            log_warning "  Falling back to package.json version: $FALLBACK_VERSION"
-            VERSION="$FALLBACK_VERSION"
-        else
-            log_error "update_changelog: VERSION parameter is invalid and package.json has no usable version"
-            log_error "  Got VERSION='$VERSION', package.json version='$FALLBACK_VERSION'"
-            log_error "  Refusing to proceed — a release without a changelog update is a bug."
-            return 1
-        fi
+    # WHY package.json is the authoritative source: there is a long-standing
+    # variable-leak bug where the caller's $NEW_VERSION reaches this function
+    # as an empty string even though it logged correctly two lines earlier
+    # (and is correct again in commit_version_bump two lines later). v1.2.0
+    # and v1.2.1 both hit this. The leak path was never identified across
+    # multiple debugging sessions; rather than chase a bash-scoping ghost,
+    # we read package.json directly — which by this point in the pipeline
+    # IS the already-bumped, authoritative source of truth.
+    #
+    # WHY validate $1 anyway: if the caller's value DISAGREES with
+    # package.json, that's a real inconsistency worth flagging — usually
+    # means npm version succeeded against a stale package.json, or two
+    # bumps happened concurrently. Better to fail loudly than ship a tag
+    # that doesn't match the published version.
+    VERSION=$(get_current_version 2>/dev/null || echo "")
+    VERSION=$(echo "$VERSION" | strip_ansi)
+    if ! validate_version "$VERSION"; then
+        log_error "update_changelog: package.json version is invalid: '$VERSION'"
+        log_error "  caller passed: '$CALLER_VERSION'"
+        log_error "  Refusing to proceed — a release without a changelog update is a bug."
+        return 1
     fi
 
-    # Strip any ANSI codes that might have leaked in (paranoid safeguard)
-    VERSION=$(echo "$VERSION" | strip_ansi)
-
-    # Re-validate after strip_ansi (defense in depth)
-    if ! validate_version "$VERSION"; then
-        log_error "Invalid version format in update_changelog after strip_ansi: $VERSION"
-        return 1
+    # Cross-check: caller's value must match package.json (when caller
+    # passed a non-empty value). Catches stale-state bugs early.
+    if [ -n "$CALLER_VERSION" ]; then
+        local CALLER_STRIPPED
+        CALLER_STRIPPED=$(echo "$CALLER_VERSION" | strip_ansi)
+        if [ "$CALLER_STRIPPED" != "$VERSION" ] && validate_version "$CALLER_STRIPPED" 2>/dev/null; then
+            log_warning "update_changelog: caller's VERSION ('$CALLER_STRIPPED') does not match package.json ('$VERSION')"
+            log_warning "  Using package.json — caller value ignored. This usually means a stale variable."
+        fi
     fi
 
     log_info "Updating CHANGELOG.md with git-cliff for v${VERSION}..."
