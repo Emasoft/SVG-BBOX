@@ -21,7 +21,14 @@
   <a href="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"><img alt="unpkg CDN" src="https://img.shields.io/badge/unpkg-CDN-blue?style=flat-square&logo=unpkg"></a>
   <a href="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js"><img alt="jsDelivr CDN" src="https://img.shields.io/badge/jsDelivr-CDN-orange?style=flat-square&logo=jsdelivr"></a>
   <a href="https://github.com/Emasoft/SVG-BBOX"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-Repository-black?style=flat-square&logo=github"></a>
+  <a href="https://github.com/Emasoft/svg2fbf"><img alt="svg2fbf companion" src="https://img.shields.io/badge/svg2fbf-companion-blueviolet?style=flat-square&logo=github"></a>
 </p>
+
+> **🎬 New in v1.2:** native support for **FBF.SVG** frame-by-frame animations
+> (produced by [`svg2fbf`](https://github.com/Emasoft/svg2fbf)) — pin any frame
+> for rendering or comparison via the `--fbf-frame` flag on `sbb-svg2png` and
+> `sbb-compare`.
+> [Jump to the Companion Projects section ↓](#-companion-projects)
 
 ---
 
@@ -42,6 +49,7 @@
 - [Library API Reference](#-library-api-reference)
 - [Tools CLI Commands Usage](#tools-cli-commands-usage)
 - [Renaming Workflow with the HTML Viewer](#-renaming-workflow-with-the-html-viewer)
+- [Companion Projects](#-companion-projects)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -2054,6 +2062,47 @@ A typical end‑to‑end workflow:
    node sbb-extract.cjs sprites.renamed.svg \
      --export-all exported --export-groups --margin 2
    ```
+
+---
+
+## 🎬 Companion Projects
+
+### `svg2fbf` — Frame-By-Frame SVG animations
+
+[**svg2fbf**](https://github.com/Emasoft/svg2fbf) is a sister tool that converts
+a sequence of static SVG frames (or a Lottie / CSS / SMIL animation) into a
+single self-contained **FBF.SVG** file: every frame is embedded as a `<symbol>`
+and the active frame is swapped via a discrete-mode `<animate>` driving a
+PROSKENION `<use xlink:href>`. The result is a normal SVG that plays in any
+browser — no external assets, no JavaScript, no canvas.
+
+`svg-bbox` knows the FBF.SVG format natively. Two CLI tools accept the
+`--fbf-frame` flag to pin any frame for rendering or comparison:
+
+| Tool          | Use case                                                          | Flags                                           |
+| ------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+| `sbb-svg2png` | Render single frames or batches of frames to PNG/JPEG             | `--fbf-frame N \| LIST \| RANGE`                |
+| `sbb-compare` | Visual-diff a frame against another frame, a static SVG, or a PNG | `--fbf-frame`, `--fbf-frame-a`, `--fbf-frame-b` |
+
+```bash
+# Snapshot frame 7 of an FBF animation as a PNG
+npx sbb-svg2png anim.fbf.svg frame-007.png --fbf-frame 7 --scale 4
+
+# Render frames 1-30 to thumb-1.png ... thumb-30.png
+npx sbb-svg2png anim.fbf.svg "thumb-{n}.png" --fbf-frame 1-30 --scale 2
+
+# Pixel-diff frame 7 against a hand-authored reference
+npx sbb-compare reference.svg anim.fbf.svg \
+  --fbf-frame-b 7 --out-diff diff.png
+```
+
+For programmatic use, the same logic is exposed via the `svg-bbox/fbf` subpath
+import — see the
+[`sbb-svg2png` FBF.SVG section](#fbfsvg-frame-extraction---fbf-frame) below for
+`describeFbf()` and `pinFrame()` API details.
+
+The FBF.SVG format spec lives in the
+[svg2fbf repository](https://github.com/Emasoft/svg2fbf#fbfsvg-format-spec).
 
 ---
 
