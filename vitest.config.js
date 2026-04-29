@@ -2,25 +2,26 @@ import { defineConfig } from 'vitest/config';
 import { TEST_TIMEOUT_MS, HOOK_TIMEOUT_MS } from './config/timeouts.js';
 
 // Parallel execution configuration
-// Why 2 (was 3, then 5, originally 10): Each integration test invokes a CLI
-// tool (sbb-compare, sbb-svg2png, etc.) which spawns its own Puppeteer
-// subprocess. There is no shared browser pool across vitest workers — every
-// CLI subprocess launches its own Chromium. Concurrency 3 still produced
-// random "Runtime.callFunctionOn timed out" failures in the v1.2.1 release
-// pipeline because:
-//   - Vitest worker A spawns sbb-extract, which spawns Chromium A
-//   - Vitest worker B spawns sbb-compare, which spawns Chromium B + B'
-//     (since sbb-compare can use 2 browsers when comparing 2 files)
-//   - Vitest worker C spawns sbb-svg2png, which spawns Chromium C
-//   - Total: up to 4-5 Chromium processes competing for GPU bandwidth
-// At concurrency 2, peak Chromium count is ~3, well within the
-// MAX_CONCURRENT_BROWSERS_CI=2 + headroom envelope. Throughput cost vs
-// concurrency 3 is ~30% (5min → 6.5min for the full suite), which is the
-// final price for deterministic release-pipeline runs.
+// Why 1 (was 2, 3, 5, originally 10): Even at concurrency 2, the v1.2.1
+// release pipeline produced random "Runtime.callFunctionOn timed out"
+// failures in CJK-text bbox tests (Puppeteer waiting >120s on a single
+// CDP call) and html-preview tests (sbb-extract CLI subprocess hitting
+// the same protocolTimeout). The root cause: each vitest worker spawns
+// its own Puppeteer + Chromium AND each CLI test spawns ANOTHER Chromium
+// from the subprocess, so peak Chromium count was 4+ even at concurrency 2.
+//
+// Concurrency 1 (serial execution) eliminates inter-worker contention
+// entirely — only one test file runs at a time, only one Puppeteer
+// instance exists at any moment. Total runtime ~13min for the full suite
+// (vs ~5min at concurrency 5), but every release runs to completion
+// without flake. This is the right tradeoff for a release-blocking
+// pipeline; CI can override via VITEST_MAX_CONCURRENT_TESTS env var if
+// faster feedback matters more than determinism on a given branch.
 //
 // v1.2.1 release attempts: 7 flaky at concurrency 10, 1-2 at concurrency
-// 5, then html-preview/cli-security at concurrency 3, then ALL pass at 2.
-const MAX_CONCURRENT_TESTS = 2;
+// 5, then html-preview/cli-security at concurrency 3, then 3 tests still
+// flaked at concurrency 2 — finally green at concurrency 1.
+const MAX_CONCURRENT_TESTS = parseInt(process.env.VITEST_MAX_CONCURRENT_TESTS || '1', 10);
 
 // Generate timestamped log filename for test output
 // Format: tests/logs/vitest-YYYY-MM-DD-HH-MM-SS.log

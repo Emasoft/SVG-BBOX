@@ -100,7 +100,7 @@ const FONT_TIMEOUT_MS = 8000;
  * - Don't reduce below 60s — flake risk under load is a strong dollar
  *   cost in CI minutes; 120s headroom buys reliability cheaply.
  */
-const PROTOCOL_TIMEOUT_MS = 120000;
+const PROTOCOL_TIMEOUT_MS = 300000;
 
 // ============================================================================
 // CLI Operation Timeouts
