@@ -7352,7 +7352,7 @@ main() {
             log_error "No TTY available for the interactive confirmation prompt."
             log_error "When running this script non-interactively (CI, AI tools,"
             log_error "shell pipes, etc.) pass --yes to skip the prompt:"
-            log_error "    ./scripts/release.sh ${RELEASE_TYPE:-$1} --yes"
+            log_error "    ./scripts/release.sh ${VERSION_ARG:-patch} --yes"
             log_info "Restoring package.json..."
             git checkout package.json pnpm-lock.yaml 2>/dev/null || true
             exit 1

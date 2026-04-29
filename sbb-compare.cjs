@@ -1073,6 +1073,16 @@ async function performFileComparison(file1Path, file2Path, args, browser) {
   // continues to apply to the pinned side just as it would to any SVG.
   /** @type {string[]} */
   const fbfTempFiles = [];
+  // WHY remember originals: comparison reports include the input file
+  // paths in svg1/svg2/diffImage/HTML. Without restoration, the report
+  // would show the user's `anim.fbf.svg` as
+  // `anim.fbf.fbf-pin-sideA-FRAME00007-xyz.svg`, which is a confusing
+  // implementation leak. We rewrite the temp paths back to the originals
+  // (annotated with `(frame N)`) before returning the result.
+  const originalFile1 = file1Path;
+  const originalFile2 = file2Path;
+  /** @type {Map<string, string>} */
+  const tempToDisplay = new Map();
   try {
     const pinned1 = await maybeApplyFbfPin({
       side: 'A',
@@ -1085,6 +1095,10 @@ async function performFileComparison(file1Path, file2Path, args, browser) {
     if (pinned1.tempPath) {
       file1Path = pinned1.path;
       fbfTempFiles.push(pinned1.tempPath);
+      tempToDisplay.set(
+        pinned1.tempPath,
+        `${originalFile1} (frame ${pinned1.frameNumber}/#${pinned1.frameId})`
+      );
     }
     const pinned2 = await maybeApplyFbfPin({
       side: 'B',
@@ -1097,6 +1111,10 @@ async function performFileComparison(file1Path, file2Path, args, browser) {
     if (pinned2.tempPath) {
       file2Path = pinned2.path;
       fbfTempFiles.push(pinned2.tempPath);
+      tempToDisplay.set(
+        pinned2.tempPath,
+        `${originalFile2} (frame ${pinned2.frameNumber}/#${pinned2.frameId})`
+      );
     }
 
     // If --fbf-frame (global) was passed but neither side was an FBF.SVG,
@@ -1117,21 +1135,36 @@ async function performFileComparison(file1Path, file2Path, args, browser) {
 
     // Route to appropriate comparison function (paths may now point at
     // pinned temp files written next to the originals).
+    /** @type {ComparisonResult} */
+    let result;
     if (type1 === 'svg' && type2 === 'svg') {
       // SVG vs SVG: Use full SVG comparison with all features
-      return await performSingleComparison(file1Path, file2Path, args, browser);
+      result = await performSingleComparison(file1Path, file2Path, args, browser);
     } else if (type1 === 'png' && type2 === 'png') {
       // PNG vs PNG: Direct comparison (dimensions must match)
-      return await comparePngToPng(file1Path, file2Path, args);
+      result = await comparePngToPng(file1Path, file2Path, args);
     } else if (type1 === 'svg' && type2 === 'png') {
       // SVG vs PNG: Render SVG at PNG resolution
-      return await compareSvgToPng(file1Path, file2Path, args, browser, true);
+      result = await compareSvgToPng(file1Path, file2Path, args, browser, true);
     } else if (type1 === 'png' && type2 === 'svg') {
       // PNG vs SVG: Render SVG at PNG resolution (order flipped)
-      return await compareSvgToPng(file2Path, file1Path, args, browser, false);
+      result = await compareSvgToPng(file2Path, file1Path, args, browser, false);
     } else {
       throw new ValidationError(`Unsupported file type combination: ${type1} vs ${type2}`);
     }
+
+    // Replace any temp pinned-file path in the result with the original
+    // FBF path + frame annotation. svg1/svg2 are the documented user-
+    // facing fields; defensive lookups use the temp→display map.
+    if (result && tempToDisplay.size > 0) {
+      if (result.svg1 && tempToDisplay.has(result.svg1)) {
+        result.svg1 = tempToDisplay.get(result.svg1) || result.svg1;
+      }
+      if (result.svg2 && tempToDisplay.has(result.svg2)) {
+        result.svg2 = tempToDisplay.get(result.svg2) || result.svg2;
+      }
+    }
+    return result;
   } finally {
     // Best-effort cleanup of pinned temp files. Failures here are
     // logged in verbose mode but never propagate — leaving a 1-frame
@@ -1168,13 +1201,13 @@ async function performFileComparison(file1Path, file2Path, args, browser) {
  * @param {number|null} opts.perSideFrame
  * @param {number|null} opts.globalFrame
  * @param {ComparisonArgs} opts.args
- * @returns {Promise<{ path: string, tempPath: string|null, frameId: string|null }>}
+ * @returns {Promise<{ path: string, tempPath: string|null, frameId: string|null, frameNumber: number|null }>}
  */
 async function maybeApplyFbfPin({ side, filePath, fileType, perSideFrame, globalFrame, args }) {
   const explicit = perSideFrame !== null && perSideFrame !== undefined;
   const requestedFrame = explicit ? perSideFrame : globalFrame;
   if (requestedFrame === null || requestedFrame === undefined) {
-    return { path: filePath, tempPath: null, frameId: null };
+    return { path: filePath, tempPath: null, frameId: null, frameNumber: null };
   }
 
   if (fileType !== 'svg') {
@@ -1185,7 +1218,7 @@ async function maybeApplyFbfPin({ side, filePath, fileType, perSideFrame, global
       );
     }
     // Global flag: silently skip non-SVG sides.
-    return { path: filePath, tempPath: null, frameId: null };
+    return { path: filePath, tempPath: null, frameId: null, frameNumber: null };
   }
 
   // Lazy require to keep the script's startup cost flat for users who
@@ -1210,7 +1243,7 @@ async function maybeApplyFbfPin({ side, filePath, fileType, perSideFrame, global
           `with <g id="FRAMEnnnnn"> definitions.`
       );
     }
-    return { path: filePath, tempPath: null, frameId: null };
+    return { path: filePath, tempPath: null, frameId: null, frameNumber: null };
   }
 
   // Pin the requested frame (this throws with a clear message if the
@@ -1245,7 +1278,12 @@ async function maybeApplyFbfPin({ side, filePath, fileType, perSideFrame, global
     );
   }
 
-  return { path: tempPath, tempPath, frameId: pinned.frameId };
+  return {
+    path: safeTempPath,
+    tempPath: safeTempPath,
+    frameId: pinned.frameId,
+    frameNumber: pinned.frameNumber
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

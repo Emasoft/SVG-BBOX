@@ -303,6 +303,46 @@ function deriveFramePath(basePath, frameId, frameNumber) {
 }
 
 /**
+ * Expand a base output path into a list of `{ frame, output }` pairs for
+ * each requested FBF frame. Reads the FBF descriptor once so the
+ * generated `FRAME0000N` ids in output filenames use the source FBF's
+ * actual zero-pad width (5-digit per spec, 4-digit for the variant
+ * documented in issue #3) instead of an arbitrary hardcoded width.
+ *
+ * Single-frame requests with no placeholder in `basePath` keep the
+ * supplied path verbatim — same behaviour as v1.1.x and earlier.
+ *
+ * @param {string} basePath - User-supplied output path (may contain {frame}/{n})
+ * @param {Array<number|null>} frames - Result of `[null]` (no FBF) or `[1,2,3]`
+ * @param {string} fbfSourcePath - Path to the source FBF.SVG (peeked for pad width)
+ * @returns {Array<{ frame: number|null, output: string }>}
+ */
+function expandFbfFrameOutputs(basePath, frames, fbfSourcePath) {
+  if (!frames || frames.length === 0 || frames[0] === null) {
+    return [{ frame: null, output: basePath }];
+  }
+  // Peek at the FBF to use its real pad width. Failures are non-fatal —
+  // we just fall back to the spec's 5-digit default. The actual pin
+  // operation re-reads the file later via the normal validated path.
+  let padWidth = 5;
+  try {
+    const peek = fs.readFileSync(fbfSourcePath, 'utf8');
+    const desc = describeFbf(peek);
+    if (desc.padWidth >= 1) padWidth = desc.padWidth;
+  } catch {
+    // Unreadable file will fail later in renderSvgWithModes with a clearer error.
+  }
+  const hasPlaceholder = /\{frame\}|\{n\}/.test(basePath);
+  return frames.map((frame) => {
+    if (frame === null || (frames.length === 1 && !hasPlaceholder)) {
+      return { frame, output: basePath };
+    }
+    const frameId = `FRAME${String(frame).padStart(padWidth, '0')}`;
+    return { frame, output: deriveFramePath(basePath, frameId, frame) };
+  });
+}
+
+/**
  * Print CLI help message with usage instructions and examples
  * @returns {void}
  */
@@ -1465,19 +1505,8 @@ async function main() {
         // (and non-FBF inputs, opts.fbfFrames === null) keep the
         // original 1:1 behaviour and write directly to pngPath.
         const frames = opts.fbfFrames && opts.fbfFrames.length > 0 ? opts.fbfFrames : [null];
-        for (const frame of frames) {
-          /** @type {string} */
-          let perFrameOut = pngPath;
-          if (frame !== null && frames.length > 1) {
-            // Auto-derive — the user only supplied one path but asked
-            // for multiple frames. Use the FBF id format for clarity.
-            const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
-            perFrameOut = deriveFramePath(pngPath, frameIdGuess, frame);
-          } else if (frame !== null && /\{frame\}|\{n\}/.test(pngPath)) {
-            // User-supplied placeholder, even with a single frame.
-            const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
-            perFrameOut = deriveFramePath(pngPath, frameIdGuess, frame);
-          }
+        const frameOutputs = expandFbfFrameOutputs(pngPath, frames, svgPath);
+        for (const { frame, output: perFrameOut } of frameOutputs) {
           await renderSvgWithModes({
             input: svgPath,
             output: perFrameOut,
@@ -1534,18 +1563,13 @@ async function main() {
   // runs exactly once and writes to opts.output as before. With a list,
   // it derives a per-frame output path from opts.output (or applies a
   // user-supplied {frame}/{n} placeholder).
-  const baseOutput = opts.output;
   const frames = opts.fbfFrames && opts.fbfFrames.length > 0 ? opts.fbfFrames : [null];
-  for (const frame of frames) {
-    /** @type {string} */
-    let perFrameOut = baseOutput;
-    if (frame !== null && frames.length > 1) {
-      const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
-      perFrameOut = deriveFramePath(baseOutput, frameIdGuess, frame);
-    } else if (frame !== null && /\{frame\}|\{n\}/.test(baseOutput)) {
-      const frameIdGuess = `FRAME${String(frame).padStart(5, '0')}`;
-      perFrameOut = deriveFramePath(baseOutput, frameIdGuess, frame);
-    }
+  const frameOutputs = expandFbfFrameOutputs(opts.output, frames, opts.input);
+  const lastIdx = frameOutputs.length - 1;
+  for (let idx = 0; idx < frameOutputs.length; idx++) {
+    const entry = frameOutputs[idx];
+    if (!entry) continue; // defensive: array bounds are valid by construction
+    const { frame, output: perFrameOut } = entry;
     await renderSvgWithModes({
       input: opts.input,
       output: perFrameOut,
@@ -1557,7 +1581,7 @@ async function main() {
       background: opts.background,
       margin: opts.margin,
       // Auto-open only the LAST frame to avoid spamming Chrome with N tabs.
-      autoOpen: opts.autoOpen && frame === frames[frames.length - 1],
+      autoOpen: opts.autoOpen && idx === lastIdx,
       jpg: opts.jpg,
       deletePngAfter: opts.deletePngAfter,
       fbfFrame: frame

@@ -15,7 +15,19 @@
     },
     "./min": {
       "default": "./SvgVisualBBox.min.js"
-    }
+    },
+    "./fbf": {
+      "require": "./lib/fbf.cjs",
+      "import": "./lib/fbf.cjs",
+      "default": "./lib/fbf.cjs"
+    },
+    "./lib/fbf": {
+      "require": "./lib/fbf.cjs",
+      "import": "./lib/fbf.cjs",
+      "default": "./lib/fbf.cjs"
+    },
+    "./lib/fbf.cjs": "./lib/fbf.cjs",
+    "./package.json": "./package.json"
   },
   "bin": {
     "svg-bbox": "svg-bbox.cjs",

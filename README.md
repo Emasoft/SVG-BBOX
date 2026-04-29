@@ -1224,14 +1224,27 @@ actionable when the input is not an FBF.SVG, when any frame is out of range, or
 when the syntax is malformed (inverted ranges, empty fragments, non-numeric
 values are caught at parse time before any browser launch).
 
-For programmatic use, the same logic is exposed by `lib/fbf.cjs`:
+For programmatic use, the same logic is exposed via the `svg-bbox/fbf` subpath
+export:
 
 ```js
-const { describeFbf, pinFrame } = require('svg-bbox/lib/fbf.cjs');
+const { describeFbf, pinFrame } = require('svg-bbox/fbf');
+//   or:  import { describeFbf, pinFrame } from 'svg-bbox/fbf';
+
 const desc = describeFbf(svgString); // { isFbf, frames, padWidth, ... }
 const { svg, frameId } = pinFrame(svgString, 7);
 // `svg` is now a normal static SVG — feed to any renderer.
 ```
+
+Available helpers from this entry point:
+
+| Function                     | Purpose                                                           |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `describeFbf(svg)`           | Returns `{ isFbf, frames, padWidth, minFrame, maxFrame, … }`      |
+| `pinFrame(svg, n)`           | Returns `{ svg, frameId, frameNumber, totalFrames }` (static SVG) |
+| `formatFrameId(n, padWidth)` | Format a 1-based number as `FRAME0000N` with zero-padding         |
+| `resolveFrameId(desc, n)`    | Look up the literal frame id for a 1-based number, or `null`      |
+| `isFbfSvg(svg)`              | Boolean shortcut — `describeFbf(svg).isFbf`                       |
 
 #### Examples
 
