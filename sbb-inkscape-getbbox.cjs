@@ -529,7 +529,15 @@ async function main() {
   }
 }
 
-// Run CLI
-runCLI(main);
+// Run CLI only when invoked directly. When required by tests via
+// in-process-cli helper, expose main() so it can be called without spawning
+// a subprocess.
+if (require.main === module) {
+  runCLI(main);
+}
 
-module.exports = { getBBoxWithInkscape };
+// WHY bare main (not runCLI(main)): tests handle exit-code capture themselves.
+module.exports = {
+  main,
+  getBBoxWithInkscape
+};

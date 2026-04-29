@@ -834,4 +834,12 @@ async function main() {
   await fixSvgFile(input, output, autoOpen, force);
 }
 
-runCLI(main);
+// Run CLI only when invoked directly. When required by tests via
+// in-process-cli helper, expose main() so it can be called without spawning
+// a subprocess.
+if (require.main === module) {
+  runCLI(main);
+}
+
+// WHY bare main (not runCLI(main)): tests handle exit-code capture themselves.
+module.exports = { main };

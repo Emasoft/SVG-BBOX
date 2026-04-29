@@ -1155,4 +1155,17 @@ if (require.main === module) {
   runCLI(main);
 }
 
-module.exports = { computeBBox, processDirectory, processList, repairSvgAttributes };
+// WHY export `main` (the inner async function, NOT runCLI(main)): the
+// in-process test helper (tests/helpers/in-process-cli.js) already does its
+// own exit-code capture and error handling. Wrapping with runCLI would
+// double-handle: parseArgs's process.exit(0) for --help would be caught by
+// runCLI as an "unexpected error" and re-thrown with exit code 1, breaking
+// tests. Tests get the raw main(); production gets runCLI(main) via the
+// require.main guard above.
+module.exports = {
+  main,
+  computeBBox,
+  processDirectory,
+  processList,
+  repairSvgAttributes
+};

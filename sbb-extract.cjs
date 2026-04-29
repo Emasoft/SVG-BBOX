@@ -3055,6 +3055,16 @@ async function main() {
 }
 
 // SECURITY: Run with CLI error handling
-runCLI(main);
+// WHY require.main guard: lets tests `require('./sbb-extract.cjs')` to call
+// main() in-process without immediately running it. Without this, requiring
+// the file from a test would trigger CLI execution as a side-effect.
+if (require.main === module) {
+  runCLI(main);
+}
 
+// WHY export bare `main`: in-process test helper does its own exit-code
+// capture; runCLI's outer try/catch would re-throw parseArgs's
+// process.exit(0) (for --help/--version) as an "unexpected error" with
+// exit code 1. Tests need the raw main; production uses runCLI(main) via
+// the require.main guard above.
 module.exports = { main };

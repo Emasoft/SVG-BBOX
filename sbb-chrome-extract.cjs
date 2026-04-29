@@ -878,7 +878,15 @@ async function main() {
   await extractWithGetBBox(extractOptions);
 }
 
-// Run CLI
-runCLI(main);
+// Run CLI only when invoked directly. When required by tests via
+// in-process-cli helper, expose main() so it can be called without spawning
+// a subprocess (saves ~1-3s per test on Chromium boot).
+if (require.main === module) {
+  runCLI(main);
+}
 
-module.exports = { extractWithGetBBox };
+// WHY bare main (not runCLI(main)): tests handle exit-code capture themselves.
+module.exports = {
+  main,
+  extractWithGetBBox
+};

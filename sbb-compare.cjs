@@ -3094,6 +3094,11 @@ async function main() {
 }
 
 // SECURITY: Run with CLI error handling
-runCLI(main);
+// WHY require.main guard: lets tests `require('./sbb-compare.cjs')` to call
+// main() in-process without immediately running it.
+if (require.main === module) {
+  runCLI(main);
+}
 
+// WHY bare main (not runCLI(main)): tests handle exit-code capture themselves.
 module.exports = { main };

@@ -567,6 +567,9 @@ async function main() {
 }
 
 // SECURITY: Run with CLI error handling
-runCLI(main);
+if (require.main === module) {
+  runCLI(main);
+}
 
+// WHY bare main (not runCLI(main)): tests handle exit-code capture themselves.
 module.exports = { main, extractObjectWithInkscape };
