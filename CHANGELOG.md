@@ -14,10 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinning the PROSKENION `<use xlink:href>` to `#FRAME0000N` and
   dropping the swap `<animate>` child before rendering. Closes #3.
 - **sbb-svg2png**: `--fbf-frame` accepts a comma-separated list and
-  inclusive range syntax (`--fbf-frame 7,23,87` or `--fbf-frame 1-30,
-  10,20-22`). Multi-frame requests auto-derive per-frame output names
-  (`out.png` → `out-FRAME00007.png`, …) or honour `{frame}`/`{n}`
-  placeholders in the supplied output path.
+  inclusive range syntax — for example `--fbf-frame 7,23,87` or
+  `--fbf-frame 1-30,10,20-22`. Multi-frame requests auto-derive
+  per-frame output names (`out.png` → `out-FRAME00007.png`, …) or
+  honour `{frame}` / `{n}` placeholders in the supplied output path.
 - **sbb-compare**: `--fbf-frame N`, `--fbf-frame-a N`, and
   `--fbf-frame-b N` make the same FBF.SVG frame extraction available to
   the visual diff tool. Each side of the comparison can be independently
