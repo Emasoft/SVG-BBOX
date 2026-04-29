@@ -127,7 +127,11 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const puppeteer = require('puppeteer');
 const { getVersion } = require('./version.cjs');
-const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const {
+  BROWSER_TIMEOUT_MS,
+  FONT_TIMEOUT_MS,
+  PROTOCOL_TIMEOUT_MS
+} = require('./config/timeouts.cjs');
 
 const execFilePromise = promisify(execFile);
 

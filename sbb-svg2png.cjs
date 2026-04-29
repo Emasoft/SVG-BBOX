@@ -93,7 +93,11 @@ const sharp = require('sharp');
  * @property {string} output - Output PNG file path
  */
 const { openInChrome } = require('./browser-utils.cjs');
-const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const {
+  BROWSER_TIMEOUT_MS,
+  FONT_TIMEOUT_MS,
+  PROTOCOL_TIMEOUT_MS
+} = require('./config/timeouts.cjs');
 
 // SECURITY: Import security utilities
 const {

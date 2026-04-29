@@ -118,7 +118,11 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
+const {
+  BROWSER_TIMEOUT_MS,
+  FONT_TIMEOUT_MS,
+  PROTOCOL_TIMEOUT_MS
+} = require('./config/timeouts.cjs');
 
 // Import security utilities
 const {
