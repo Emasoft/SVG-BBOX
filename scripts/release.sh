@@ -6052,6 +6052,19 @@ commit_version_bump() {
         git add CHANGELOG.md 2>/dev/null || true
     fi
 
+    # Stage the rebuilt minified bundle if it was regenerated with the new
+    # version preamble during the local build verification step.
+    # WHY: The build step rewrites SvgVisualBBox.min.js with the new
+    #   `/*! v$VERSION */` preamble, but this file used to be left
+    #   uncommitted — every release pre-1.2.0 needed a manual follow-up
+    #   commit titled "Build: Regenerate minified file with vX preamble".
+    #   Including it in the version-bump commit fixes that drift loop and
+    #   makes the release tag point at a commit whose tracked min.js
+    #   matches the published npm tarball.
+    if [ -f "SvgVisualBBox.min.js" ]; then
+        git add SvgVisualBBox.min.js 2>/dev/null || true
+    fi
+
     # Verify there are changes to commit
     # WHY: Prevents "nothing to commit" errors if version was already bumped
     if git diff --cached --quiet; then
