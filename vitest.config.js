@@ -2,9 +2,16 @@ import { defineConfig } from 'vitest/config';
 import { TEST_TIMEOUT_MS, HOOK_TIMEOUT_MS } from './config/timeouts.js';
 
 // Parallel execution configuration
-// Why 10: Puppeteer tests are I/O-bound (waiting for browser), not CPU-bound.
-// Higher concurrency (vs default 5) maximizes throughput without CPU saturation.
-const MAX_CONCURRENT_TESTS = 10;
+// Why 5 (was 10): Puppeteer tests share a browser pool. With CI capping
+// SVG_BBOX_MAX_BROWSERS at 2, raising vitest concurrency above the pool
+// size queues tests behind browser allocation. Locally without that cap
+// the OS happily spawns more Chromium instances, but each one fights
+// for shared GPU + font + memory resources, causing the
+// "should handle SVG with text elements" / "should handle threshold
+// correctly" tests to time out under load (60-120s test timeouts hit
+// even after retry: 2). Five is a headroom-friendly value that still
+// runs the suite at near-peak throughput on modern hardware.
+const MAX_CONCURRENT_TESTS = 5;
 
 // Generate timestamped log filename for test output
 // Format: tests/logs/vitest-YYYY-MM-DD-HH-MM-SS.log
