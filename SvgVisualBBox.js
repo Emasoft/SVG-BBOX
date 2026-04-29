@@ -2480,6 +2480,279 @@
     };
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // FBF.SVG (Frame-By-Frame SVG) — browser-side frame extractor
+  // ─────────────────────────────────────────────────────────────────────
+  //
+  // FBF.SVG is the format produced by https://github.com/Emasoft/svg2fbf:
+  // every animation frame is a complete static scene stored in <defs> as
+  // <g id="FRAME00001">…</g>, and a single <use id="PROSKENION"> with a
+  // discrete-mode <animate> child swaps its xlink:href across the frame
+  // ids to play the animation.
+  //
+  // Pure string manipulation — no DOM, no canvas, no fs — so the same
+  // logic also lives in lib/fbf.cjs for Node CLI consumers. The two
+  // copies are intentional: this file is loaded into the browser via a
+  // <script> tag (and into Puppeteer via page.addScriptTag), it cannot
+  // require() a CommonJS module. A regression test compares both
+  // implementations on the same fixture to keep them in lockstep.
+  //
+  // No file-size limit applies here — multi-hour 60 fps FBF.SVG renders
+  // pack millions of frames into a single string and the helper handles
+  // them one frame at a time.
+
+  /**
+   * Escape a string so it can be embedded literally inside a RegExp.
+   * @param {string} s
+   * @returns {string}
+   */
+  function _fbfEscapeRegex(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Find the start/end indices of the named element in the SVG string.
+   * Handles self-closing tags and paired tags with arbitrary nesting of
+   * the same element. Returns null if not found.
+   * @param {string} svg
+   * @param {string} tagName
+   * @param {string} idValue
+   * @returns {{ openStart: number, openEnd: number, closeStart: number, closeEnd: number, selfClosing: boolean }|null}
+   */
+  function _fbfFindElementById(svg, tagName, idValue) {
+    const idAttr = new RegExp(
+      `<${tagName}\\b[^>]*?\\bid\\s*=\\s*["']${_fbfEscapeRegex(idValue)}["'][^>]*?>`,
+      'i'
+    );
+    const m = idAttr.exec(svg);
+    if (!m) return null;
+    const openStart = m.index;
+    const openEnd = openStart + m[0].length;
+    const selfClosing = m[0].endsWith('/>');
+    if (selfClosing) {
+      return { openStart, openEnd, closeStart: openEnd, closeEnd: openEnd, selfClosing: true };
+    }
+    // WHY: walk forward counting nested same-name opens so we land on
+    // the matching close — a naive regex would grab the first </tag>.
+    const openRe = new RegExp(`<${tagName}\\b[^>]*?>`, 'gi');
+    const closeRe = new RegExp(`</${tagName}\\s*>`, 'gi');
+    openRe.lastIndex = openEnd;
+    closeRe.lastIndex = openEnd;
+    let depth = 1;
+    while (depth > 0) {
+      const nextOpen = openRe.exec(svg);
+      const nextClose = closeRe.exec(svg);
+      if (!nextClose) return null;
+      if (nextOpen && nextOpen.index < nextClose.index) {
+        depth++;
+        if (nextOpen[0].endsWith('/>')) depth--;
+        closeRe.lastIndex = nextOpen.index + nextOpen[0].length;
+      } else {
+        depth--;
+        openRe.lastIndex = nextClose.index + nextClose[0].length;
+        if (depth === 0) {
+          return {
+            openStart,
+            openEnd,
+            closeStart: nextClose.index,
+            closeEnd: nextClose.index + nextClose[0].length,
+            selfClosing: false
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Inspect an SVG string and report its FBF.SVG frame inventory.
+   * @param {string} svg
+   * @returns {{ isFbf: boolean, frames: Array<{id: string, number: number, padWidth: number}>, padWidth: number, minFrame: number, maxFrame: number, hasProskenion: boolean }}
+   */
+  function _fbfDescribe(svg) {
+    if (typeof svg !== 'string' || svg.length === 0) {
+      return {
+        isFbf: false,
+        frames: [],
+        padWidth: 0,
+        minFrame: 0,
+        maxFrame: 0,
+        hasProskenion: false
+      };
+    }
+    const idRe = /\bid\s*=\s*["']FRAME(\d+)["']/g;
+    const seen = new Map();
+    let match;
+    while ((match = idRe.exec(svg)) !== null) {
+      const digits = match[1];
+      if (!digits) continue;
+      const id = `FRAME${digits}`;
+      if (seen.has(id)) continue;
+      seen.set(id, { id, number: parseInt(digits, 10), padWidth: digits.length });
+    }
+    const frames = Array.from(seen.values()).sort((a, b) => a.number - b.number);
+    const hasProskenion = /\bid\s*=\s*["']PROSKENION["']/.test(svg);
+    let padWidth = 0;
+    for (const f of frames) if (f.padWidth > padWidth) padWidth = f.padWidth;
+    return {
+      isFbf: hasProskenion && frames.length > 0,
+      frames,
+      padWidth,
+      minFrame: frames.length > 0 ? frames[0].number : 0,
+      maxFrame: frames.length > 0 ? frames[frames.length - 1].number : 0,
+      hasProskenion
+    };
+  }
+
+  /**
+   * Resolve a 1-based frame number to the actual id present in the SVG.
+   * @param {{ frames: Array<{id: string, number: number}> }} desc
+   * @param {number} frameNumber
+   * @returns {string|null}
+   */
+  function _fbfResolveFrameId(desc, frameNumber) {
+    for (const f of desc.frames) {
+      if (f.number === frameNumber) return f.id;
+    }
+    return null;
+  }
+
+  /**
+   * Replace (or add) xlink:href / href attributes on an element open tag.
+   * @param {string} openTag
+   * @param {string} newHref
+   * @returns {string}
+   */
+  function _fbfSetHref(openTag, newHref) {
+    let result = openTag;
+    let replacedAny = false;
+    // WHY: rewrite BOTH xlink:href and SVG2 plain href, because some
+    // FBF generators emit either or both. Leaving the wrong one alone
+    // would let the original frame leak through after pinning.
+    result = result.replace(/\bxlink:href\s*=\s*["'][^"']*["']/i, () => {
+      replacedAny = true;
+      return `xlink:href="${newHref}"`;
+    });
+    result = result.replace(/(?<!:)\bhref\s*=\s*["'][^"']*["']/i, () => {
+      replacedAny = true;
+      return `href="${newHref}"`;
+    });
+    if (!replacedAny) {
+      if (result.endsWith('/>')) {
+        result = `${result.slice(0, -2)} xlink:href="${newHref}"/>`;
+      } else {
+        result = `${result.slice(0, -1)} xlink:href="${newHref}">`;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Remove every <animate>…</animate> child (used after pinning).
+   * @param {string} fragment
+   * @returns {string}
+   */
+  function _fbfStripAnimate(fragment) {
+    return fragment
+      .replace(/<animate\b[^>]*\/>/gi, '')
+      .replace(/<animate\b[^>]*?>[\s\S]*?<\/animate\s*>/gi, '');
+  }
+
+  /**
+   * Pin PROSKENION to the chosen frame and remove its <animate> child.
+   * Returns the rewritten SVG string and metadata about the pin.
+   * @param {string} svg
+   * @param {number} frameNumber
+   * @returns {{ svg: string, frameId: string, frameNumber: number, totalFrames: number }}
+   */
+  function _fbfPinFrame(svg, frameNumber) {
+    const desc = _fbfDescribe(svg);
+    if (!desc.isFbf) {
+      if (!desc.hasProskenion) {
+        throw new Error(
+          'Input does not look like an FBF.SVG: no <use id="PROSKENION"> element found.'
+        );
+      }
+      throw new Error(
+        'Input does not look like an FBF.SVG: no <g id="FRAMEnnnnn"> definitions found.'
+      );
+    }
+    const targetId = _fbfResolveFrameId(desc, frameNumber);
+    if (!targetId) {
+      throw new Error(
+        `Frame ${frameNumber} not found in FBF.SVG. Available frames: ` +
+          `${desc.minFrame}..${desc.maxFrame} (${desc.frames.length} frames).`
+      );
+    }
+    const useElement = _fbfFindElementById(svg, 'use', 'PROSKENION');
+    if (!useElement) {
+      throw new Error('Could not locate the <use id="PROSKENION"> element for in-place pinning.');
+    }
+    const openTag = svg.slice(useElement.openStart, useElement.openEnd);
+    const newOpenTag = _fbfSetHref(openTag, `#${targetId}`);
+    let newUseBlock;
+    if (useElement.selfClosing) {
+      newUseBlock = newOpenTag;
+    } else {
+      const inner = svg.slice(useElement.openEnd, useElement.closeStart);
+      const closeTag = svg.slice(useElement.closeStart, useElement.closeEnd);
+      newUseBlock = newOpenTag + _fbfStripAnimate(inner) + closeTag;
+    }
+    const next = svg.slice(0, useElement.openStart) + newUseBlock + svg.slice(useElement.closeEnd);
+    return { svg: next, frameId: targetId, frameNumber, totalFrames: desc.frames.length };
+  }
+
+  /**
+   * **The unified FBF.SVG frame extractor for browser consumers.**
+   *
+   * Pass an SVG markup string (must be FBF.SVG, i.e. produced by
+   * [svg2fbf](https://github.com/Emasoft/svg2fbf)) and a 1-based frame
+   * number, and receive a pinned-frame SVG string ready to feed any
+   * normal SVG renderer (canvas, <img>, <object>, foreignObject, …).
+   *
+   * Validation layers (all with messages safe to surface to a user):
+   *   1. `svgContent` must be a non-empty string.
+   *   2. `frameNumber` must be a positive integer.
+   *   3. The markup must be FBF.SVG (PROSKENION + FRAMEnnnnn defs).
+   *   4. `frameNumber` must resolve to an existing FRAMEnnnnn id.
+   *
+   * Pure string manipulation — no DOM, no canvas, no fs — so it runs
+   * in any context that can run JavaScript.
+   *
+   * @param {string} svgContent - The full FBF.SVG markup.
+   * @param {number} frameNumber - 1-based frame number to extract.
+   * @returns {{ svg: string, frameId: string, frameNumber: number, totalFrames: number }}
+   */
+  function extractFbfFrame(svgContent, frameNumber) {
+    if (typeof svgContent !== 'string' || svgContent.length === 0) {
+      throw new Error('extractFbfFrame: svgContent must be a non-empty string.');
+    }
+    if (!Number.isInteger(frameNumber) || frameNumber < 1) {
+      throw new Error(
+        `extractFbfFrame: frame number must be a positive integer, got: ${frameNumber}`
+      );
+    }
+    const desc = _fbfDescribe(svgContent);
+    if (!desc.isFbf) {
+      if (!desc.hasProskenion) {
+        throw new Error(
+          'extractFbfFrame: input is not an FBF.SVG (missing <use id="PROSKENION">). ' +
+            'FBF.SVG is the format produced by https://github.com/Emasoft/svg2fbf.'
+        );
+      }
+      throw new Error(
+        'extractFbfFrame: input is not an FBF.SVG (no <g id="FRAMEnnnnn"> definitions found).'
+      );
+    }
+    if (!_fbfResolveFrameId(desc, frameNumber)) {
+      throw new Error(
+        `extractFbfFrame: frame ${frameNumber} not found. Available frames: ` +
+          `${desc.minFrame}..${desc.maxFrame} (${desc.frames.length} total).`
+      );
+    }
+    return _fbfPinFrame(svgContent, frameNumber);
+  }
+
   // Export public API
   return {
     waitForDocumentFonts: waitForDocumentFonts,
@@ -2488,6 +2761,15 @@
     getSvgElementVisibleAndFullBBoxes: getSvgElementVisibleAndFullBBoxes,
     getSvgRootViewBoxExpansionForFullDrawing: getSvgRootViewBoxExpansionForFullDrawing,
     showTrueBBoxBorder: showTrueBBoxBorder,
-    setViewBoxOnObjects: setViewBoxOnObjects
+    setViewBoxOnObjects: setViewBoxOnObjects,
+    // FBF.SVG support — pin one frame of a Frame-By-Frame SVG before
+    // rendering. Pure string manipulation; works in browser, Puppeteer,
+    // and any plain JS runtime.
+    extractFbfFrame: extractFbfFrame,
+    // Lower-level helpers exposed for tests and advanced consumers.
+    describeFbf: _fbfDescribe,
+    isFbfSvg: /** @param {string} svg */ function (svg) {
+      return _fbfDescribe(svg).isFbf;
+    }
   };
 });

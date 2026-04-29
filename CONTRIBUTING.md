@@ -113,6 +113,47 @@ Enhancement suggestions are welcome! Please:
 
 See [DEVELOPING.md](DEVELOPING.md) for detailed development instructions.
 
+## Build pipeline (CDN bundle)
+
+The minified browser bundle published to npm — and from there to unpkg /
+jsDelivr — is `SvgVisualBBox.min.js`. The default `npm run build` script
+produces it via **Terser** (`scripts/build-min.cjs`), not Bun. **Do not switch
+the publish pipeline to `bun run build.js`** even though the file exists.
+Background:
+
+- `SvgVisualBBox.js` is a hand-authored UMD module that side-effects
+  `root.SvgVisualBBox = factory()` so a `<script>` tag exposes it as a global.
+  Browser CDN consumers depend on that side-effect.
+- `Bun.build()` always wraps the entry in a synthetic CJS scope before running
+  it. The UMD's runtime detection sees that scope's `module.exports` and takes
+  the CJS branch (`e.exports = factory()`) — the global-assignment branch never
+  runs. The minified file looks fine but `window.SvgVisualBBox` ends up
+  `undefined` in browsers.
+- Terser minifies the source byte-for-byte without inserting any wrapper, which
+  preserves the UMD's three-way detection. Verified against Bun 1.3.13 with
+  every `format` / `target` combination.
+- CI guards against accidental regressions: `.github/workflows/ci.yml` fails the
+  build if `SvgVisualBBox.min.js` ever contains `export default`.
+- Re-evaluate this choice when Bun grows a real `globalName` option (esbuild has
+  one) or stops wrapping IIFE entries in synthetic CJS scopes. Until then,
+  Terser is the right tool.
+
+The Node CJS shim `SvgVisualBBox.cjs` is hand-written, not built — it re-exports
+the FBF helpers from `lib/fbf.cjs` and stubs the DOM-bound functions with
+actionable error messages. Edit it directly when you need to change either of
+those concerns.
+
+The same FBF helper logic lives in three places:
+
+- `lib/fbf.cjs` — single source of truth for Node CommonJS.
+- `SvgVisualBBox.js` — inlined into the UMD because the browser bundle cannot
+  `require()`.
+- `SvgVisualBBox.cjs` — Node shim; re-exports from `lib/fbf.cjs`.
+
+Keep these in lockstep when touching FBF behaviour. The regression test
+`tests/integration/fbf-cross-runtime.test.js` (or your preferred location)
+should pin all three to the same fixture.
+
 ## Testing Guidelines
 
 ### Unit Tests

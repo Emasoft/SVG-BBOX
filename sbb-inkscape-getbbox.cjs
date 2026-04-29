@@ -10,6 +10,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -21,6 +22,15 @@ const { getVersion } = require('./version.cjs');
 // NOTE: printSuccess removed - writeJSONOutput handles success feedback internally
 const { runCLI, printError, printBanner, writeJSONOutput } = require('./lib/cli-utils.cjs');
 const { validateFilePath, VALID_ID_PATTERN } = require('./lib/security-utils.cjs');
+
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// WHY: --fbf-frame N pins PROSKENION to one frame BEFORE Inkscape sees the
+// file, so the bbox describes that single frame instead of the full
+// PROSKENION area the SMIL animation would span across all frames. Inkscape
+// is a binary that takes a file path, so we materialize the pinned SVG into
+// a unique temp file and pass that path; the temp file is always deleted in
+// `finally` (even on Inkscape failure).
+const { extractFbfFrame } = require('./lib/fbf.cjs');
 
 const execFilePromise = promisify(execFile);
 
@@ -75,6 +85,7 @@ let discoveredInkscapePath = null;
  * @typedef {Object} InkscapeOptions
  * @property {string} inputFile - Input SVG file path
  * @property {string[]} elementIds - Element IDs to get bbox for
+ * @property {number | null} [fbfFrame] - 1-based FBF.SVG frame to pin before query
  */
 
 /**
@@ -83,6 +94,7 @@ let discoveredInkscapePath = null;
  * @property {string} input - Input SVG file path
  * @property {string[]} elementIds - Element IDs to query
  * @property {string | null} inkscapePath - Custom Inkscape executable path
+ * @property {number | null} fbfFrame - 1-based FBF.SVG frame to pin before query
  */
 
 /**
@@ -91,7 +103,7 @@ let discoveredInkscapePath = null;
  * @returns {Promise<InkscapeResult>} Result with filename, path, and results
  */
 async function getBBoxWithInkscape(options) {
-  const { inputFile, elementIds } = options;
+  const { inputFile, elementIds, fbfFrame = null } = options;
 
   // Validate input file
   const safePath = validateFilePath(inputFile, {
@@ -105,112 +117,145 @@ async function getBBoxWithInkscape(options) {
   // WHY: Use discovered path instead of hardcoded 'inkscape' for cross-platform compatibility
   const inkscapeCmd = discoveredInkscapePath || 'inkscape';
 
-  // If no element IDs specified, get whole document bbox
-  if (elementIds.length === 0) {
-    try {
-      // Query all objects in the file
-      const { stdout } = await execFilePromise(inkscapeCmd, ['--query-all', safePath], {
-        timeout: INKSCAPE_QUERY_TIMEOUT
-      });
+  // FBF.SVG: pin a specific frame BEFORE invoking Inkscape. Inkscape takes
+  // a file path (not a string), so we materialize the pinned SVG into a
+  // unique temp file (pid+timestamp+frameId prevents collision when the
+  // tool is invoked in parallel) and pass that temp path to Inkscape. The
+  // temp file is always removed in `finally`, even if Inkscape fails.
+  /** @type {string} */
+  let pathForInkscape = safePath;
+  /** @type {string | null} */
+  let tempFbfFile = null;
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const srcContent = fs.readFileSync(safePath, 'utf8');
+    const pinned = extractFbfFrame(srcContent, fbfFrame);
+    tempFbfFile = path.join(
+      os.tmpdir(),
+      `sbb-fbf-${process.pid}-${Date.now()}-${pinned.frameId}.svg`
+    );
+    fs.writeFileSync(tempFbfFile, pinned.svg, 'utf8');
+    pathForInkscape = tempFbfFile;
+  }
 
-      const lines = stdout.trim().split('\n');
-      if (lines.length === 0 || !lines[0]) {
-        results['WHOLE CONTENT'] = { error: 'No objects found' };
-      } else {
-        // Parse first object as representative
-        const firstLine = lines[0];
-        const parts = firstLine.split(',');
-        if (parts.length >= 5) {
-          // Extract coordinates - parts[0] is the ID, parts[1-4] are x,y,width,height
-          // WHY: parseFloat returns NaN for invalid input, not null/undefined
-          // so we must explicitly check for NaN and use 0 as fallback
-          /**
-           * @param {string | undefined} str
-           * @returns {number}
-           */
-          const parseCoord = (str) => {
-            const val = parseFloat(str || '');
-            return Number.isNaN(val) ? 0 : val;
-          };
-          results['WHOLE CONTENT'] = {
-            bbox: {
-              x: parseCoord(parts[1]),
-              y: parseCoord(parts[2]),
-              width: parseCoord(parts[3]),
-              height: parseCoord(parts[4])
-            },
-            objectCount: lines.length
-          };
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      results['WHOLE CONTENT'] = { error: message };
-    }
-  } else {
-    // Get bbox for each element ID
-    for (const id of elementIds) {
-      // WHY: Validate ID format before passing to Inkscape to prevent command injection
-      // IDs are passed via --query-id flag and could contain shell metacharacters
-      // VALID_ID_PATTERN ensures IDs match XML spec: start with letter/underscore, followed by word chars, periods, hyphens
-      if (!VALID_ID_PATTERN.test(id)) {
-        results[id] = {
-          error: `Invalid ID format: "${id}". IDs must start with a letter or underscore, followed by letters, digits, underscores, periods, or hyphens.`
-        };
-        continue;
-      }
-
+  try {
+    // If no element IDs specified, get whole document bbox
+    if (elementIds.length === 0) {
       try {
-        const { stdout } = await execFilePromise(
-          inkscapeCmd,
-          [
-            `--query-id=${id}`,
-            '--query-x',
-            '--query-y',
-            '--query-width',
-            '--query-height',
-            safePath
-          ],
-          {
-            timeout: INKSCAPE_QUERY_TIMEOUT
-          }
-        );
+        // Query all objects in the file
+        const { stdout } = await execFilePromise(inkscapeCmd, ['--query-all', pathForInkscape], {
+          timeout: INKSCAPE_QUERY_TIMEOUT
+        });
 
         const lines = stdout.trim().split('\n');
-        if (lines.length >= 4) {
-          // WHY: parseFloat returns NaN for invalid input, not null/undefined
-          // so we must explicitly check for NaN and use 0 as fallback
-          /**
-           * @param {string | undefined} str
-           * @returns {number}
-           */
-          const parseCoord = (str) => {
-            const val = parseFloat(str || '');
-            return Number.isNaN(val) ? 0 : val;
-          };
-          const x = parseCoord(lines[0]);
-          const y = parseCoord(lines[1]);
-          const width = parseCoord(lines[2]);
-          const height = parseCoord(lines[3]);
-          results[id] = {
-            bbox: { x, y, width, height },
-            element: { id }
-          };
+        if (lines.length === 0 || !lines[0]) {
+          results['WHOLE CONTENT'] = { error: 'No objects found' };
         } else {
-          results[id] = { error: 'Element not found or query failed' };
+          // Parse first object as representative
+          const firstLine = lines[0];
+          const parts = firstLine.split(',');
+          if (parts.length >= 5) {
+            // Extract coordinates - parts[0] is the ID, parts[1-4] are x,y,width,height
+            // WHY: parseFloat returns NaN for invalid input, not null/undefined
+            // so we must explicitly check for NaN and use 0 as fallback
+            /**
+             * @param {string | undefined} str
+             * @returns {number}
+             */
+            const parseCoord = (str) => {
+              const val = parseFloat(str || '');
+              return Number.isNaN(val) ? 0 : val;
+            };
+            results['WHOLE CONTENT'] = {
+              bbox: {
+                x: parseCoord(parts[1]),
+                y: parseCoord(parts[2]),
+                width: parseCoord(parts[3]),
+                height: parseCoord(parts[4])
+              },
+              objectCount: lines.length
+            };
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        results[id] = { error: message };
+        results['WHOLE CONTENT'] = { error: message };
+      }
+    } else {
+      // Get bbox for each element ID
+      for (const id of elementIds) {
+        // WHY: Validate ID format before passing to Inkscape to prevent command injection
+        // IDs are passed via --query-id flag and could contain shell metacharacters
+        // VALID_ID_PATTERN ensures IDs match XML spec: start with letter/underscore, followed by word chars, periods, hyphens
+        if (!VALID_ID_PATTERN.test(id)) {
+          results[id] = {
+            error: `Invalid ID format: "${id}". IDs must start with a letter or underscore, followed by letters, digits, underscores, periods, or hyphens.`
+          };
+          continue;
+        }
+
+        try {
+          const { stdout } = await execFilePromise(
+            inkscapeCmd,
+            [
+              `--query-id=${id}`,
+              '--query-x',
+              '--query-y',
+              '--query-width',
+              '--query-height',
+              pathForInkscape
+            ],
+            {
+              timeout: INKSCAPE_QUERY_TIMEOUT
+            }
+          );
+
+          const lines = stdout.trim().split('\n');
+          if (lines.length >= 4) {
+            // WHY: parseFloat returns NaN for invalid input, not null/undefined
+            // so we must explicitly check for NaN and use 0 as fallback
+            /**
+             * @param {string | undefined} str
+             * @returns {number}
+             */
+            const parseCoord = (str) => {
+              const val = parseFloat(str || '');
+              return Number.isNaN(val) ? 0 : val;
+            };
+            const x = parseCoord(lines[0]);
+            const y = parseCoord(lines[1]);
+            const width = parseCoord(lines[2]);
+            const height = parseCoord(lines[3]);
+            results[id] = {
+              bbox: { x, y, width, height },
+              element: { id }
+            };
+          } else {
+            results[id] = { error: 'Element not found or query failed' };
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          results[id] = { error: message };
+        }
+      }
+    }
+
+    return {
+      filename: path.basename(safePath),
+      path: safePath,
+      results
+    };
+  } finally {
+    // WHY: Always clean up the temp FBF file, even if Inkscape failed.
+    // Best-effort: swallow errors to avoid masking the real error from the
+    // try block (and because temp-dir cleanup is non-critical anyway).
+    if (tempFbfFile) {
+      try {
+        fs.unlinkSync(tempFbfFile);
+      } catch {
+        /* swallow — best-effort cleanup of FBF temp file */
       }
     }
   }
-
-  return {
-    filename: path.basename(safePath),
-    path: safePath,
-    results
-  };
 }
 
 /**
@@ -307,6 +352,11 @@ OPTIONAL ARGUMENTS:
 OPTIONS:
   --json <path>           Save results as JSON to specified file (use - for stdout)
   --inkscape-path <path>  Specify custom Inkscape executable path
+  --fbf-frame N           Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                          SVG from svg2fbf) before computing the bbox.
+                          PROSKENION's <use> is rewritten to #FRAMEnnnnn and
+                          its <animate> is dropped, so the bbox describes
+                          that specific frame. Single-file mode only.
   --help, -h              Show this help message
   --version, -v           Show version number
 
@@ -422,7 +472,8 @@ function parseArgs(argv) {
     json: null,
     input: '',
     elementIds: [],
-    inkscapePath: null
+    inkscapePath: null,
+    fbfFrame: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -453,6 +504,22 @@ function parseArgs(argv) {
           options.inkscapePath = next ?? null;
           useNext();
           break;
+        case 'fbf-frame': {
+          // WHY: --fbf-frame N pins one specific frame of an FBF.SVG (the
+          // format produced by https://github.com/Emasoft/svg2fbf) before
+          // running Inkscape, so the resulting bbox describes that single
+          // frame instead of the full PROSKENION area the SMIL animation
+          // would visit. Must be a positive integer (1-based).
+          const raw = next;
+          const n = Number(raw);
+          if (!Number.isInteger(n) || n < 1) {
+            printError('--fbf-frame must be a positive integer (1-based)');
+            process.exit(1);
+          }
+          options.fbfFrame = n;
+          useNext();
+          break;
+        }
         default:
           printError(`Unknown option: ${key}`);
           process.exit(1);
@@ -518,7 +585,8 @@ async function main() {
   // Get bbox using Inkscape
   const result = await getBBoxWithInkscape({
     inputFile: options.input,
-    elementIds: options.elementIds
+    elementIds: options.elementIds,
+    fbfFrame: options.fbfFrame
   });
 
   // Output results

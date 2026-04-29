@@ -9,6 +9,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -27,6 +28,14 @@ const {
 
 const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-utils.cjs');
 
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// WHY: --fbf-frame N pins PROSKENION to one frame BEFORE Inkscape sees the
+// file, so the extracted object reflects that single frame instead of the
+// PROSKENION's full animation footprint. Inkscape takes a file path, so we
+// materialize the pinned SVG into a unique temp file (cleaned up in
+// `finally`, even on Inkscape failure).
+const { extractFbfFrame } = require('./lib/fbf.cjs');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -39,6 +48,7 @@ const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-util
  * @property {string|null} output - Output SVG file path
  * @property {number|null} margin - Margin around extracted object in pixels
  * @property {string|null} batch - Batch file path for batch processing
+ * @property {number|null} fbfFrame - 1-based FBF.SVG frame to pin before extraction
  */
 
 /**
@@ -84,6 +94,9 @@ OPTIONS:
   --output <file>           Output SVG file (default: <input>_<id>.svg)
   --margin <pixels>         Margin around extracted object in pixels
   --batch <file>            Process multiple extractions from batch file
+  --fbf-frame N             Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                            SVG from svg2fbf) before extracting. Single-file
+                            mode only (cannot be combined with --batch).
   --help                    Show this help
   --version                 Show version
 
@@ -157,7 +170,8 @@ function parseArgs(argv) {
     objectId: null,
     output: null,
     margin: null,
-    batch: null
+    batch: null,
+    fbfFrame: null
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -185,6 +199,17 @@ function parseArgs(argv) {
         process.exit(2);
       }
       args.margin = parsedMargin;
+    } else if (arg === '--fbf-frame' && i + 1 < argv.length) {
+      // WHY: --fbf-frame N pins one specific frame of an FBF.SVG (the
+      // format produced by https://github.com/Emasoft/svg2fbf) before
+      // extraction. Must be a positive integer (1-based).
+      const raw = argv[++i] ?? '';
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1) {
+        console.error('Error: --fbf-frame must be a positive integer (1-based)');
+        process.exit(2);
+      }
+      args.fbfFrame = n;
     } else if (!arg.startsWith('-')) {
       if (!args.input) {
         args.input = arg;
@@ -201,6 +226,14 @@ function parseArgs(argv) {
   // Validate batch vs single mode
   if (args.batch && args.input) {
     console.error('Error: Cannot use both --batch and input file argument');
+    process.exit(2);
+  }
+
+  // WHY: --fbf-frame N pins one specific frame, which only makes sense for
+  // a single FBF.SVG input. In batch mode every file would be forced to be
+  // FBF, which is almost never the intent — fail loud instead.
+  if (args.batch && args.fbfFrame !== null) {
+    console.error('Error: Cannot use --fbf-frame with --batch (single-file mode only)');
     process.exit(2);
   }
 
@@ -239,10 +272,11 @@ function parseArgs(argv) {
  * @param {string} objectId - ID of the object to extract
  * @param {string} outputPath - Path for the output SVG file
  * @param {number|null} margin - Margin around extracted object in pixels (optional)
+ * @param {number|null} [fbfFrame=null] - 1-based FBF.SVG frame to pin before extraction
  * @returns {Promise<ExtractionResult>} Result of the extraction operation
  * @throws {SVGBBoxError} If Inkscape is not installed or extraction fails
  */
-async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin) {
+async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin, fbfFrame = null) {
   // SECURITY: Validate input file path
   const safeInputPath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
@@ -261,6 +295,26 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     throw new SVGBBoxError(
       `Invalid ID format: "${objectId}". IDs must start with a letter or underscore, followed by letters, digits, underscores, periods, or hyphens.`
     );
+  }
+
+  // FBF.SVG: pin a specific frame BEFORE invoking Inkscape. Inkscape takes
+  // a file path (not a string), so we materialize the pinned SVG into a
+  // unique temp file (pid+timestamp+frameId prevents collisions on parallel
+  // runs) and pass that temp path to Inkscape. The temp file is always
+  // removed in `finally`, even if Inkscape fails.
+  /** @type {string} */
+  let pathForInkscape = safeInputPath;
+  /** @type {string | null} */
+  let tempFbfFile = null;
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const srcContent = fs.readFileSync(safeInputPath, 'utf8');
+    const pinned = extractFbfFrame(srcContent, fbfFrame);
+    tempFbfFile = path.join(
+      os.tmpdir(),
+      `sbb-fbf-${process.pid}-${Date.now()}-${pinned.frameId}.svg`
+    );
+    fs.writeFileSync(tempFbfFile, pinned.svg, 'utf8');
+    pathForInkscape = tempFbfFile;
   }
 
   // Build Inkscape command arguments
@@ -301,8 +355,8 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     // untouched) and "scale-document" (each length will be re-scaled individually).
     '--convert-dpi-method=none',
 
-    // Input SVG file
-    safeInputPath
+    // Input SVG file (or pinned FBF temp file when --fbf-frame is set)
+    pathForInkscape
   ];
 
   // Add margin if specified (optional parameter)
@@ -353,6 +407,17 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     } else {
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new SVGBBoxError(`Inkscape extraction failed: ${errorMessage}`);
+    }
+  } finally {
+    // WHY: Always clean up the temp FBF file, even if Inkscape failed.
+    // Best-effort: swallow errors so we never mask the real error from the
+    // try/catch above (and because temp-dir cleanup is non-critical).
+    if (tempFbfFile) {
+      try {
+        fs.unlinkSync(tempFbfFile);
+      } catch {
+        /* swallow — best-effort cleanup of FBF temp file */
+      }
     }
   }
 }
@@ -549,7 +614,8 @@ async function main() {
     args.input,
     args.objectId,
     args.output,
-    args.margin
+    args.margin,
+    args.fbfFrame
   );
 
   printSuccess('✓ Object extracted successfully');

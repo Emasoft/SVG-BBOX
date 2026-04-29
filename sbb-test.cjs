@@ -40,6 +40,13 @@ const {
 
 const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-utils.cjs');
 
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// Used by --fbf-frame N to pin PROSKENION to a specific frame BEFORE the
+// SVG is injected into the test page, so the library's bbox/union/expansion
+// functions are exercised against that single frame instead of the union
+// of all PROSKENION targets the SMIL timeline would visit.
+const { extractFbfFrame } = require('./lib/fbf.cjs');
+
 // Centralized timeout configuration
 const { BROWSER_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 // WHY launchOrConnect/safeShutdown: see lib/puppeteer-utils.cjs.
@@ -184,10 +191,16 @@ Description:
   results to JSON and error log files in the current directory.
 
 Options:
-  -h, --help      Show this help message
-  -v, --version   Show version information
-  --quiet         Minimal output - only show test results (pass/fail)
-  --verbose       Show detailed test progress information
+  -h, --help          Show this help message
+  -v, --version       Show version information
+  --quiet             Minimal output - only show test results (pass/fail)
+  --verbose           Show detailed test progress information
+  --fbf-frame N       Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                      SVG produced by svg2fbf) before running the tests.
+                      The PROSKENION <use> is rewritten to #FRAMEnnnnn and
+                      its <animate> is dropped, so all bbox functions run
+                      against that specific frame instead of the union of
+                      all PROSKENION targets the SMIL timeline would visit.
 
 Output Files:
   <basename>-bbox-results.json   Test results (JSON)
@@ -200,8 +213,9 @@ Functions Tested:
   - getSvgRootViewBoxExpansionForFullDrawing
 
 Examples:
-  sbb-test logo.svg           Test logo.svg
-  sbb-test assets/icon.svg    Test icon.svg
+  sbb-test logo.svg                 Test logo.svg
+  sbb-test assets/icon.svg          Test icon.svg
+  sbb-test scene.fbf.svg --fbf-frame 7   Pin frame 7 of an FBF.SVG
 `);
   process.exit(0);
 }
@@ -260,8 +274,47 @@ async function runTest() {
     printInfo(`sbb-test v${getVersion()} | svg-bbox toolkit\n`);
   }
 
-  // WHY: Filter out flag arguments to find the actual file path
-  const inputPath = args.find((arg) => !arg.startsWith('--') && !arg.startsWith('-'));
+  // WHY: Walk args once so --fbf-frame can consume its numeric value and
+  // we can collect any positional file paths in the same pass. The earlier
+  // args.find() approach couldn't read the value that followed --fbf-frame.
+  /** @type {string[]} */
+  const positional = [];
+  /** @type {number|null} */
+  let fbfFrame = null;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg) continue;
+    if (arg === '--fbf-frame') {
+      // WHY: Pin a specific frame of an FBF.SVG (svg2fbf format) before
+      // injecting the SVG so all four bbox functions exercise that single
+      // frame rather than the union of frames PROSKENION animates over.
+      const raw = args[++i];
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1) {
+        throw new ValidationError(
+          `--fbf-frame must be a positive integer (1-based frame number), got: ${raw}`
+        );
+      }
+      fbfFrame = n;
+    } else if (!arg.startsWith('-')) {
+      positional.push(arg);
+    }
+    // WHY: Unknown flags (--quiet, --verbose, --help, --version) are
+    // already handled above via args.includes(); silently skip them here
+    // so we don't have to duplicate the option list.
+  }
+
+  // WHY: --fbf-frame N pins one specific frame, which only makes sense for
+  // a single FBF.SVG input. sbb-test only ever processes one positional
+  // file today, but enforce the invariant explicitly so future batch-mode
+  // additions don't silently force every file to be FBF.
+  if (fbfFrame !== null && positional.length > 1) {
+    throw new ValidationError(
+      'Cannot use --fbf-frame with multiple input files (single-file mode only).'
+    );
+  }
+
+  const inputPath = positional[0];
   if (!inputPath) {
     throw new ValidationError(
       'Usage: node sbb-test.cjs path/to/file.svg\nUse --help for more information.'
@@ -280,7 +333,27 @@ async function runTest() {
   });
 
   // SECURITY: Read SVG with size limit and validation
-  const svgContent = readSVGFileSafe(safePath);
+  // WHY `let` (not const): --fbf-frame may rewrite svgContent below to pin
+  // a single FBF.SVG frame before sanitization runs.
+  // WHY size limits are intentionally Infinity in lib/security-utils.cjs:
+  // FBF.SVG files can pack millions of frames (multi-hour animations) into
+  // a single SVG; capping the read would refuse legitimate inputs.
+  let svgContent = readSVGFileSafe(safePath);
+
+  // FBF.SVG: pin a specific frame BEFORE sanitization so the helper sees
+  // the original PROSKENION/animate structure as authored. The pinned SVG
+  // is still a normal SVG, so sanitization and the rest of the pipeline
+  // work unchanged.
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const pinned = extractFbfFrame(svgContent, fbfFrame);
+    svgContent = pinned.svg;
+    if (verboseMode && !quietMode) {
+      log(
+        `FBF: pinned frame ${pinned.frameNumber} (#${pinned.frameId}) of ${pinned.totalFrames}`,
+        'verbose'
+      );
+    }
+  }
 
   // SECURITY: Sanitize SVG content (remove scripts, event handlers)
   const sanitizedSvg = sanitizeSVGContent(svgContent);

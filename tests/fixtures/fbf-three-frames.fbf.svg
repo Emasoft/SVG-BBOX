@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Tiny Frame-By-Frame SVG fixture for sbb-svg2png --fbf-frame integration tests.
+  Tiny Frame-By-Frame SVG fixture for sbb-svg2png fbf-frame integration tests.
 
   Mirrors the structural contract documented at
   https://github.com/Emasoft/svg2fbf and in svg-bbox issue #3:

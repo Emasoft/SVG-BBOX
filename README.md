@@ -25,9 +25,11 @@
 </p>
 
 > **🎬 New in v1.2:** native support for **FBF.SVG** frame-by-frame animations
-> (produced by [`svg2fbf`](https://github.com/Emasoft/svg2fbf)) — pin any frame
-> for rendering or comparison via the `--fbf-frame` flag on `sbb-svg2png` and
-> `sbb-compare`.
+> (produced by [`svg2fbf`](https://github.com/Emasoft/svg2fbf)) — pass
+> `--fbf-frame N` to **any** CLI tool (`sbb-getbbox`, `sbb-extract`,
+> `sbb-svg2png`, `sbb-compare`, the chrome / inkscape variants, …) to pin a
+> specific frame before the operation runs. Library consumers get the same
+> behaviour from one helper: `require('svg-bbox/fbf').extractFbfFrame(svg, n)`.
 > [Jump to the Companion Projects section ↓](#-companion-projects)
 
 ---
@@ -40,7 +42,7 @@
 - [Platform Compatibility](#platform-compatibility)
 - [Browser Configuration](#browser-configuration)
 - [What This Package Provides](#what-this-package-provides)
-  - [1. Core Library: SvgVisualBBox.js](#1-core-library-svgvisualbboxjs)
+  - [1. Core Library](#1-core-library)
   - [2. CLI Tools](#2-cli-tools)
 - [Quickstart](#-quickstart)
   - [Browser (CDN)](#browser-cdn)
@@ -498,12 +500,21 @@ Output example:
 
 ## What This Package Provides
 
-### 1. Core Library: `SvgVisualBBox.js`
+### 1. Core Library
 
-JavaScript library for accurate visual bounding box computation. Works in
-browsers and Node.js (via Puppeteer).
+JavaScript library for accurate visual bounding box computation **and** for
+extracting individual frames from FBF.SVG animations. Three flavours ship in the
+npm package; the right one is picked automatically based on how you load it (see
+[Choose your runtime](#choose-your-runtime) for the full table):
 
-**Available Functions:**
+| File                   | Used when…                                                       | Contents                                                                              |
+| ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `SvgVisualBBox.min.js` | `<script src="…">` in a browser, served via unpkg / jsDelivr CDN | Full UMD library, minified by Terser                                                  |
+| `SvgVisualBBox.js`     | Browser bundlers, `import 'svg-bbox'` in Bun                     | Same UMD, unminified for debugging                                                    |
+| `SvgVisualBBox.cjs`    | `require('svg-bbox')` / `import 'svg-bbox'` in Node              | FBF helpers + DOM-bound stubs that throw helpful errors when called outside a browser |
+| `lib/fbf.cjs`          | `require('svg-bbox/fbf')` (slimmer FBF-only entry)               | FBF.SVG helpers only                                                                  |
+
+**Available Functions (full library — browser, bundler, Bun):**
 
 - `getSvgElementVisualBBoxTwoPassAggressive(target, options)` - Compute accurate
   visual bbox for any element
@@ -513,12 +524,24 @@ browsers and Node.js (via Puppeteer).
   (viewBox-respecting) and unclipped bounds
 - `showTrueBBoxBorder(target, options)` - Visual debugging overlay
 - `waitForDocumentFonts(document, timeoutMs)` - Wait for fonts before measuring
+- `setViewBoxOnObjects(svgRootOrId, ids, options)` - Reframe a viewBox around
+  named objects
+- `getSvgRootViewBoxExpansionForFullDrawing(svgRootOrId, options)` - Compute
+  viewBox padding to cover the full drawing
+- **FBF.SVG support** (also available in Node — pure string manipulation):
+  - `extractFbfFrame(svgString, frameNumber)` - Pin one frame and return a
+    renderable SVG
+  - `describeFbf(svgString)` - Inspect the frame inventory
+  - `isFbfSvg(svgString)` - Quick FBF detection
 
 **Capabilities:**
 
 - Font-aware: Arabic, CJK, ligatures, RTL, textPath, custom fonts
 - Filter-safe: Blur, shadows, masks, clipping
 - Stroke-aware: Width, caps, joins, markers, patterns
+- FBF.SVG-aware: pin any frame of a
+  [`svg2fbf`](https://github.com/Emasoft/svg2fbf) animation before
+  computing/rendering
 
 ### 2. CLI Tools
 
@@ -668,22 +691,138 @@ Each object / group becomes its own SVG, with:
 
 ### 7. Library: `SvgVisualBBox.js`
 
+#### Choose your runtime
+
+**Single-page cheatsheet** — `svg-bbox` ships four physical files, three entry
+points (the package's `exports` map routes each runtime to the right one
+automatically), and 12 CLI bins. The table below is the canonical map: it tells
+you, for every realistic scenario, **which file is loaded**, **what you actually
+get**, and **how to use it** with a copy-pasteable one-liner.
+
+| #   | Scenario / Runtime                                                     | Code you write                                                                                                                                                                                                                         | File served / loaded                                                                  | What you get                                                          | Status                                                       | Notes                                                                                                                                                                         |
+| --- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Browser via CDN** (production, minified)                             | `<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>`<br>**or** `<script src="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js"></script>`<br>then `SvgVisualBBox.extractFbfFrame(svg, 7)` | `SvgVisualBBox.min.js`                                                                | `window.SvgVisualBBox.*` — full library (all bbox fns + FBF helpers)  | ✅ verified in Puppeteer                                     | Terser-minified UMD, ~29 KB. Both unpkg and jsDelivr serve this file from npm; pick whichever CDN you prefer (or pin a specific version with `@1.2.1` in place of `@latest`). |
+| 2   | **Browser via CDN** (debug, unminified)                                | `<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>`<br>**or** `<script src="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.js"></script>`                                                         | `SvgVisualBBox.js`                                                                    | Same as #1 but unminified, ~111 KB                                    | ✅ verified                                                  | Useful when stepping through in DevTools                                                                                                                                      |
+| 3   | **Browser via npm + bundler** (Webpack, Vite, esbuild, Rollup, Parcel) | `import { extractFbfFrame, getSvgElementVisualBBoxTwoPassAggressive } from 'svg-bbox';`                                                                                                                                                | `SvgVisualBBox.js` (via `exports."."."browser"`)                                      | Full library                                                          | ✅ verified                                                  | Bundler resolves the `"browser"` export condition                                                                                                                             |
+| 4   | **Bun** (CJS or ESM)                                                   | `import { extractFbfFrame } from 'svg-bbox';`<br>or `const { extractFbfFrame } = require('svg-bbox');`                                                                                                                                 | `SvgVisualBBox.js` (via `exports."."."bun"`)                                          | Full library — including DOM-bound bbox functions                     | ✅ verified end-to-end (real `node_modules` install)         | Bun's UMD interop loads the global side-effect cleanly                                                                                                                        |
+| 5   | **Node.js (CJS)** — FBF only                                           | `const { extractFbfFrame } = require('svg-bbox');`<br>`extractFbfFrame(svgString, 7)`                                                                                                                                                  | `SvgVisualBBox.cjs` (via `exports."."."require"`)                                     | FBF helpers (work) + DOM-bound fns stubbed                            | ✅ verified end-to-end (real `node_modules` install)         | Calling a DOM stub throws an actionable error pointing at scenario #7                                                                                                         |
+| 6   | **Node.js (ESM)** — FBF only                                           | `import { extractFbfFrame } from 'svg-bbox';`<br>**or**<br>`import x from 'svg-bbox';`<br>then `x.extractFbfFrame(svgString, 7)`                                                                                                       | `SvgVisualBBox.cjs` (via `exports."."."import"`)                                      | Same as #5 — both **named** and **default** imports work              | ✅ verified end-to-end (real `node_modules` install)         | Resolved through Node's CJS-from-ESM interop                                                                                                                                  |
+| 7   | **Node.js (CJS or ESM)** — bbox computation                            | Spin up Puppeteer, inject the UMD into the page, call from `page.evaluate()`. See [Pattern C](#pattern-c--bbox-computation-in-node-puppeteer-injection-pattern) below.                                                                 | `SvgVisualBBox.js` injected via `addScriptTag({ path: require.resolve('svg-bbox') })` | Full library running in headless Chrome                               | ✅ verified (every shipped CLI tool uses this exact pattern) | Required because `getBBox()`/`<canvas>`/font-loading only exist in a real browser                                                                                             |
+| 8   | **Slimmer FBF-only entry** (any runtime, CJS or ESM)                   | `import { extractFbfFrame } from 'svg-bbox/fbf';`<br>or `require('svg-bbox/fbf')`                                                                                                                                                      | `lib/fbf.cjs`                                                                         | FBF helpers only                                                      | ✅ verified                                                  | Smallest dependency surface; safe in pure-Node services that never need bbox                                                                                                  |
+| 9   | **CLI tool — bbox**                                                    | `npx sbb-getbbox drawing.svg --json`                                                                                                                                                                                                   | `sbb-getbbox.cjs` (CJS bin)                                                           | Bbox JSON for one or many SVGs                                        | ✅ verified                                                  | Internally uses scenario #7                                                                                                                                                   |
+| 10  | **CLI tool — render**                                                  | `npx sbb-svg2png anim.fbf.svg out.png --fbf-frame 7`                                                                                                                                                                                   | `sbb-svg2png.cjs` (CJS bin)                                                           | PNG/JPEG file at correct visual bounds                                | ✅ verified                                                  | Supports list/range syntax for FBF batches                                                                                                                                    |
+| 11  | **CLI tool — extract / repair / compare / etc.**                       | `npx sbb-extract sprites.svg --list`, `npx sbb-fix-viewbox broken.svg`, `npx sbb-compare a.svg b.png`, …                                                                                                                               | `sbb-*.cjs` (12 CLI bins total)                                                       | See the [Tools CLI Commands Usage](#tools-cli-commands-usage) section | ✅ verified                                                  | Every tool that takes one SVG accepts `--fbf-frame N`                                                                                                                         |
+
+**Quick decision tree:**
+
+- 🌐 Running **in a browser** (or behind a bundler that targets a browser)? →
+  Scenarios 1, 2, 3 — use the full library directly.
+- ⚡ Running **in Bun**? → Scenario 4 — full library works via plain
+  `require`/`import`.
+- 🟢 Running **in plain Node** and you need to **pin an FBF.SVG frame**? →
+  Scenarios 5, 6, or 8 — pure-string helper, no Puppeteer needed.
+- 🟢 Running **in plain Node** and you need **bbox computation**? → Scenario 7 —
+  Puppeteer injection (or just shell out to one of the CLI bins in scenarios
+  9–11).
+- 🛠️ Just want a command-line tool? → Scenarios 9–11 — `npx sbb-…` and you're
+  done.
+
+**CDN URLs at a glance:**
+
+| File                                          | unpkg                                                                                             | jsDelivr                                                                                                                | Use case                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `SvgVisualBBox.min.js` (minified UMD, ~29 KB) | [unpkg.com/svg-bbox/SvgVisualBBox.min.js](https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js) | [cdn.jsdelivr.net/npm/svg-bbox/SvgVisualBBox.min.js](https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js) | Production browser `<script>` (scenarios 1, also injectable in scenario 7) |
+| `SvgVisualBBox.js` (unminified UMD, ~111 KB)  | [unpkg.com/svg-bbox/SvgVisualBBox.js](https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js)         | [cdn.jsdelivr.net/npm/svg-bbox/SvgVisualBBox.js](https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.js)         | Debug in DevTools (scenario 2)                                             |
+
+Both CDNs serve every file in the published npm package — you can substitute
+`@latest` with any released version (e.g. `@1.2.1`) to pin. The Node-only files
+(`SvgVisualBBox.cjs`, `lib/fbf.cjs`, `sbb-*.cjs`) are also addressable on both
+CDNs but exist only for `npm install` workflows; loading them in a browser via
+`<script>` won't work because they're CommonJS.
+
+#### Quick examples for each scenario
+
+```html
+<!-- 1: Browser CDN (production) -->
+<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+<script>
+  const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('#my-element');
+  const { svg } = SvgVisualBBox.extractFbfFrame(fbfString, 7);  // FBF too
+</script>
+```
+
+```js
+// 3: Browser bundler (Vite/Webpack/etc.) — same call as the CDN version
+import {
+  getSvgElementVisualBBoxTwoPassAggressive,
+  extractFbfFrame
+} from 'svg-bbox';
+```
+
+```js
+// 4: Bun — full library directly
+import {
+  extractFbfFrame,
+  getSvgElementVisualBBoxTwoPassAggressive
+} from 'svg-bbox';
+const { svg, frameId } = extractFbfFrame(fbfString, 7);
+```
+
+```js
+// 5/6: Node CJS or ESM — FBF works, bbox throws actionable error
+const { extractFbfFrame } = require('svg-bbox'); // CJS
+import { extractFbfFrame } from 'svg-bbox'; // ESM
+const { svg, frameId, totalFrames } = extractFbfFrame(fbfString, 7);
+```
+
+```js
+// 7: Node bbox via Puppeteer injection
+const puppeteer = require('puppeteer');
+const browser = await puppeteer.launch();
+const page = await browser.newPage();
+await page.setContent(`<html><body>${svgContent}</body></html>`);
+await page.addScriptTag({ path: require.resolve('svg-bbox') });
+const bbox = await page.evaluate(() =>
+  SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('svg')
+);
+```
+
+```js
+// 8: Slim FBF-only entry — works in every runtime, smallest surface
+const { extractFbfFrame } = require('svg-bbox/fbf');
+//   or:  import { extractFbfFrame } from 'svg-bbox/fbf';
+```
+
+```bash
+# 9–11: CLI tools (every tool takes --fbf-frame N when given an FBF.SVG)
+npx sbb-getbbox drawing.svg --json
+npx sbb-svg2png anim.fbf.svg out.png --fbf-frame 7 --scale 4
+npx sbb-extract sprites.svg --list
+npx sbb-fix-viewbox broken.svg fixed.svg
+npx sbb-compare reference.svg anim.fbf.svg --fbf-frame-b 7 --out-diff diff.png
+```
+
+**Rule of thumb:** if your code runs in a browser (or Bun, or a bundler that
+targets a browser), `import 'svg-bbox'` gives you everything. If your code runs
+in plain Node, you can still call `extractFbfFrame()` directly, but bbox
+computations need Puppeteer to spin up Chrome — that's how every shipped CLI
+tool does it.
+
 #### Installation
 
 ```html
-<!-- CDN (minified, recommended for production) -->
+<!-- CDN (minified UMD, recommended for production browser use) -->
 <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
 
-<!-- Or via npm (non-minified for debugging) -->
+<!-- Or via npm — UMD source for debugging in a browser -->
 <script src="./node_modules/svg-bbox/SvgVisualBBox.js"></script>
 ```
 
-This library can be used in two ways:
-
-1. **Node.js/CLI Tools** - Injected by Puppeteer in headless Chrome (used by all
-   CLI tools)
-2. **Browser/Web Applications** - Loaded directly in webpages via `<script>` tag
-   or npm import
+```bash
+# Or install via npm / Bun for use under any of the runtimes above
+bun add svg-bbox    # recommended — fastest, full UMD via require/import
+npm install svg-bbox
+```
 
 ### 🌐 Browser (embed via CDN mirrors)
 
@@ -759,19 +898,72 @@ bun add svg-bbox    # recommended - fastest
 npm install svg-bbox
 ```
 
+What you get from a plain `require('svg-bbox')` / `import 'svg-bbox'` depends on
+your runtime — see the [Choose your runtime](#choose-your-runtime) table above.
+The three patterns below cover every realistic scenario.
+
+#### Pattern A — FBF.SVG frame extraction in any Node/Bun runtime
+
+`extractFbfFrame()` is pure string manipulation, so it works without a browser,
+without Puppeteer, and without any DOM polyfill:
+
 ```javascript
-// Use with Puppeteer for server-side SVG processing
+// CommonJS (Node or Bun)
+const { extractFbfFrame } = require('svg-bbox');
+
+const fs = require('fs');
+const fbf = fs.readFileSync('animation.fbf.svg', 'utf8');
+const { svg, frameId, frameNumber, totalFrames } = extractFbfFrame(
+  fbf,
+  /* 1-based */ 7
+);
+fs.writeFileSync('frame-7.svg', svg);
+console.log(`Pinned ${frameId} (${frameNumber}/${totalFrames})`);
+```
+
+```javascript
+// ESM (Node or Bun)
+import { extractFbfFrame } from 'svg-bbox';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const fbf = readFileSync('animation.fbf.svg', 'utf8');
+const { svg } = extractFbfFrame(fbf, 7);
+writeFileSync('frame-7.svg', svg);
+```
+
+The same call also works from `'svg-bbox/fbf'` if you'd rather depend on the
+slimmer FBF-only entry point.
+
+#### Pattern B — Bbox computation in Bun (works directly)
+
+Bun's UMD interop loads the full library, so all bbox functions are usable the
+moment you `require('svg-bbox')` — but they still need a DOM at call time. You
+can run them in a `happy-dom` / `jsdom` context, or use Pattern C (Puppeteer)
+for production-grade results.
+
+#### Pattern C — Bbox computation in Node (Puppeteer-injection pattern)
+
+The bbox functions need real `getBBox()` / `<canvas>` / fonts — that only exists
+in a browser, so the supported pattern in Node is to inject the library into
+headless Chrome via Puppeteer. Every shipped CLI tool uses exactly this pattern;
+copy any of them as a worked example (e.g. `sbb-getbbox.cjs`).
+
+```javascript
 const puppeteer = require('puppeteer');
 
 const browser = await puppeteer.launch();
 const page = await browser.newPage();
 await page.setContent(`<html><body>${svgContent}</body></html>`);
-await page.addScriptTag({ path: 'node_modules/svg-bbox/SvgVisualBBox.js' });
+await page.addScriptTag({ path: require.resolve('svg-bbox') });
 
 const bbox = await page.evaluate(async () => {
   return await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('svg');
 });
 ```
+
+If you `require('svg-bbox')` from Node and try to call a bbox function directly
+(without Puppeteer), it throws an actionable error pointing at this pattern — so
+a misuse fails loudly instead of returning `undefined`.
 
 ### Functions of the SvgVisualBBox library
 
@@ -2076,13 +2268,28 @@ and the active frame is swapped via a discrete-mode `<animate>` driving a
 PROSKENION `<use xlink:href>`. The result is a normal SVG that plays in any
 browser — no external assets, no JavaScript, no canvas.
 
-`svg-bbox` knows the FBF.SVG format natively. Two CLI tools accept the
-`--fbf-frame` flag to pin any frame for rendering or comparison:
+`svg-bbox` knows the FBF.SVG format natively. **Every CLI tool that takes a
+single SVG input accepts `--fbf-frame N`** to pin any 1-based frame before the
+operation runs:
 
-| Tool          | Use case                                                          | Flags                                           |
-| ------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
-| `sbb-svg2png` | Render single frames or batches of frames to PNG/JPEG             | `--fbf-frame N \| LIST \| RANGE`                |
-| `sbb-compare` | Visual-diff a frame against another frame, a static SVG, or a PNG | `--fbf-frame`, `--fbf-frame-a`, `--fbf-frame-b` |
+| Tool                     | What `--fbf-frame N` does                                             |
+| ------------------------ | --------------------------------------------------------------------- |
+| `sbb-getbbox`            | Compute the bbox of frame N specifically                              |
+| `sbb-extract`            | List / extract / export / rename objects as they appear at frame N    |
+| `sbb-fix-viewbox`        | Repair the viewBox using frame N as the visual reference              |
+| `sbb-svg2png`            | Render frame N (also accepts list / range — see below)                |
+| `sbb-compare`            | Pin a frame on either side of the diff (`--fbf-frame-a/-b`)           |
+| `sbb-test`               | Test bbox accuracy on frame N                                         |
+| `sbb-chrome-getbbox`     | Same as sbb-getbbox via Chrome's `.getBBox()`                         |
+| `sbb-chrome-extract`     | Same as sbb-extract via Chrome's `.getBBox()`                         |
+| `sbb-inkscape-getbbox`   | Same as sbb-getbbox via Inkscape (writes pinned frame to a temp file) |
+| `sbb-inkscape-extract`   | Same as sbb-extract via Inkscape                                      |
+| `sbb-inkscape-text2path` | Convert text→path on frame N                                          |
+| `sbb-inkscape-svg2png`   | Inkscape PNG render of frame N                                        |
+
+`sbb-svg2png` and `sbb-compare` extend the syntax to accept lists and ranges
+(`--fbf-frame 7,23,87`, `--fbf-frame 1-30`); every other tool takes one frame
+number.
 
 ```bash
 # Snapshot frame 7 of an FBF animation as a PNG
@@ -2091,15 +2298,81 @@ npx sbb-svg2png anim.fbf.svg frame-007.png --fbf-frame 7 --scale 4
 # Render frames 1-30 to thumb-1.png ... thumb-30.png
 npx sbb-svg2png anim.fbf.svg "thumb-{n}.png" --fbf-frame 1-30 --scale 2
 
+# Bbox of frame 7 only (vs. the bbox of every frame combined)
+npx sbb-getbbox anim.fbf.svg --fbf-frame 7 --json
+
 # Pixel-diff frame 7 against a hand-authored reference
 npx sbb-compare reference.svg anim.fbf.svg \
   --fbf-frame-b 7 --out-diff diff.png
 ```
 
-For programmatic use, the same logic is exposed via the `svg-bbox/fbf` subpath
-import — see the
-[`sbb-svg2png` FBF.SVG section](#fbfsvg-frame-extraction---fbf-frame) below for
-`describeFbf()` and `pinFrame()` API details.
+**No size limit applies to FBF.SVG inputs.** A multi-hour 60 fps vector
+animation packs millions of frames into one file, and `svg-bbox` reads it
+without rejection (file-size checks in `lib/security-utils.cjs` are `Infinity`
+by design).
+
+For programmatic use, the same helper is available everywhere — pick whichever
+matches your runtime (the package's `exports` map routes you to the right
+implementation automatically — see [Choose your runtime](#choose-your-runtime)
+for the full table):
+
+**Node CJS / Node ESM / Bun — main entry:**
+
+```js
+// Works in every JS runtime — same call, same result
+const { extractFbfFrame } = require('svg-bbox');
+//   or:  import { extractFbfFrame } from 'svg-bbox';
+
+const { svg, frameId, frameNumber, totalFrames } = extractFbfFrame(
+  svgContent,
+  /* 1-based */ 7
+);
+// `svg` is the pinned-frame SVG, ready for any normal renderer.
+```
+
+**Slimmer FBF-only entry point (same API, smaller dependency surface):**
+
+```js
+const { extractFbfFrame } = require('svg-bbox/fbf');
+//   or:  import { extractFbfFrame } from 'svg-bbox/fbf';
+```
+
+**Browser (CDN `<script>` tag):**
+
+```html
+<script src="https://unpkg.com/svg-bbox/SvgVisualBBox.min.js"></script>
+<script>
+  const { svg, frameId, totalFrames } = SvgVisualBBox.extractFbfFrame(
+    svgString,
+    /* 1-based */ 7
+  );
+  // Render `svg` into a canvas, <img>, or <object> — it's a normal SVG now.
+</script>
+```
+
+Three implementations sit behind the same API, and which one you load is
+determined by the `exports` conditions in `package.json`:
+
+| Implementation                 | Used by                                                                                                       | Why three?                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `lib/fbf.cjs` (CJS)            | Every CLI tool, Node `require('svg-bbox')`, Node `import 'svg-bbox'`, anyone using the `svg-bbox/fbf` subpath | The single source of truth for Node-side FBF logic                                                |
+| `SvgVisualBBox.js` (UMD)       | Browser `<script>` tags, browser bundlers, Bun (`bun` export condition)                                       | Pure browser bundle; ships its own copy of the FBF logic so the browser bundle is self-contained  |
+| `SvgVisualBBox.cjs` (CJS shim) | Node `require('svg-bbox')` and `import 'svg-bbox'` only                                                       | Re-exports `lib/fbf.cjs`; stubs DOM-bound functions with actionable errors so misuse fails loudly |
+
+A regression test pins all three to the same fixture to keep them in lockstep.
+
+Both expose the same shape:
+
+```text
+extractFbfFrame(svgContent: string, frameNumber: number)
+  → { svg: string, frameId: string, frameNumber: number, totalFrames: number }
+```
+
+Throws actionable errors when the input isn't FBF.SVG or the frame number is out
+of range — error messages name svg2fbf's URL and list the available frame range.
+Lower-level helpers (`describeFbf`, `isFbfSvg`, `pinFrame`, `formatFrameId`,
+`resolveFrameId`) are also exposed from both surfaces for tests and advanced
+consumers.
 
 The FBF.SVG format spec lives in the
 [svg2fbf repository](https://github.com/Emasoft/svg2fbf#fbfsvg-format-spec).

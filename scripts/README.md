@@ -227,9 +227,20 @@ gh run view --log
 
 ## Other Scripts
 
-### `build-min.cjs`
+### `build-min.cjs` (the canonical build)
 
-Builds the minified browser library using Terser.
+Builds the minified browser library `SvgVisualBBox.min.js` using Terser. **This
+is the script `npm run build` and `prepublishOnly` invoke** — and it is the
+script the publish pipeline serves to unpkg/jsDelivr.
+
+It minifies `SvgVisualBBox.js` byte-for-byte, preserving the UMD wrapper intact
+so `<script>` consumers get `window.SvgVisualBBox = factory()` as designed.
+
+**Do not switch the publish pipeline to `bun run build.js`** — that path exists
+for experimentation but produces a CDN-broken bundle. See the
+[Build pipeline](../CONTRIBUTING.md#build-pipeline-cdn-bundle) section in
+CONTRIBUTING.md and the comment block at the top of `../build.js` for the full
+root-cause notes.
 
 ### `bump-version.cjs`
 

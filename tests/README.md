@@ -110,6 +110,20 @@ Example:
 - **Broken:** no-viewbox, no-dimensions, empty, invalid-ids, duplicate-ids
 - **Use/Defs:** use-symbol, gradients
 - **Transforms:** rotation, nested-groups
+- **FBF.SVG:** `fbf-three-frames.fbf.svg` — minimal Frame-By-Frame SVG fixture
+  (PROSKENION `<use>` + 3 single-color frames in `<defs>`) used by
+  `--fbf-frame N` integration tests across every CLI tool. **Note:** XML
+  comments in any fixture must not contain `--` (XML 1.0 forbids the sequence
+  inside comments — DOMParser rejects the file with `malformed comment`).
+
+### FBF.SVG cross-runtime tests
+
+The `extractFbfFrame()` helper exists in three places (single-source-of-truth
+`lib/fbf.cjs`, the inlined copy in `SvgVisualBBox.js` for browser bundle parity,
+and the Node CJS shim `SvgVisualBBox.cjs` that re-exports from `lib/fbf.cjs`).
+When you touch any of them, run/extend the regression test that pins all three
+to the same fixture and compares output byte-for-byte — drift between the two
+real implementations is the only realistic source of bugs in this code path.
 
 ## Browser Test Helpers
 

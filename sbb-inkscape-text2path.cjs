@@ -9,6 +9,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -35,6 +36,14 @@ const {
   printBanner
 } = require('./lib/cli-utils.cjs');
 
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// WHY: --fbf-frame N pins PROSKENION to one frame BEFORE Inkscape sees the
+// file, so the text→path conversion runs against that single frame instead
+// of the whole multi-frame document. Inkscape takes a file path, so we
+// materialize the pinned SVG into a unique temp file (cleaned up in
+// `finally`, even on Inkscape failure).
+const { extractFbfFrame } = require('./lib/fbf.cjs');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -47,6 +56,7 @@ const {
  * @property {boolean} overwrite - Whether to overwrite existing output files
  * @property {boolean} skipComparison - Whether to skip comparison after conversion
  * @property {boolean} json - Whether to output results as JSON
+ * @property {number | null} fbfFrame - 1-based FBF.SVG frame to pin before conversion
  */
 
 /**
@@ -133,6 +143,9 @@ OPTIONS:
   --skip-comparison     Skip automatic similarity check with sbb-compare
                         (only applies to single file mode)
   --json                Output results as JSON
+  --fbf-frame N         Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                        SVG from svg2fbf) before converting text to paths.
+                        Single-file mode only (cannot be combined with --batch).
   --help                Show this help
   --version             Show version
 
@@ -312,7 +325,8 @@ function parseArgs(argv) {
     batch: null,
     overwrite: false,
     skipComparison: false,
-    json: false
+    json: false,
+    fbfFrame: null
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -335,6 +349,16 @@ function parseArgs(argv) {
       args.skipComparison = true;
     } else if (arg === '--json') {
       args.json = true;
+    } else if (arg === '--fbf-frame' && i + 1 < argv.length) {
+      // WHY: --fbf-frame N pins one specific frame of an FBF.SVG (the
+      // format produced by https://github.com/Emasoft/svg2fbf) before
+      // running Inkscape. Must be a positive integer (1-based).
+      const raw = argv[++i] ?? '';
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1) {
+        throw new ValidationError('--fbf-frame must be a positive integer (1-based)');
+      }
+      args.fbfFrame = n;
     } else if (!arg.startsWith('-')) {
       if (!args.input) {
         args.input = arg;
@@ -351,6 +375,13 @@ function parseArgs(argv) {
   // Validate batch vs single mode
   if (args.batch && args.input) {
     throw new ValidationError('Cannot use both --batch and input file argument');
+  }
+
+  // WHY: --fbf-frame N pins one specific frame, which only makes sense for
+  // a single FBF.SVG input. In batch mode every file would be forced to be
+  // FBF, which is almost never the intent — fail loud instead.
+  if (args.batch && args.fbfFrame !== null) {
+    throw new ValidationError('Cannot use --fbf-frame with --batch (single-file mode only)');
   }
 
   // Validate required arguments
@@ -606,9 +637,17 @@ function readBatchFile(batchFilePath) {
  * @param {string} outputPath - Path for output SVG file
  * @param {ProcessOptions} options - Processing options
  * @param {CLIArgs} args - CLI arguments
+ * @param {number | null} [fbfFrame=null] - 1-based FBF.SVG frame to pin before conversion
  * @returns {Promise<ConversionResult>} Conversion result with optional comparison
  */
-async function processSingleFile(inkscapePath, inputPath, outputPath, options, args) {
+async function processSingleFile(
+  inkscapePath,
+  inputPath,
+  outputPath,
+  options,
+  args,
+  fbfFrame = null
+) {
   // SECURITY: Validate input SVG file
   const safeInputPath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
@@ -627,40 +666,77 @@ async function processSingleFile(inkscapePath, inputPath, outputPath, options, a
     );
   }
 
-  // Convert text to paths
-  await convertTextToPaths(inkscapePath, safeInputPath, safeOutputPath);
-
-  // Verify output file was created
-  if (!fs.existsSync(safeOutputPath)) {
-    throw new FileSystemError('Conversion failed: output file not created');
+  // FBF.SVG: pin a specific frame BEFORE invoking Inkscape. Inkscape takes
+  // a file path (not a string), so we materialize the pinned SVG into a
+  // unique temp file (pid+timestamp+frameId prevents collisions on parallel
+  // runs) and pass that temp path to Inkscape. The temp file is always
+  // removed in `finally`, even if Inkscape fails.
+  /** @type {string} */
+  let pathForInkscape = safeInputPath;
+  /** @type {string | null} */
+  let tempFbfFile = null;
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const srcContent = fs.readFileSync(safeInputPath, 'utf8');
+    const pinned = extractFbfFrame(srcContent, fbfFrame);
+    tempFbfFile = path.join(
+      os.tmpdir(),
+      `sbb-fbf-${process.pid}-${Date.now()}-${pinned.frameId}.svg`
+    );
+    fs.writeFileSync(tempFbfFile, pinned.svg, 'utf8');
+    pathForInkscape = tempFbfFile;
   }
 
-  const inputStats = fs.statSync(safeInputPath);
-  const outputStats = fs.statSync(safeOutputPath);
+  try {
+    // Convert text to paths
+    await convertTextToPaths(inkscapePath, pathForInkscape, safeOutputPath);
 
-  /** @type {ConversionResult} */
-  const result = {
-    input: safeInputPath,
-    output: safeOutputPath,
-    inputSize: inputStats.size,
-    outputSize: outputStats.size,
-    sizeIncrease: ((outputStats.size / inputStats.size - 1) * 100).toFixed(2) + '%',
-    comparison: null
-  };
+    // Verify output file was created
+    if (!fs.existsSync(safeOutputPath)) {
+      throw new FileSystemError('Conversion failed: output file not created');
+    }
 
-  // Run comparison (unless skipped)
-  if (!options.skipComparison) {
-    const comparisonResult = await runComparison(safeInputPath, safeOutputPath, args.json);
-    if (comparisonResult) {
-      result.comparison = {
-        diffPercentage: Number(comparisonResult.diffPercentage),
-        differentPixels: Number(comparisonResult.differentPixels),
-        totalPixels: Number(comparisonResult.totalPixels)
-      };
+    const inputStats = fs.statSync(safeInputPath);
+    const outputStats = fs.statSync(safeOutputPath);
+
+    /** @type {ConversionResult} */
+    const result = {
+      input: safeInputPath,
+      output: safeOutputPath,
+      inputSize: inputStats.size,
+      outputSize: outputStats.size,
+      sizeIncrease: ((outputStats.size / inputStats.size - 1) * 100).toFixed(2) + '%',
+      comparison: null
+    };
+
+    // Run comparison (unless skipped). When --fbf-frame was used, compare
+    // the pinned frame (temp file) against the converted output, not the
+    // original multi-frame SVG — otherwise the diff would be dominated by
+    // the absent frames rather than the actual text→path conversion.
+    if (!options.skipComparison) {
+      const comparisonSource = tempFbfFile || safeInputPath;
+      const comparisonResult = await runComparison(comparisonSource, safeOutputPath, args.json);
+      if (comparisonResult) {
+        result.comparison = {
+          diffPercentage: Number(comparisonResult.diffPercentage),
+          differentPixels: Number(comparisonResult.differentPixels),
+          totalPixels: Number(comparisonResult.totalPixels)
+        };
+      }
+    }
+
+    return result;
+  } finally {
+    // WHY: Always clean up the temp FBF file, even if Inkscape failed.
+    // Best-effort: swallow errors so we never mask the real error from the
+    // try block (and because temp-dir cleanup is non-critical).
+    if (tempFbfFile) {
+      try {
+        fs.unlinkSync(tempFbfFile);
+      } catch {
+        /* swallow — best-effort cleanup of FBF temp file */
+      }
     }
   }
-
-  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -837,7 +913,8 @@ async function main() {
       overwrite: args.overwrite,
       skipComparison: args.skipComparison
     },
-    args
+    args,
+    args.fbfFrame
   );
 
   // Output results

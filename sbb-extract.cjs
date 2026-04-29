@@ -190,6 +190,12 @@ const {
 
 const { runCLI, printError, printInfo, printWarning, printBanner } = require('./lib/cli-utils.cjs');
 
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// Used by --fbf-frame N to pin PROSKENION to a specific frame so list /
+// extract / export / rename operations see that frame's geometry rather
+// than the union of all PROSKENION targets.
+const { extractFbfFrame } = require('./lib/fbf.cjs');
+
 // -------- CLI parsing --------
 
 /**
@@ -215,6 +221,7 @@ const { runCLI, printError, printInfo, printWarning, printBanner } = require('./
  * @property {string | null} batchOutDir - Output directory for batch extraction
  * @property {boolean} quiet - Minimal output mode - only prints essential info
  * @property {boolean} verbose - Show detailed progress information
+ * @property {number|null} [fbfFrame] - 1-based FBF.SVG frame number to pin before processing
  */
 
 /**
@@ -257,6 +264,15 @@ function parseArgs(argv) {
         alias: 'v',
         type: 'boolean',
         description: 'Show detailed progress information'
+      },
+      {
+        name: 'fbf-frame',
+        type: 'number',
+        description:
+          'Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame SVG from svg2fbf) ' +
+          'before list / extract / export / rename. Single-input only.',
+        validator: (v) => Number.isInteger(v) && v >= 1,
+        validationError: '--fbf-frame must be a positive integer (1-based)'
       }
     ],
     modes: {
@@ -369,7 +385,10 @@ function parseArgs(argv) {
     // WHY: Quiet mode for scripting - only outputs essential info (file paths)
     quiet: result.flags.quiet || false,
     // WHY: Verbose mode for debugging - shows detailed progress
-    verbose: result.flags.verbose || false
+    verbose: result.flags.verbose || false,
+    // WHY: 1-based FBF.SVG frame number to pin (svg2fbf format) before
+    // any list / extract / export / rename operation. null = no pinning.
+    fbfFrame: result.flags['fbf-frame'] || null
   };
 
   // Mode-specific positional argument handling
@@ -528,6 +547,7 @@ function readBatchIdsFile(batchFilePath) {
 /**
  * @typedef {Object} WithPageOptions
  * @property {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height for viewBox
+ * @property {number|null} [fbfFrame] - 1-based FBF.SVG frame number to pin before processing
  */
 
 /**
@@ -539,7 +559,7 @@ function readBatchIdsFile(batchFilePath) {
  * @returns {Promise<T>} Result from the handler function
  */
 async function withPageForSvg(inputPath, handler, options = {}) {
-  const { ignoreResolution = false } = options;
+  const { ignoreResolution = false, fbfFrame = null } = options;
 
   // SECURITY: Validate and read SVG file safely
   const safePath = validateFilePath(inputPath, {
@@ -547,7 +567,16 @@ async function withPageForSvg(inputPath, handler, options = {}) {
     mustExist: true
   });
 
-  const svgContent = readSVGFileSafe(safePath);
+  // WHY: file-size limit is intentionally Infinity (see lib/security-utils.cjs)
+  // so multi-hour FBF.SVG renders — millions of frames packed into a single
+  // file — load without rejection.
+  let svgContent = readSVGFileSafe(safePath);
+  // FBF.SVG: pin a specific frame BEFORE sanitization so the helper
+  // sees the original PROSKENION/animate structure as authored.
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const pinned = extractFbfFrame(svgContent, fbfFrame);
+    svgContent = pinned.svg;
+  }
   const sanitizedSvg = sanitizeSVGContent(svgContent);
 
   // SECURITY: Launch browser with security args and timeout
@@ -759,6 +788,7 @@ ${sanitizedSvg}
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
  * @param {boolean} [quiet] - Minimal output mode - only prints essential info
  * @param {boolean} [verbose] - Show detailed progress information
+ * @param {number|null} [fbfFrame] - 1-based FBF.SVG frame number to pin before processing
  * @returns {Promise<void>}
  */
 async function listAndAssignIds(
@@ -770,7 +800,8 @@ async function listAndAssignIds(
   autoOpen,
   ignoreResolution = false,
   quiet = false,
-  verbose = false
+  verbose = false,
+  fbfFrame = null
 ) {
   const result = await withPageForSvg(
     inputPath,
@@ -1259,7 +1290,7 @@ async function listAndAssignIds(
       }, assignIds);
       return evalResult;
     },
-    { ignoreResolution }
+    { ignoreResolution, fbfFrame }
   );
 
   // Build HTML listing file
@@ -2035,6 +2066,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
  * @param {boolean} [quiet] - Minimal output mode - only prints essential info
  * @param {boolean} [verbose] - Show detailed progress information
+ * @param {number|null} [fbfFrame] - 1-based FBF.SVG frame number to pin before processing
  * @returns {Promise<void>}
  */
 async function extractSingleObject(
@@ -2046,7 +2078,8 @@ async function extractSingleObject(
   jsonMode,
   ignoreResolution = false,
   quiet = false,
-  verbose = false
+  verbose = false,
+  fbfFrame = null
 ) {
   const result = await withPageForSvg(
     inputPath,
@@ -2161,7 +2194,7 @@ async function extractSingleObject(
       );
       return evalResult;
     },
-    { ignoreResolution }
+    { ignoreResolution, fbfFrame }
   );
 
   // SECURITY: Validate and write extracted SVG file safely
@@ -2218,6 +2251,7 @@ async function extractSingleObject(
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
  * @param {boolean} [quiet] - Minimal output mode - only prints essential info
  * @param {boolean} [verbose] - Show detailed progress information
+ * @param {number|null} [fbfFrame] - 1-based FBF.SVG frame number to pin before processing
  * @returns {Promise<void>}
  */
 async function exportAllObjects(
@@ -2228,7 +2262,8 @@ async function exportAllObjects(
   jsonMode,
   ignoreResolution = false,
   quiet = false,
-  verbose = false
+  verbose = false,
+  fbfFrame = null
 ) {
   if (!fs.existsSync(outDir)) {
     fs.mkdirSync(outDir, { recursive: true });
@@ -2436,7 +2471,7 @@ async function exportAllObjects(
       );
       return evalResult;
     },
-    { ignoreResolution }
+    { ignoreResolution, fbfFrame }
   );
 
   if (!exports || exports.length === 0) {
@@ -2525,6 +2560,7 @@ async function exportAllObjects(
  * @param {boolean} [ignoreResolution] - Use full drawing bbox instead of width/height
  * @param {boolean} [quiet] - Minimal output mode - only prints essential info
  * @param {boolean} [verbose] - Show detailed progress information
+ * @param {number|null} [fbfFrame] - 1-based FBF.SVG frame number to pin before processing
  * @returns {Promise<void>}
  */
 async function renameIds(
@@ -2534,7 +2570,8 @@ async function renameIds(
   jsonMode,
   ignoreResolution = false,
   quiet = false,
-  verbose = false
+  verbose = false,
+  fbfFrame = null
 ) {
   // SECURITY: Read and validate JSON mapping file safely
   const safeJsonPath = validateFilePath(renameJsonPath, {
@@ -2704,7 +2741,7 @@ async function renameIds(
       }, mappings);
       return evalResult;
     },
-    { ignoreResolution }
+    { ignoreResolution, fbfFrame }
   );
 
   // SECURITY: Validate and write renamed SVG file safely
@@ -2786,7 +2823,8 @@ async function main() {
         opts.autoOpen,
         opts.ignoreResolution,
         opts.quiet,
-        opts.verbose
+        opts.verbose,
+        opts.fbfFrame
       );
     } else if (opts.mode === 'extract') {
       if (opts.batchIds) {
@@ -2828,7 +2866,8 @@ async function main() {
               false, // WHY: Don't output JSON per-item, will output summary at end
               opts.ignoreResolution,
               opts.quiet,
-              opts.verbose
+              opts.verbose,
+              opts.fbfFrame
             );
 
             if (!opts.json) {
@@ -2887,7 +2926,8 @@ async function main() {
           opts.json,
           opts.ignoreResolution,
           opts.quiet,
-          opts.verbose
+          opts.verbose,
+          opts.fbfFrame
         );
       }
     } else if (opts.mode === 'exportAll') {
@@ -2949,7 +2989,8 @@ async function main() {
               false, // Don't output JSON for individual files in batch mode
               opts.ignoreResolution,
               opts.quiet,
-              opts.verbose
+              opts.verbose,
+              opts.fbfFrame
             );
 
             results.push({
@@ -3022,7 +3063,8 @@ async function main() {
           opts.json,
           opts.ignoreResolution,
           opts.quiet,
-          opts.verbose
+          opts.verbose,
+          opts.fbfFrame
         );
       }
     } else if (opts.mode === 'rename') {
@@ -3043,7 +3085,8 @@ async function main() {
         opts.json,
         opts.ignoreResolution,
         opts.quiet,
-        opts.verbose
+        opts.verbose,
+        opts.fbfFrame
       );
     } else {
       throw new SVGBBoxError(`Unknown mode: ${opts.mode}`);

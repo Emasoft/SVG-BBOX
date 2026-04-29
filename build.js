@@ -65,8 +65,29 @@ async function build() {
   }
 
   try {
-    // Bun.build() for minification
-    // Note: SvgVisualBBox.js is a UMD module, we preserve its format
+    // ⚠️ DO NOT USE Bun.build() FOR THIS UMD SOURCE ⚠️
+    //
+    // Why: SvgVisualBBox.js is a hand-authored UMD module that browsers
+    // load via <script src="SvgVisualBBox.min.js"> and side-effects
+    // `window.SvgVisualBBox = factory()`. Bun.build() always wraps the
+    // entry in its own internal CJS-style scope (`{exports:{}}`) before
+    // running it, which makes the UMD's runtime check
+    // `typeof module === 'object' && module.exports` succeed and take
+    // the CJS branch (`e.exports = c()`) — the global-assignment branch
+    // (`root.SvgVisualBBox = factory()`) never runs. The result is a
+    // valid-looking minified file in which `window.SvgVisualBBox` ends
+    // up undefined. Confirmed empirically against Bun 1.3.13 with
+    // `format: 'iife'`, `target: 'browser'`, every combination tried.
+    //
+    // The legacy Terser path (`scripts/build-min.cjs`) minifies the
+    // source byte-for-byte without inserting any module wrapper, which
+    // preserves the UMD's three-way detection (AMD / CJS / global) and
+    // the `<script>` tag works as designed. The CDN release pipeline
+    // therefore runs the Terser script via `npm run build:legacy`.
+    //
+    // Re-evaluate this choice when Bun grows a real `globalName`
+    // option (esbuild has one) or when its bundler stops wrapping IIFE
+    // entries in synthetic CJS scopes. Until then, do NOT switch back.
     const result = await Bun.build({
       entrypoints: [SOURCE_FILE],
       outdir: __dirname,

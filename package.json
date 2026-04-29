@@ -10,7 +10,9 @@
   "exports": {
     ".": {
       "browser": "./SvgVisualBBox.js",
-      "import": "./SvgVisualBBox.js",
+      "bun": "./SvgVisualBBox.js",
+      "import": "./SvgVisualBBox.cjs",
+      "require": "./SvgVisualBBox.cjs",
       "default": "./SvgVisualBBox.js"
     },
     "./min": {
@@ -47,6 +49,7 @@
   "files": [
     "SvgVisualBBox.js",
     "SvgVisualBBox.min.js",
+    "SvgVisualBBox.cjs",
     "svg-bbox.cjs",
     "sbb-*.cjs",
     "browser-utils.cjs",
@@ -94,9 +97,10 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "bun run build.js",
+    "build": "node scripts/build-min.cjs",
     "build:dev": "bun run build.js --dev",
     "build:watch": "bun run build.js --watch",
+    "build:bun": "bun run build.js",
     "build:legacy": "node scripts/build-min.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -119,7 +123,7 @@
     "version:bump:minor": "node scripts/bump-version.cjs minor",
     "version:bump:major": "node scripts/bump-version.cjs major",
     "version:bump": "node scripts/bump-version.cjs",
-    "prepublishOnly": "bun run build.js && node scripts/validate-build.cjs && npm run lint && npm run typecheck && npm exec vitest run tests/integration/package-installation.test.js"
+    "prepublishOnly": "npm run build && node scripts/validate-build.cjs && npm run lint && npm run typecheck && npm exec vitest run tests/integration/package-installation.test.js"
   },
   "dependencies": {
     "chrome-launcher": "^1.2.1",

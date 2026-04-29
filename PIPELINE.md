@@ -216,7 +216,7 @@ lockfiles.
 # ci.yml
 env:
   NODE_VERSION: '24'
-  BUN_VERSION: '1.3.5'
+  BUN_VERSION: '1.3.13'
 
 # publish.yml
 env:
@@ -659,7 +659,7 @@ on:
 
 env:
   NODE_VERSION: '24'
-  BUN_VERSION: '1.3.5'
+  BUN_VERSION: '1.3.13'
 
 jobs:
   # STAGE 1: Fast checks (parallel)

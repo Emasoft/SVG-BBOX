@@ -68,6 +68,23 @@ safety.
 - Set timeouts on all operations
 - Run in sandboxed environment (Docker, VM) for untrusted input
 
+**File-size limits and FBF.SVG:**
+
+`lib/security-utils.cjs` exposes `MAX_SVG_SIZE` and `MAX_JSON_SIZE` constants,
+both deliberately set to `Infinity`. This is intentional: a
+[Frame-By-Frame SVG](https://github.com/Emasoft/svg2fbf) (FBF.SVG) used by
+`--fbf-frame N` can pack millions of frames into a single file (e.g. a
+multi-hour 60 fps vector animation), and capping the read size would refuse
+legitimate inputs.
+
+If you process **untrusted** SVG input in a server context, enforce your own
+size cap before handing the file to `svg-bbox` — for example, reject multi-GB
+inputs in your upload handler — and run the toolkit inside a resource-limited
+sandbox (Docker `--memory`, systemd cgroup quotas, etc.). The
+`extractFbfFrame()` helper itself only ever holds the input string and the
+rewritten output string in memory; it does not make additional copies of the
+per-frame data.
+
 ### External Resources
 
 SVG files can reference external resources (images, fonts, stylesheets). This

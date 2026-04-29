@@ -13,6 +13,12 @@ const { PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
 // WHY launchOrConnect/safeShutdown: see lib/puppeteer-utils.cjs.
 const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// Used by --fbf-frame N to pin PROSKENION to a specific frame so the
+// resulting bbox describes that frame instead of the full PROSKENION
+// boundary the SMIL timeline would visit across all frames.
+const { extractFbfFrame } = require('./lib/fbf.cjs');
+
 // Import CLI utilities including shared JSON output function
 // WHY: writeJSONOutput centralizes JSON output handling (DRY principle)
 // DO NOT: Implement custom saveJSON - use writeJSONOutput instead
@@ -66,6 +72,9 @@ const {
  * @property {string} inputFile - Input SVG file path
  * @property {string[]} elementIds - Element IDs to get bbox for
  * @property {number} margin - Margin to apply around bbox
+ * @property {number | null} [fbfFrame] - 1-based FBF.SVG frame number to pin before computation
+ * @property {boolean} [verbose] - Whether to print FBF pin info
+ * @property {boolean} [quiet] - Whether to suppress FBF pin info
  */
 
 /**
@@ -76,6 +85,7 @@ const {
  * @property {string[]} elementIds - Element IDs to get bbox for
  * @property {boolean} quiet - Minimal output mode (only bbox values)
  * @property {boolean} verbose - Verbose output mode (detailed progress)
+ * @property {number | null} fbfFrame - 1-based FBF.SVG frame number to pin before computation
  */
 
 /**
@@ -84,7 +94,14 @@ const {
  * @returns {Promise<GetBBoxResult>} Result with bounding box information
  */
 async function getBBoxWithChrome(options) {
-  const { inputFile, elementIds, margin } = options;
+  const {
+    inputFile,
+    elementIds,
+    margin,
+    fbfFrame = null,
+    verbose = false,
+    quiet = false
+  } = options;
 
   const browser = await launchOrConnect({
     headless: true,
@@ -98,7 +115,25 @@ async function getBBoxWithChrome(options) {
     page = await browser.newPage();
 
     // Read the SVG file
-    const svgContent = fs.readFileSync(inputFile, 'utf-8');
+    // WHY `let`: --fbf-frame N rewrites the markup before we hand it to
+    // the Chrome page, so svgContent must be reassignable.
+    let svgContent = fs.readFileSync(inputFile, 'utf-8');
+
+    // FBF.SVG: pin a specific frame BEFORE the SVG is loaded into Chrome
+    // so .getBBox() describes that single frame instead of the union the
+    // running PROSKENION animation would visit. Pure string rewrite — the
+    // pinned SVG is still a normal SVG, so the rest of the pipeline works
+    // unchanged. extractFbfFrame throws an actionable error if the input
+    // isn't an FBF.SVG or the frame number is out of range.
+    if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+      const pinned = extractFbfFrame(svgContent, fbfFrame);
+      svgContent = pinned.svg;
+      if (verbose && !quiet) {
+        printInfo(
+          `FBF: pinned frame ${pinned.frameNumber} (#${pinned.frameId}) of ${pinned.totalFrames}`
+        );
+      }
+    }
 
     // Load it into the page
     await page.setContent(`
@@ -335,6 +370,11 @@ OPTIONAL ARGUMENTS:
 OPTIONS:
   --margin <number>       Margin around bbox in SVG units (default: 5)
   --json <path>           Save results as JSON to specified file (use - for stdout)
+  --fbf-frame <N>         Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                          SVG produced by https://github.com/Emasoft/svg2fbf)
+                          before computing the bbox. The PROSKENION <use> is
+                          rewritten to #FRAMEnnnnn and its <animate> is
+                          dropped, so the bbox describes that specific frame.
   --quiet                 Minimal output - only prints bounding box values
   --verbose               Show detailed progress information
   --help, -h              Show this help message
@@ -407,7 +447,8 @@ function parseArgs(argv) {
     input: '',
     elementIds: [],
     quiet: false,
-    verbose: false
+    verbose: false,
+    fbfFrame: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -460,6 +501,21 @@ function parseArgs(argv) {
           // WHY: Detailed progress information for debugging
           options.verbose = true;
           break;
+        case 'fbf-frame': {
+          // WHY: Pin a specific frame of an FBF.SVG (svg2fbf format)
+          // before bbox computation. Validation is intentionally strict
+          // (positive integer, 1-based) — non-integers and zero are
+          // common typos that would silently disable the pin.
+          const fbfRaw = next;
+          const fbfNum = Number(fbfRaw);
+          if (!Number.isInteger(fbfNum) || fbfNum < 1) {
+            printError('--fbf-frame must be a positive integer (1-based)');
+            process.exit(1);
+          }
+          options.fbfFrame = fbfNum;
+          useNext();
+          break;
+        }
         default:
           printError(`Unknown option: ${key}`);
           process.exit(1);
@@ -514,7 +570,12 @@ async function main() {
   const result = await getBBoxWithChrome({
     inputFile: options.input,
     elementIds: options.elementIds,
-    margin: options.margin
+    margin: options.margin,
+    // WHY: 1-based FBF.SVG frame number to pin (svg2fbf format) before
+    // bbox computation. null means "no pinning, use the SVG as-is".
+    fbfFrame: options.fbfFrame,
+    verbose: options.verbose,
+    quiet: options.quiet
   });
 
   // WHY: Verbose mode confirms browser completed successfully

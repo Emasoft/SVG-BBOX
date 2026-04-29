@@ -150,6 +150,12 @@ const {
   writeJSONOutput
 } = require('./lib/cli-utils.cjs');
 
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// Used by --fbf-frame N to pin PROSKENION to a specific frame so the
+// resulting bbox describes that frame instead of the full PROSKENION
+// boundary the SMIL timeline would visit across all frames.
+const { extractFbfFrame } = require('./lib/fbf.cjs');
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -228,6 +234,17 @@ const argParser = createArgParser({
       alias: 'v',
       description: 'Show detailed progress information',
       type: 'boolean'
+    },
+    {
+      name: 'fbf-frame',
+      description:
+        'Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame SVG from svg2fbf) ' +
+        'before computing the bbox. The PROSKENION <use> is rewritten to ' +
+        '#FRAMEnnnnn and its <animate> is dropped, so the bbox describes that ' +
+        'specific frame.',
+      type: 'number',
+      validator: (v) => Number.isInteger(v) && v >= 1,
+      validationError: '--fbf-frame must be a positive integer (1-based frame number)'
     }
   ],
   minPositional: 0,
@@ -459,6 +476,7 @@ async function detectSpriteSheet(page) {
  * @param {Object} [outputOptions] - Output options for quiet/verbose modes
  * @param {boolean} [outputOptions.quiet] - Minimal output mode
  * @param {boolean} [outputOptions.verbose] - Show detailed progress
+ * @param {number|null} [outputOptions.fbfFrame] - 1-based FBF.SVG frame number to pin before computation
  * @returns {Promise<BBoxFileResult>} Computation result with bboxes
  * @throws {ValidationError} If svgPath is invalid, contains path traversal, or doesn't have .svg extension
  * @throws {FileSystemError} If SVG file cannot be read, exceeds size limit, or SvgVisualBBox.js is missing
@@ -471,7 +489,7 @@ async function computeBBox(
   spriteMode = false,
   outputOptions = {}
 ) {
-  const { quiet = false, verbose = false } = outputOptions;
+  const { quiet = false, verbose = false, fbfFrame = null } = outputOptions;
   // SECURITY: Validate file path (prevents path traversal)
   const safePath = validateFilePath(svgPath, {
     requiredExtensions: ['.svg'],
@@ -479,7 +497,21 @@ async function computeBBox(
   });
 
   // SECURITY: Read SVG with size limit and validation
-  const svgContent = readSVGFileSafe(safePath);
+  let svgContent = readSVGFileSafe(safePath);
+
+  // FBF.SVG: pin a specific frame BEFORE sanitization so the helper
+  // sees the original PROSKENION/animate structure as authored. The
+  // pinned SVG is still a normal SVG, so sanitization and the rest of
+  // the pipeline work unchanged.
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const pinned = extractFbfFrame(svgContent, fbfFrame);
+    svgContent = pinned.svg;
+    if (verbose && !quiet) {
+      printInfo(
+        `FBF: pinned frame ${pinned.frameNumber} (#${pinned.frameId}) of ${pinned.totalFrames}`
+      );
+    }
+  }
 
   // SECURITY: Sanitize SVG content (remove scripts, event handlers)
   const sanitizedSvg = sanitizeSVGContent(svgContent);
@@ -1118,7 +1150,8 @@ async function main() {
       options.spriteMode,
       {
         quiet: options.quiet,
-        verbose: options.verbose
+        verbose: options.verbose,
+        fbfFrame: args.flags['fbf-frame'] || null
       }
     );
     allResults.push(result);

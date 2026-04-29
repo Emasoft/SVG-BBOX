@@ -12,6 +12,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -32,6 +33,14 @@ const {
 } = require('./lib/security-utils.cjs');
 
 const { runCLI, printSuccess, printError, printInfo, printBanner } = require('./lib/cli-utils.cjs');
+
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// WHY: --fbf-frame N pins PROSKENION to one frame BEFORE Inkscape sees the
+// file, so the resulting PNG snapshots that single frame instead of the
+// PROSKENION's full animation footprint. Inkscape takes a file path, so we
+// materialize the pinned SVG into a unique temp file (cleaned up in
+// `finally`, even on Inkscape failure).
+const { extractFbfFrame } = require('./lib/fbf.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -58,6 +67,7 @@ const { runCLI, printSuccess, printError, printInfo, printBanner } = require('./
  * @property {string | null} batch - Batch file path
  * @property {boolean} jpg - Also produce a JPEG version at 100% quality
  * @property {boolean} deletePngAfter - Delete PNG after creating JPG (requires --jpg)
+ * @property {number | null} fbfFrame - 1-based FBF.SVG frame to pin before export
  */
 
 /**
@@ -76,6 +86,7 @@ const { runCLI, printSuccess, printError, printInfo, printBanner } = require('./
  * @property {string | null} [background] - Background color
  * @property {number | null} [backgroundOpacity] - Background opacity (0-255)
  * @property {string} [convertDpiMethod] - Method for legacy files
+ * @property {number | null} [fbfFrame] - 1-based FBF.SVG frame to pin before export
  */
 
 /**
@@ -191,6 +202,13 @@ JPEG CONVERSION:
                             Useful for batch processing to save disk space
                             REQUIRES: --jpg must be specified
 
+FBF.SVG OPTIONS:
+  --fbf-frame N             Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                            SVG from svg2fbf) before exporting to PNG. PROSKENION's
+                            <use> is rewritten to #FRAMEnnnnn and its <animate>
+                            is dropped, so the PNG snapshots that specific frame.
+                            Single-file mode only (cannot be combined with --batch).
+
 OTHER OPTIONS:
   --help                    Show this help
   --version                 Show version
@@ -297,7 +315,9 @@ function parseArgs(argv) {
     batch: null,
     // JPEG conversion
     jpg: false,
-    deletePngAfter: false
+    deletePngAfter: false,
+    // FBF.SVG frame pinning
+    fbfFrame: null
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -413,6 +433,17 @@ function parseArgs(argv) {
     } else if (arg === '--delete-png-after') {
       // WHY: Delete PNG after JPG creation to save disk space in batch processing
       args.deletePngAfter = true;
+    } else if (arg === '--fbf-frame' && i + 1 < argv.length) {
+      // WHY: --fbf-frame N pins one specific frame of an FBF.SVG (the
+      // format produced by https://github.com/Emasoft/svg2fbf) before
+      // running Inkscape. Must be a positive integer (1-based).
+      const raw = getNextArg();
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1) {
+        console.error('Error: --fbf-frame must be a positive integer (1-based)');
+        process.exit(2);
+      }
+      args.fbfFrame = n;
     } else if (arg && !arg.startsWith('-')) {
       if (!args.input) {
         args.input = arg;
@@ -437,6 +468,14 @@ function parseArgs(argv) {
   // Batch mode cannot have individual input file
   if (args.batch && args.input) {
     console.error('Error: --batch mode cannot be combined with individual SVG file argument');
+    process.exit(2);
+  }
+
+  // WHY: --fbf-frame N pins one specific frame, which only makes sense for
+  // a single FBF.SVG input. In batch mode every file would be forced to be
+  // FBF, which is almost never the intent — fail loud instead.
+  if (args.batch && args.fbfFrame !== null) {
+    console.error('Error: Cannot use --fbf-frame with --batch (single-file mode only)');
     process.exit(2);
   }
 
@@ -601,8 +640,29 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
     antialias = null,
     background = null,
     backgroundOpacity = null,
-    convertDpiMethod = 'none'
+    convertDpiMethod = 'none',
+    fbfFrame = null
   } = options;
+
+  // FBF.SVG: pin a specific frame BEFORE invoking Inkscape. Inkscape takes
+  // a file path (not a string), so we materialize the pinned SVG into a
+  // unique temp file (pid+timestamp+frameId prevents collisions on parallel
+  // runs) and pass that temp path to Inkscape. The temp file is always
+  // removed in `finally`, even if Inkscape fails.
+  /** @type {string} */
+  let pathForInkscape = safeInputPath;
+  /** @type {string | null} */
+  let tempFbfFile = null;
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const srcContent = fs.readFileSync(safeInputPath, 'utf8');
+    const pinned = extractFbfFrame(srcContent, fbfFrame);
+    tempFbfFile = path.join(
+      os.tmpdir(),
+      `sbb-fbf-${process.pid}-${Date.now()}-${pinned.frameId}.svg`
+    );
+    fs.writeFileSync(tempFbfFile, pinned.svg, 'utf8');
+    pathForInkscape = tempFbfFile;
+  }
 
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
@@ -724,8 +784,8 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
     inkscapeArgs.push('--export-background-opacity=255');
   }
 
-  // Add input file as last argument
-  inkscapeArgs.push(safeInputPath);
+  // Add input file as last argument (or pinned FBF temp file when --fbf-frame is set)
+  inkscapeArgs.push(pathForInkscape);
 
   try {
     // Execute Inkscape with timeout
@@ -784,6 +844,17 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
       throw new SVGBBoxError(`Inkscape PNG export failed: ${errorMessage}`, 'INKSCAPE_ERROR', {
         originalError: error
       });
+    }
+  } finally {
+    // WHY: Always clean up the temp FBF file, even if Inkscape failed.
+    // Best-effort: swallow errors so we never mask the real error from the
+    // try/catch above (and because temp-dir cleanup is non-critical).
+    if (tempFbfFile) {
+      try {
+        fs.unlinkSync(tempFbfFile);
+      } catch {
+        /* swallow — best-effort cleanup of FBF temp file */
+      }
     }
   }
 }
@@ -918,7 +989,8 @@ async function main() {
     antialias: args.antialias,
     background: args.background,
     backgroundOpacity: args.backgroundOpacity,
-    convertDpiMethod: args.convertDpiMethod
+    convertDpiMethod: args.convertDpiMethod,
+    fbfFrame: args.fbfFrame
   });
 
   printSuccess('✓ PNG export successful');

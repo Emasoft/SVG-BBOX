@@ -25,6 +25,7 @@
  * @property {number} scale - Resolution multiplier for PNG
  * @property {number|null} width - Exact PNG width in pixels (optional)
  * @property {number|null} height - Exact PNG height in pixels (optional)
+ * @property {number|null} [fbfFrame] - 1-based FBF.SVG frame number to pin before extraction
  */
 
 /**
@@ -50,6 +51,7 @@
  * @property {string} [input] - Input SVG file path (set in single mode)
  * @property {boolean} quiet - Minimal output mode (only essential info)
  * @property {boolean} verbose - Detailed progress information
+ * @property {number|null} fbfFrame - 1-based FBF.SVG frame number to pin before extraction
  */
 
 /**
@@ -76,6 +78,12 @@ const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 const { printError, printSuccess, printInfo, printBanner, runCLI } = require('./lib/cli-utils.cjs');
 // SECURITY: Import security utilities
 const { SHELL_METACHARACTERS, SVGBBoxError } = require('./lib/security-utils.cjs');
+
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// Used by --fbf-frame N to pin PROSKENION to a specific frame so the
+// extracted element/SVG describes that frame rather than the union the
+// running PROSKENION animation would visit across all frames.
+const { extractFbfFrame } = require('./lib/fbf.cjs');
 
 // WHY: Module-level flags for output verbosity control
 // Set by parseArgs() and respected by log functions
@@ -113,8 +121,18 @@ function log(message, level = 'info') {
  * @returns {Promise<void>}
  */
 async function extractWithGetBBox(options) {
-  const { inputFile, elementId, outputSvg, outputPng, margin, background, scale, width, height } =
-    options;
+  const {
+    inputFile,
+    elementId,
+    outputSvg,
+    outputPng,
+    margin,
+    background,
+    scale,
+    width,
+    height,
+    fbfFrame = null
+  } = options;
 
   const browser = await launchOrConnect({
     headless: true,
@@ -128,7 +146,25 @@ async function extractWithGetBBox(options) {
     page = await browser.newPage();
 
     // Read the SVG file
-    const svgContent = fs.readFileSync(inputFile, 'utf-8');
+    // WHY `let`: --fbf-frame N rewrites the markup before we hand it to
+    // the Chrome page, so svgContent must be reassignable.
+    let svgContent = fs.readFileSync(inputFile, 'utf-8');
+
+    // FBF.SVG: pin a specific frame BEFORE the SVG is loaded into Chrome
+    // so the extracted element/SVG reflects that single frame instead of
+    // the union the running PROSKENION animation would visit. Pure string
+    // rewrite — the pinned SVG is still a normal SVG, so the rest of the
+    // pipeline (getBBox, defs cloning, PNG render) works unchanged.
+    // extractFbfFrame throws an actionable error if the input is not an
+    // FBF.SVG or the frame number is out of range.
+    if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+      const pinned = extractFbfFrame(svgContent, fbfFrame);
+      svgContent = pinned.svg;
+      log(
+        `FBF: pinned frame ${pinned.frameNumber} (#${pinned.frameId}) of ${pinned.totalFrames}`,
+        'verbose'
+      );
+    }
 
     // Load it into the page
     await page.setContent(`
@@ -396,6 +432,13 @@ BATCH FILE FORMAT:
 
 BBOX OPTIONS:
   --margin <number>       Margin around bbox in SVG units (default: 5)
+  --fbf-frame <N>         Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                          SVG produced by https://github.com/Emasoft/svg2fbf)
+                          before extraction. The PROSKENION <use> is
+                          rewritten to #FRAMEnnnnn and its <animate> is
+                          dropped, so the extracted SVG/PNG reflects that
+                          specific frame. Single-file mode only — cannot be
+                          combined with --batch.
 
 PNG RENDERING OPTIONS:
   --scale <number>        Resolution multiplier (default: 4)
@@ -593,7 +636,8 @@ function parseArgs(argv) {
     batch: null,
     input: undefined,
     quiet: false,
-    verbose: false
+    verbose: false,
+    fbfFrame: null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -686,6 +730,21 @@ function parseArgs(argv) {
           // WHY: Verbose mode - show detailed progress information
           options.verbose = true;
           break;
+        case 'fbf-frame': {
+          // WHY: Pin a specific frame of an FBF.SVG (svg2fbf format)
+          // before extraction. Validation is intentionally strict
+          // (positive integer, 1-based) — non-integers and zero are
+          // common typos that would silently disable the pin.
+          const fbfRaw = next;
+          const fbfNum = Number(fbfRaw);
+          if (!Number.isInteger(fbfNum) || fbfNum < 1) {
+            printError('--fbf-frame must be a positive integer (1-based)');
+            process.exit(1);
+          }
+          options.fbfFrame = fbfNum;
+          useNext();
+          break;
+        }
         default:
           printError(`Unknown option: ${key}`);
           process.exit(1);
@@ -698,6 +757,14 @@ function parseArgs(argv) {
   // Validate batch vs single mode
   if (options.batch && positional.length > 0) {
     printError('Cannot use both --batch and input file argument');
+    process.exit(1);
+  }
+
+  // WHY: --fbf-frame N pins one specific frame, which only makes sense
+  // for a single FBF.SVG input. In batch mode every file would be forced
+  // to be FBF, which is almost never the intent — fail loud instead.
+  if (options.batch && options.fbfFrame !== null) {
+    printError('Cannot use --fbf-frame with --batch (single-file mode only)');
     process.exit(1);
   }
 
@@ -873,7 +940,12 @@ async function main() {
     background: options.background,
     scale: options.scale,
     width: options.width,
-    height: options.height
+    height: options.height,
+    // WHY: 1-based FBF.SVG frame number to pin (svg2fbf format) before
+    // extraction. null means "no pinning, use the SVG as-is". Batch mode
+    // is rejected upstream in parseArgs(), so this only applies to
+    // single-file extraction.
+    fbfFrame: options.fbfFrame
   };
 
   // Run extraction

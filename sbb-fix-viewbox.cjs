@@ -57,6 +57,11 @@ const {
   FileSystemError
 } = require('./lib/security-utils.cjs');
 
+// FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
+// Used by --fbf-frame N to pin PROSKENION to a specific frame so the
+// fixed viewBox describes that frame rather than the union of all frames.
+const { extractFbfFrame } = require('./lib/fbf.cjs');
+
 const {
   runCLI,
   printBanner,
@@ -152,6 +157,9 @@ OPTIONS:
   --overwrite         Overwrite input file (USE WITH CAUTION - loses original viewBox!)
   --auto-open         Automatically open fixed SVG in Chrome/Chromium
                       (only applies to single file mode)
+  --fbf-frame N       Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
+                      SVG produced by https://github.com/Emasoft/svg2fbf)
+                      before computing the viewBox. Single-file mode only.
   --quiet             Minimal output - only prints output file path
                       Useful for scripting and automation
   --verbose           Show detailed progress information
@@ -225,7 +233,7 @@ USE CASES:
 /**
  * Parse command-line arguments.
  * @param {string[]} argv - The process.argv array
- * @returns {{ input: string | null, output: string | null, autoOpen: boolean, force: boolean, overwrite: boolean, batch: string | null, quiet: boolean, verbose: boolean }}
+ * @returns {{ input: string | null, output: string | null, autoOpen: boolean, force: boolean, overwrite: boolean, batch: string | null, quiet: boolean, verbose: boolean, fbfFrame: number | null }}
  */
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -243,6 +251,7 @@ function parseArgs(argv) {
   let batch = null;
   let quiet = false;
   let verbose = false;
+  let fbfFrame = null;
 
   for (let i = 0; i < args.length; i++) {
     // WHY: TypeScript doesn't know args[i] is safe within bounds of for loop
@@ -264,6 +273,18 @@ function parseArgs(argv) {
     } else if (arg === '--batch' && i + 1 < args.length) {
       // WHY: args[++i] is string | undefined, convert to string | null for return type consistency
       batch = args[++i] ?? null;
+    } else if (arg === '--fbf-frame' && i + 1 < args.length) {
+      // WHY: Pin a specific frame of an FBF.SVG (svg2fbf format) before
+      // fixing the viewBox so the result describes that single frame
+      // rather than the union of all PROSKENION targets.
+      const raw = args[++i];
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1) {
+        throw new ValidationError(
+          `--fbf-frame must be a positive integer (1-based frame number), got: ${raw}`
+        );
+      }
+      fbfFrame = n;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -280,6 +301,13 @@ function parseArgs(argv) {
   // Validate batch vs single mode
   if (batch && positional.length > 0) {
     throw new ValidationError('Cannot use both --batch and input file argument');
+  }
+
+  // WHY: --fbf-frame N pins one specific frame, which only makes sense
+  // for a single FBF.SVG input. In batch mode every file would be forced
+  // to be FBF, which is almost never the intent — fail loud instead.
+  if (batch && fbfFrame !== null) {
+    throw new ValidationError('Cannot use --fbf-frame with --batch (single-file mode only)');
   }
 
   // Validate required arguments
@@ -303,7 +331,7 @@ function parseArgs(argv) {
     }
   }
 
-  return { input, output, autoOpen, force, overwrite, batch, quiet, verbose };
+  return { input, output, autoOpen, force, overwrite, batch, quiet, verbose, fbfFrame };
 }
 
 /**
@@ -435,9 +463,10 @@ const PUPPETEER_OPTIONS = {
  * @param {string} outputPath - Path where the fixed SVG will be saved
  * @param {boolean} [autoOpen=false] - Whether to auto-open the fixed SVG in Chrome
  * @param {boolean} [force=false] - Whether to force regeneration of all attributes
+ * @param {number|null} [fbfFrame=null] - 1-based FBF.SVG frame number to pin before fixing
  * @returns {Promise<void>}
  */
-async function fixSvgFile(inputPath, outputPath, autoOpen = false, force = false) {
+async function fixSvgFile(inputPath, outputPath, autoOpen = false, force = false, fbfFrame = null) {
   logVerbose(`Processing: ${inputPath}`);
   logVerbose(`Output target: ${outputPath}`);
   logVerbose(`Force mode: ${force}`);
@@ -449,9 +478,23 @@ async function fixSvgFile(inputPath, outputPath, autoOpen = false, force = false
   });
   logVerbose(`Validated input path: ${safePath}`);
 
-  // SECURITY: Read SVG with size limit and validation
-  const svgContent = readSVGFileSafe(safePath);
+  // SECURITY: Read SVG with validation (file-size limit is intentionally
+  // Infinity so multi-hour FBF.SVG renders — millions of frames packed
+  // into a single file — load without rejection).
+  let svgContent = readSVGFileSafe(safePath);
   logVerbose(`Read SVG content: ${svgContent.length} bytes`);
+
+  // FBF.SVG: pin a specific frame BEFORE sanitization so the helper
+  // sees the original PROSKENION/animate structure as authored. The
+  // pinned SVG is still a normal SVG, so sanitization and the rest of
+  // the pipeline work unchanged.
+  if (typeof fbfFrame === 'number' && fbfFrame >= 1) {
+    const pinned = extractFbfFrame(svgContent, fbfFrame);
+    svgContent = pinned.svg;
+    logVerbose(
+      `FBF: pinned frame ${pinned.frameNumber} (#${pinned.frameId}) of ${pinned.totalFrames}`
+    );
+  }
 
   // SECURITY: Sanitize SVG content (remove scripts, event handlers)
   const sanitizedSvg = sanitizeSVGContent(svgContent);
@@ -738,7 +781,7 @@ ${sanitizedSvg}
  * @returns {Promise<void>}
  */
 async function main() {
-  const { input, output, autoOpen, force, overwrite, batch, quiet, verbose } = parseArgs(
+  const { input, output, autoOpen, force, overwrite, batch, quiet, verbose, fbfFrame } = parseArgs(
     process.argv
   );
 
@@ -833,7 +876,7 @@ async function main() {
   if (!input || !output) {
     throw new Error('Internal error: input and output should be set in single file mode');
   }
-  await fixSvgFile(input, output, autoOpen, force);
+  await fixSvgFile(input, output, autoOpen, force, fbfFrame);
 }
 
 // Run CLI only when invoked directly. When required by tests via

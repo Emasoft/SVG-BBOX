@@ -74,7 +74,59 @@ sbb-getbbox sample.svg
 sbb-svg2png input.svg output.png
 sbb-compare file1.svg file2.svg
 sbb-extract input.svg --list
+
+# Every tool that takes a single SVG accepts --fbf-frame N to pin a
+# specific frame of an FBF.SVG (Frame-By-Frame SVG from svg2fbf):
+sbb-getbbox anim.fbf.svg --fbf-frame 7
+sbb-svg2png anim.fbf.svg out.png --fbf-frame 7 --scale 4
 ```
+
+### Browser via CDN (no install required)
+
+The minified UMD bundle is served from both major npm CDNs and works in any
+modern browser via a `<script>` tag — no `npm install`, no bundler:
+
+```html
+<!-- Pick either CDN, both serve the same file from npm -->
+<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+<!-- or -->
+<script src="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+
+<script>
+  const { svg } = SvgVisualBBox.extractFbfFrame(svgString, 7);
+  const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('#myElement');
+</script>
+```
+
+Pin a specific version with `@1.2.1` in place of `@latest` for production.
+
+### Library import (npm package)
+
+After `bun add svg-bbox` / `npm install svg-bbox`, the right entry point is
+picked automatically based on your runtime — see the
+[Choose your runtime](README.md#choose-your-runtime) cheatsheet in the README
+for the full per-scenario table:
+
+```js
+// Browser bundler / Bun — full library
+import {
+  extractFbfFrame,
+  getSvgElementVisualBBoxTwoPassAggressive
+} from 'svg-bbox';
+
+// Node.js (CJS or ESM) — FBF helpers + actionable stubs for DOM-bound functions
+const { extractFbfFrame } = require('svg-bbox'); // CJS
+import { extractFbfFrame } from 'svg-bbox'; // ESM (named or default import)
+
+// Slim FBF-only entry — works in every runtime, smallest dependency surface
+const { extractFbfFrame } = require('svg-bbox/fbf'); // CJS
+import { extractFbfFrame } from 'svg-bbox/fbf'; // ESM
+```
+
+In Node, bbox functions need a real DOM, so calling them directly throws an
+actionable error. Use the
+[Puppeteer-injection pattern](README.md#pattern-c--bbox-computation-in-node-puppeteer-injection-pattern)
+or just shell out to one of the CLI bins.
 
 ---
 
@@ -187,6 +239,11 @@ npm uninstall -g svg-bbox # global
 
 ## Links
 
-- [npm](https://www.npmjs.com/package/svg-bbox)
-- [GitHub](https://github.com/Emasoft/SVG-BBOX)
+- [npm package](https://www.npmjs.com/package/svg-bbox)
+- [GitHub repository](https://github.com/Emasoft/SVG-BBOX)
 - [API Docs](https://github.com/Emasoft/SVG-BBOX/blob/main/API.md)
+- [unpkg CDN](https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js)
+- [jsDelivr CDN](https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js)
+- [Choose your runtime cheatsheet](README.md#choose-your-runtime)
+- [`svg2fbf` companion repo](https://github.com/Emasoft/svg2fbf) (FBF.SVG format
+  spec)

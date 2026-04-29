@@ -16,7 +16,7 @@ concurrency:
 # Only support latest Node.js version for faster CI/CD
 env:
   NODE_VERSION: '24' # Only support Node.js 24 (latest)
-  BUN_VERSION: '1.3.5' # Pinned Bun version for reproducible builds
+  BUN_VERSION: '1.3.13' # Pinned Bun version for reproducible builds (must match publish.yml)
   GIT_FETCH_DEPTH: '10' # Increased from 1 to support selective testing
   # Chrome Pool Configuration (conservative for CI - less RAM than local dev)
   # See config/timeouts.cjs for documentation on these values
@@ -54,13 +54,31 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build with Bun
-        run: bun run build.js
+      - name: Build minified browser bundle (Terser preserves UMD)
+        # WHY `npm run build` (Terser), not `bun run build.js`:
+        #   Bun.build() always wraps UMD entries in a synthetic CJS
+        #   scope, which makes the UMD's runtime detection take the
+        #   `module.exports = factory()` branch — the
+        #   `root.SvgVisualBBox = factory()` global-assignment branch
+        #   never runs and `window.SvgVisualBBox` ends up undefined in
+        #   browsers loading the file via <script>. Terser minifies the
+        #   source byte-for-byte without injecting any wrapper, which
+        #   keeps the UMD intact for CDN consumers (unpkg / jsDelivr).
+        #   See `build.js` for the full root-cause notes.
+        run: npm run build
 
       - name: Verify build output
         run: |
           if [ ! -f SvgVisualBBox.min.js ]; then
             echo "::error::Build failed - SvgVisualBBox.min.js not created"
+            exit 1
+          fi
+          # Guard against accidental Bun-build regression: a CDN-broken
+          # bundle ends with `export default ...`; the working UMD ends
+          # with the IIFE close `}}})});`. Fail loud so a future PR that
+          # silently switches the build script can't slip past CI.
+          if tail -c 200 SvgVisualBBox.min.js | grep -q 'export default'; then
+            echo "::error::SvgVisualBBox.min.js contains 'export default' — UMD wrapper broken; CDN consumers will see window.SvgVisualBBox === undefined. Use 'npm run build' (Terser), not 'bun run build.js'."
             exit 1
           fi
           echo "Build output:"
