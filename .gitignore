@@ -106,6 +106,8 @@ yarn.lock
 bbox_comparison_*/
 docs_dev/
 .claude/settings.local.json
+.claude/chat_history
+.claude/hook_debug.log
 
 # Claude Code plugin caches and session state (private to local install)
 .janitor/
