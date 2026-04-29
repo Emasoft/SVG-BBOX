@@ -106,18 +106,20 @@ export default defineConfig({
     // Max concurrent tests
     maxConcurrency: MAX_CONCURRENT_TESTS,
 
-    // Retry failed tests.
-    // WHY 2 in CI vs 1 locally: A handful of integration tests depend on
-    //   Puppeteer browser-pool timing and on system font availability for
-    //   CJK / Arabic / web-font fallback rendering. They pass
-    //   deterministically when re-run alone but flake under CI's parallel
-    //   slice with limited RAM (SVG_BBOX_MAX_BROWSERS=2). Failed CI runs
-    //   after v1.2.0 traced to exactly this set of tests; rerunning them
-    //   locally was 100% green. Bumping to 2 retries (3 total attempts)
-    //   in CI is the standard mitigation — genuinely-broken tests still
-    //   fail loudly, real flakes get masked. Local stays at 1 so flaky
-    //   tests still surface during development.
-    retry: process.env.CI ? 2 : 1,
+    // Retry failed tests — 2 retries (3 total attempts) everywhere.
+    // WHY: A handful of integration tests depend on Puppeteer browser-pool
+    //   timing and on system font availability for CJK / Arabic / web-font
+    //   fallback rendering. They pass deterministically when re-run alone
+    //   but flake under load — both in CI's RAM-constrained parallel slice
+    //   (SVG_BBOX_MAX_BROWSERS=2) AND in local full-suite runs (the release
+    //   script's pre-publish phase, which exercises ~640 tests at once
+    //   when package.json or another global file changes).
+    //   v1.2.1 release attempt 1 hit exactly this: 7 flaky tests blocked
+    //   the publish even though the FBF code under change was 100% green.
+    //   2 retries is the standard mitigation; broken tests still fail
+    //   loudly across all attempts. The slowdown on green runs is
+    //   essentially zero (retries only fire on failure).
+    retry: 2,
 
     // WHY bail: 0 always: Previously used bail: 1 in CI to fail fast, but this caused
     // only the first failure to be visible in CI logs. With bail: 0, all tests run
