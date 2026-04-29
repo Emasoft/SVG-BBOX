@@ -106,11 +106,13 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
        * Verifies library handles missing web fonts gracefully with fallback rendering.
        * Tests that 404 font loads don't crash bbox calculation.
        */
-      // WHY pageTimeoutMs 60000: This test loads an SVG with a missing web font.
-      // The browser will try to load the font (404), and networkidle0 waits for that to fail.
-      // In CI with parallel tests, this can exceed the default 30s timeout.
+      // WHY pageTimeoutMs 90000 (was 60000): This test loads an SVG with a missing web
+      // font. Chrome's network idle wait must fully time out the 404 before the page is
+      // considered ready. Under concurrent vitest workers (release pipeline), the network
+      // stack is contended and a single 30s networkidle timeout can stretch to 60s+ in
+      // wall-clock time. 90s gives the page-level wait enough headroom.
       const page = await createPageWithSvg('edge-cases/fonts/missing-web-font.svg', {
-        pageTimeoutMs: 60000
+        pageTimeoutMs: 90000
       });
       try {
         // Font will 404, but should fallback to Arial
@@ -129,7 +131,10 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
         // WHY try/finally: Ensure page cleanup even if test fails
         await page.close();
       }
-    }, 60000); // WHY 60s: Font loading attempt can be slow in CI with parallel tests
+      // WHY 180000 (was 60000): With pageTimeoutMs=90s + bbox compute (~30s under load),
+      // worst-case end-to-end wall-clock is ~120s. 180s adds 60s headroom for the
+      // release-pipeline scenario where dozens of test files run together.
+    }, 180000);
 
     it('should handle font-family with special characters', async () => {
       /**
