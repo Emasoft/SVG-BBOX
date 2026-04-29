@@ -415,7 +415,7 @@ get_config() {
     # Use yq if available (proper YAML parsing)
     if [ "$YQ_AVAILABLE" = true ]; then
         local VALUE
-        VALUE=$(yq -r ".$KEY // \"\"" "$CONFIG_FILE" 2>/dev/null)
+        VALUE=$(yq -r ".$KEY" "$CONFIG_FILE" 2>/dev/null)
         if [ -n "$VALUE" ] && [ "$VALUE" != "null" ]; then
             echo "$VALUE"
         else
