@@ -125,13 +125,14 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const puppeteer = require('puppeteer');
 const { getVersion } = require('./version.cjs');
 const {
   BROWSER_TIMEOUT_MS,
   FONT_TIMEOUT_MS,
   PROTOCOL_TIMEOUT_MS
 } = require('./config/timeouts.cjs');
+// WHY launchOrConnect/safeShutdown: see lib/puppeteer-utils.cjs.
+const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 
 const execFilePromise = promisify(execFile);
 
@@ -2855,12 +2856,12 @@ async function main() {
   let browser = null;
   try {
     // SECURITY: Launch browser with security args and configurable timeout
-    browser = await puppeteer.launch({
+    // WHY launchOrConnect: production launches fresh Chromium; tests connect
+    // to shared Chromium via $SBB_BROWSER_WS. See lib/puppeteer-utils.cjs.
+    browser = await launchOrConnect({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
       timeout: MODULE_TIMEOUT_MS,
-      // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
-      // Default 30s for CDP RPC calls is too short under parallel test load.
       protocolTimeout: PROTOCOL_TIMEOUT_MS
     });
 
@@ -3074,13 +3075,15 @@ async function main() {
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new SVGBBoxError(`Comparison failed: ${errorMessage}`, 'COMPARISON_FAILED');
   } finally {
-    // SECURITY: Ensure browser is always closed
+    // SECURITY: Ensure browser is always cleaned up
+    // WHY safeShutdown: closes if launched, disconnects if connected to
+    // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await browser.close();
+        await safeShutdown(browser);
         // eslint-disable-next-line no-unused-vars
-      } catch (_closeErr) {
-        // Force kill if close fails
+      } catch (_shutdownErr) {
+        // Force kill if shutdown fails (only relevant in launch mode)
         const browserProcess = browser.process();
         if (browserProcess) {
           browserProcess.kill('SIGKILL');

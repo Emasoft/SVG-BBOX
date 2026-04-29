@@ -35,7 +35,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer');
 const { openInChrome } = require('./browser-utils.cjs');
 const { printVersion } = require('./version.cjs');
 const {
@@ -43,6 +42,8 @@ const {
   FONT_TIMEOUT_MS,
   PROTOCOL_TIMEOUT_MS
 } = require('./config/timeouts.cjs');
+// WHY launchOrConnect/safeShutdown: see lib/puppeteer-utils.cjs.
+const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -460,7 +461,7 @@ async function fixSvgFile(inputPath, outputPath, autoOpen = false, force = false
 
   try {
     logVerbose('Launching headless browser...');
-    browser = await puppeteer.launch(PUPPETEER_OPTIONS);
+    browser = await launchOrConnect(PUPPETEER_OPTIONS);
     logVerbose('Browser launched successfully');
     const page = await browser.newPage();
 
@@ -709,12 +710,14 @@ ${sanitizedSvg}
         });
     }
   } finally {
-    // SECURITY: Ensure browser is always closed
+    // SECURITY: Ensure browser is always cleaned up
+    // WHY safeShutdown: closes if launched, disconnects if connected to
+    // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await browser.close();
+        await safeShutdown(browser);
       } catch {
-        // Force kill if close fails
+        // Force kill if shutdown fails (only relevant in launch mode)
         // WHY: browser.process() can return null if the browser has already exited
         const browserProcess = browser.process();
         if (browserProcess) {

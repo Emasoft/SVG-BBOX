@@ -117,12 +117,15 @@
 
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer');
 const {
   BROWSER_TIMEOUT_MS,
   FONT_TIMEOUT_MS,
   PROTOCOL_TIMEOUT_MS
 } = require('./config/timeouts.cjs');
+// WHY launchOrConnect/safeShutdown: see sbb-extract.cjs / lib/puppeteer-utils.cjs.
+// Connects to shared Chromium when $SBB_BROWSER_WS is set (test runs);
+// launches fresh Chromium otherwise (end-user CLI invocations).
+const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 
 // Import security utilities
 const {
@@ -483,7 +486,7 @@ async function computeBBox(
 
   let browser = null;
   try {
-    browser = await puppeteer.launch(PUPPETEER_OPTIONS);
+    browser = await launchOrConnect(PUPPETEER_OPTIONS);
     const page = await browser.newPage();
 
     // SECURITY: Set page timeout
@@ -664,12 +667,14 @@ ${sanitizedSvg}
 
     return result;
   } finally {
-    // SECURITY: Ensure browser is always closed
+    // SECURITY: Ensure browser is always cleaned up
+    // WHY safeShutdown: closes if launched, disconnects if connected to
+    // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await browser.close();
+        await safeShutdown(browser);
       } catch {
-        // Force kill if close fails
+        // Force kill if shutdown fails (only relevant in launch mode)
         // WHY: Store process reference to avoid calling browser.process() twice
         const browserProcess = browser.process();
         if (browserProcess) {

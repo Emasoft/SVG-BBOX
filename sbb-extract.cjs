@@ -166,9 +166,13 @@
 
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer');
 const { openInChrome } = require('./browser-utils.cjs');
 const { BROWSER_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
+// WHY launchOrConnect/safeShutdown: When tests set $SBB_BROWSER_WS, this
+// connects to a shared Chromium instead of launching a new one — drops
+// per-test browser launch cost from ~2s to ~50ms. Production behavior
+// (no env var) is unchanged. See lib/puppeteer-utils.cjs for full rationale.
+const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 
 // SECURITY: Import security utilities
 const {
@@ -547,13 +551,12 @@ async function withPageForSvg(inputPath, handler, options = {}) {
   const sanitizedSvg = sanitizeSVGContent(svgContent);
 
   // SECURITY: Launch browser with security args and timeout
-  const browser = await puppeteer.launch({
+  // WHY launchOrConnect: production launches fresh Chromium; tests connect
+  // to shared Chromium via $SBB_BROWSER_WS. See lib/puppeteer-utils.cjs.
+  const browser = await launchOrConnect({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     timeout: BROWSER_TIMEOUT_MS,
-    // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
-    // Default 30s for CDP RPC calls is too short under parallel test load —
-    // bump to 120s to prevent "Runtime.callFunctionOn timed out" failures.
     protocolTimeout: PROTOCOL_TIMEOUT_MS
   });
 
@@ -681,12 +684,14 @@ ${sanitizedSvg}
 
     return await handler(page);
   } finally {
-    // SECURITY: Ensure browser is always closed
+    // SECURITY: Ensure browser is always cleaned up
+    // WHY safeShutdown: closes if launched, disconnects if connected to
+    // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await browser.close();
+        await safeShutdown(browser);
       } catch {
-        // Force kill if close fails
+        // Force kill if shutdown fails (only relevant in launch mode)
         const browserProcess = browser.process();
         if (browserProcess) {
           browserProcess.kill('SIGKILL');

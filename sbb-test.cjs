@@ -42,6 +42,8 @@ const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-util
 
 // Centralized timeout configuration
 const { BROWSER_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
+// WHY launchOrConnect/safeShutdown: see lib/puppeteer-utils.cjs.
+const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 
 // ========================= JSDoc Type Definitions =========================
 
@@ -77,17 +79,16 @@ const { BROWSER_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.c
  * @returns {Promise<import('puppeteer').Browser>}
  */
 async function launchBrowserWithFallback(errorLogMessages) {
-  // Lazy load puppeteer and chrome-launcher to allow --help/--version to work
+  // Lazy load chrome-launcher to allow --help/--version to work
   // even when Chrome binaries are not installed (e.g., in CI package tests)
-  const puppeteer = require('puppeteer');
   const chromeLauncher = require('chrome-launcher');
 
   try {
-    const browser = await puppeteer.launch({
+    // WHY launchOrConnect: in test mode connects to shared $SBB_BROWSER_WS;
+    // in production launches fresh Chromium with --headless=new.
+    const browser = await launchOrConnect({
       // @ts-ignore - 'new' is valid for newer puppeteer versions
       headless: 'new', // new headless mode in recent Chrome versions
-      // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
-      // Default 30s for CDP RPC calls is too short under parallel test load.
       protocolTimeout: PROTOCOL_TIMEOUT_MS
     });
     return browser;
@@ -99,6 +100,7 @@ async function launchBrowserWithFallback(errorLogMessages) {
   }
 
   // Fallback: use chrome-launcher to find a system Chrome/Chromium
+  // (Only reached in launch mode; connect mode succeeds or throws above.)
   let chromePaths;
   try {
     chromePaths = chromeLauncher.Launcher.getInstallations();
@@ -121,6 +123,9 @@ async function launchBrowserWithFallback(errorLogMessages) {
   errorLogMessages.push('[launch] Using system Chrome/Chromium at: ' + chosen);
 
   try {
+    // System Chrome fallback — always launch (connect mode would have
+    // succeeded above if applicable).
+    const puppeteer = require('puppeteer');
     const browser = await puppeteer.launch({
       // @ts-ignore - 'new' is valid for newer puppeteer versions
       headless: 'new',
@@ -589,14 +594,17 @@ async function runTest() {
     writeFileSafe(safeErrPath, errorLogMessages.join('\n'), 'utf8');
     throw new Error(`Fatal error; see error log: ${safeErrPath}`);
   } finally {
-    // SECURITY: Ensure browser is always closed
+    // SECURITY: Ensure browser is always cleaned up
+    // WHY safeShutdown: closes if launched, disconnects if connected to
+    // shared Chromium (prevents tests from killing the shared instance).
     if (browser) {
       try {
-        await browser.close();
+        await safeShutdown(browser);
       } catch {
-        // WHY: browser.close() can throw if browser crashed or connection was
+        // WHY: safeShutdown can throw if browser crashed or connection was
         // lost. Force-killing ensures no zombie Chrome processes remain. We
         // swallow the error because cleanup should not cause test failure.
+        // (Only relevant in launch mode; connect mode has nothing to kill.)
         const browserProcess = browser.process();
         if (browserProcess) {
           browserProcess.kill('SIGKILL');

@@ -2,26 +2,22 @@ import { defineConfig } from 'vitest/config';
 import { TEST_TIMEOUT_MS, HOOK_TIMEOUT_MS } from './config/timeouts.js';
 
 // Parallel execution configuration
-// Why 1 (was 2, 3, 5, originally 10): Even at concurrency 2, the v1.2.1
-// release pipeline produced random "Runtime.callFunctionOn timed out"
-// failures in CJK-text bbox tests (Puppeteer waiting >120s on a single
-// CDP call) and html-preview tests (sbb-extract CLI subprocess hitting
-// the same protocolTimeout). The root cause: each vitest worker spawns
-// its own Puppeteer + Chromium AND each CLI test spawns ANOTHER Chromium
-// from the subprocess, so peak Chromium count was 4+ even at concurrency 2.
+// Why 15 (was 1-10 in earlier attempts): tests/helpers/global-setup.js
+// launches ONE shared Chromium for the entire test run and exposes its
+// WS endpoint via $SBB_BROWSER_WS. Every CLI subprocess and every test
+// helper now connects to that single Chromium via puppeteer.connect()
+// instead of launching its own. Peak Chromium count = 1 regardless of
+// vitest concurrency.
 //
-// Concurrency 1 (serial execution) eliminates inter-worker contention
-// entirely — only one test file runs at a time, only one Puppeteer
-// instance exists at any moment. Total runtime ~13min for the full suite
-// (vs ~5min at concurrency 5), but every release runs to completion
-// without flake. This is the right tradeoff for a release-blocking
-// pipeline; CI can override via VITEST_MAX_CONCURRENT_TESTS env var if
-// faster feedback matters more than determinism on a given branch.
+// With one Chromium handling all tabs, GPU/IPC saturation is impossible
+// and concurrency is bounded only by RAM and tab count. Each tab is
+// ~50-100MB (vs 300-500MB per browser), and Chromium routinely handles
+// 50+ tabs. Concurrency 15 = 15 simultaneous tabs in the shared
+// Chromium = ~1.5GB RAM ceiling, well within macOS/Linux/Windows limits.
 //
-// v1.2.1 release attempts: 7 flaky at concurrency 10, 1-2 at concurrency
-// 5, then html-preview/cli-security at concurrency 3, then 3 tests still
-// flaked at concurrency 2 — finally green at concurrency 1.
-const MAX_CONCURRENT_TESTS = parseInt(process.env.VITEST_MAX_CONCURRENT_TESTS || '1', 10);
+// Override via VITEST_MAX_CONCURRENT_TESTS env var (e.g., 1 for
+// deterministic single-thread debugging, 30 for high-spec CI runners).
+const MAX_CONCURRENT_TESTS = parseInt(process.env.VITEST_MAX_CONCURRENT_TESTS || '15', 10);
 
 // Generate timestamped log filename for test output
 // Format: tests/logs/vitest-YYYY-MM-DD-HH-MM-SS.log
@@ -149,9 +145,15 @@ export default defineConfig({
       shuffle: false
     },
 
-    // Global setup/teardown for browser cleanup
-    // globalTeardown ensures all browser processes are killed even if tests crash
-    globalSetup: undefined,
+    // Global setup/teardown for shared Chromium lifecycle.
+    // - globalSetup launches ONE Chromium for the whole test run, exports
+    //   its WebSocket endpoint via $SBB_BROWSER_WS, and tears it down at
+    //   the end. All CLI subprocesses and test helpers connect to this
+    //   shared instance. See tests/helpers/global-setup.js for cross-platform
+    //   notes (macOS, Linux, Windows handling).
+    // - globalTeardown is the safety net: kills any orphan Chromium
+    //   processes left if globalSetup's teardown failed (e.g., on crash).
+    globalSetup: './tests/helpers/global-setup.js',
     // @ts-ignore - globalTeardown is a valid Vitest option but types may be incomplete
     globalTeardown: './tests/helpers/global-teardown.js',
 

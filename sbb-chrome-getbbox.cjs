@@ -6,11 +6,12 @@
  * with SvgVisualBBox algorithm. It returns bbox information without extraction.
  */
 
-const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const { getVersion } = require('./version.cjs');
 const { PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
+// WHY launchOrConnect/safeShutdown: see lib/puppeteer-utils.cjs.
+const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 
 // Import CLI utilities including shared JSON output function
 // WHY: writeJSONOutput centralizes JSON output handling (DRY principle)
@@ -85,11 +86,9 @@ const {
 async function getBBoxWithChrome(options) {
   const { inputFile, elementIds, margin } = options;
 
-  const browser = await puppeteer.launch({
+  const browser = await launchOrConnect({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
-    // Default 30s for CDP RPC calls is too short under parallel test load.
     protocolTimeout: PROTOCOL_TIMEOUT_MS
   });
 
@@ -215,7 +214,9 @@ async function getBBoxWithChrome(options) {
       results: /** @type {BBoxResults} */ (results)
     };
   } finally {
-    await browser.close();
+    // WHY safeShutdown: closes if launched, disconnects if connected
+    // to shared Chromium (test mode).
+    await safeShutdown(browser);
   }
 }
 

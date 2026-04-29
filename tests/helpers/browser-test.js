@@ -27,26 +27,41 @@ let sharedBrowser = null;
  */
 export async function getBrowser() {
   if (!sharedBrowser) {
-    sharedBrowser = await puppeteer.launch({
-      headless: /** @type {boolean} */ (true), // Use true instead of 'new' for type compatibility
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-web-security', // Allow local file loading
-        '--allow-file-access-from-files'
-      ],
-      // WHY protocolTimeout: see config/timeouts.js (PROTOCOL_TIMEOUT_MS).
-      // Default 30s for CDP RPC calls is too short under parallel test load.
-      // Without this, beforeAll hooks that call browser.newPage() can hang
-      // for 30s+ before failing with "Hook timed out", masking real bugs.
-      protocolTimeout: PROTOCOL_TIMEOUT_MS
-    });
+    // WHY connect-vs-launch: vitest.globalSetup launches one Chromium for
+    // the entire test run and exposes the WS endpoint via $SBB_BROWSER_WS.
+    // Connect to it instead of launching a new browser per test file —
+    // this drops Chromium count from N (one per test file) to 1 (shared)
+    // and eliminates GPU/IPC saturation that causes flake at high
+    // concurrency. See tests/helpers/global-setup.js for full rationale.
+    if (process.env.SBB_BROWSER_WS) {
+      sharedBrowser = await puppeteer.connect({
+        browserWSEndpoint: process.env.SBB_BROWSER_WS,
+        protocolTimeout: PROTOCOL_TIMEOUT_MS
+      });
+    } else {
+      // Fallback: launch fresh Chromium when running outside vitest's
+      // globalSetup (e.g., one-off script invocations of test helpers).
+      sharedBrowser = await puppeteer.launch({
+        headless: /** @type {boolean} */ (true),
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-web-security', // Allow local file loading
+          '--allow-file-access-from-files'
+        ],
+        protocolTimeout: PROTOCOL_TIMEOUT_MS
+      });
+    }
   }
   return sharedBrowser;
 }
 
 /**
- * Close the shared browser instance
+ * Close the shared browser instance.
+ * In connect mode (test runs), this disconnects without killing the
+ * shared Chromium — global-teardown.js owns its lifecycle.
+ * In launch mode (one-off scripts), this fully closes the browser.
+ *
  * @param {number} [timeout=10000] - Maximum time to wait for browser to close
  */
 export async function closeBrowser(timeout = 10000) {
@@ -54,8 +69,22 @@ export async function closeBrowser(timeout = 10000) {
     const browser = sharedBrowser;
     sharedBrowser = null; // Clear reference immediately to prevent double-close
 
+    // Detect mode: if we connected via $SBB_BROWSER_WS, the global-setup
+    // owns the Chromium process and we should only disconnect.
+    const isConnected =
+      process.env.SBB_BROWSER_WS && browser.wsEndpoint() === process.env.SBB_BROWSER_WS;
+
+    if (isConnected) {
+      try {
+        browser.disconnect();
+      } catch {
+        // Already disconnected
+      }
+      return;
+    }
+
     try {
-      // Race between browser.close() and timeout
+      // Race between browser.close() and timeout (launch mode only)
       await Promise.race([
         browser.close(),
         new Promise((_, reject) =>

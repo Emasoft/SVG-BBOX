@@ -67,11 +67,12 @@
  * @property {string} [error] - Error message if failed
  */
 
-const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const { getVersion } = require('./version.cjs');
 const { PROTOCOL_TIMEOUT_MS } = require('./config/timeouts.cjs');
+// WHY launchOrConnect/safeShutdown: see lib/puppeteer-utils.cjs.
+const { launchOrConnect, safeShutdown } = require('./lib/puppeteer-utils.cjs');
 const { printError, printSuccess, printInfo, printBanner, runCLI } = require('./lib/cli-utils.cjs');
 // SECURITY: Import security utilities
 const { SHELL_METACHARACTERS, SVGBBoxError } = require('./lib/security-utils.cjs');
@@ -115,11 +116,9 @@ async function extractWithGetBBox(options) {
   const { inputFile, elementId, outputSvg, outputPng, margin, background, scale, width, height } =
     options;
 
-  const browser = await puppeteer.launch({
+  const browser = await launchOrConnect({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    // WHY protocolTimeout: see config/timeouts.cjs (PROTOCOL_TIMEOUT_MS).
-    // Default 30s for CDP RPC calls is too short under parallel test load.
     protocolTimeout: PROTOCOL_TIMEOUT_MS
   });
 
@@ -250,7 +249,9 @@ ${defsContent}${/** @type {Element} */ (clone).outerHTML}
       log(`PNG rendered to: ${outputPng}`, 'essential');
     }
   } finally {
-    await browser.close();
+    // WHY safeShutdown: closes if launched, disconnects if connected
+    // to shared Chromium (test mode).
+    await safeShutdown(browser);
   }
 }
 
