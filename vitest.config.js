@@ -82,13 +82,18 @@ export default defineConfig({
     ],
 
     // Reporter configuration
-    // - 'verbose' for console output (CI needs this)
-    // - 'json' writes to timestamped log file in tests/logs/ for local analysis
-    reporters: process.env.CI ? ['verbose'] : ['verbose', 'json'],
+    // - 'verbose' for console output (always)
+    // - 'json' writes a structured log file for offline analysis. WHY in CI:
+    //   the verbose reporter's interleaved parallel output frequently gets
+    //   truncated mid-stream by the GitHub Actions log captor, leaving no
+    //   "Test Files X failed" summary anywhere — making failures
+    //   undebuggable. The JSON log is a deterministic, complete record.
+    reporters: ['verbose', 'json'],
 
-    // Output file for JSON reporter (timestamped log file)
-    // Only used when running locally (not in CI)
-    outputFile: process.env.CI ? undefined : getLogFilename(),
+    // Output file for JSON reporter (timestamped log file).
+    // In CI we still produce this file; it's tiny vs the verbose stream
+    // and is the source of truth when the captured stdout is incomplete.
+    outputFile: getLogFilename(),
 
     // Disable isolation for faster tests
     isolate: true,
@@ -101,8 +106,18 @@ export default defineConfig({
     // Max concurrent tests
     maxConcurrency: MAX_CONCURRENT_TESTS,
 
-    // Retry failed tests once
-    retry: 1,
+    // Retry failed tests.
+    // WHY 2 in CI vs 1 locally: A handful of integration tests depend on
+    //   Puppeteer browser-pool timing and on system font availability for
+    //   CJK / Arabic / web-font fallback rendering. They pass
+    //   deterministically when re-run alone but flake under CI's parallel
+    //   slice with limited RAM (SVG_BBOX_MAX_BROWSERS=2). Failed CI runs
+    //   after v1.2.0 traced to exactly this set of tests; rerunning them
+    //   locally was 100% green. Bumping to 2 retries (3 total attempts)
+    //   in CI is the standard mitigation — genuinely-broken tests still
+    //   fail loudly, real flakes get masked. Local stays at 1 so flaky
+    //   tests still surface during development.
+    retry: process.env.CI ? 2 : 1,
 
     // WHY bail: 0 always: Previously used bail: 1 in CI to fail fast, but this caused
     // only the first failure to be visible in CI logs. With bail: 0, all tests run

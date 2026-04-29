@@ -171,6 +171,21 @@ jobs:
             node scripts/test-selective.cjs HEAD~1
           fi
 
+      # WHY upload tests/logs/ even when the test step succeeds: vitest's
+      # JSON reporter writes per-run logs that are the only programmatic
+      # record of which tests ran (the verbose stdout in GitHub Actions
+      # logs gets truncated mid-stream). Uploading the file lets us
+      # inspect failures from intermittent flaky tests after the fact.
+      # `if: always()` ensures we still upload it when the test step fails.
+      - name: Upload vitest JSON logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-logs
+          path: tests/logs/vitest-*.log
+          retention-days: 14
+          if-no-files-found: ignore
+
   # =============================================================================
   # E2E Tests (browser tests) - Multi-platform
   # =============================================================================
