@@ -280,6 +280,6 @@ describe('Diff Score Accuracy Tests', () => {
 
       const result3 = JSON.parse(stdout3);
       expect(result3.diffPercentage).toBe(0);
-    }, 120000);
+    }, 180000);
   });
 });

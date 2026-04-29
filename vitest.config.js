@@ -2,16 +2,28 @@ import { defineConfig } from 'vitest/config';
 import { TEST_TIMEOUT_MS, HOOK_TIMEOUT_MS } from './config/timeouts.js';
 
 // Parallel execution configuration
-// Why 5 (was 10): Puppeteer tests share a browser pool. With CI capping
-// SVG_BBOX_MAX_BROWSERS at 2, raising vitest concurrency above the pool
-// size queues tests behind browser allocation. Locally without that cap
-// the OS happily spawns more Chromium instances, but each one fights
-// for shared GPU + font + memory resources, causing the
-// "should handle SVG with text elements" / "should handle threshold
-// correctly" tests to time out under load (60-120s test timeouts hit
-// even after retry: 2). Five is a headroom-friendly value that still
-// runs the suite at near-peak throughput on modern hardware.
-const MAX_CONCURRENT_TESTS = 5;
+// Why 3 (was 5, originally 10): Each integration test invokes a CLI tool
+// (sbb-compare, sbb-svg2png, etc.) which spawns its own Puppeteer
+// subprocess. There is no shared browser pool across vitest workers — every
+// CLI subprocess launches its own Chromium. With concurrency 5, peak load
+// hits 5-10 Chromium processes fighting for GPU / font / memory resources,
+// and tests that issue MULTIPLE sequential CLI invocations (e.g.
+// "should handle threshold correctly" runs sbb-compare 3 times) blow past
+// even 120s timeouts because each invocation now has to queue for cores
+// and rendering bandwidth.
+//
+// Concurrency 3 matches MAX_CONCURRENT_BROWSERS=3 (the local default in
+// config/timeouts.cjs). It also matches CI's SVG_BBOX_MAX_BROWSERS=2 + 1
+// headroom slot so the same value works in both environments without
+// per-env overrides. Throughput drop vs concurrency 5 is ~30% on the full
+// suite (3 minutes → 4 minutes locally), which is the price for releases
+// that don't randomly fail on browser-pool contention.
+//
+// v1.2.1 release attempts 1-3 hit this exact issue: 7 flaky tests at
+// concurrency 10, then 1-2 stragglers at concurrency 5, then "should
+// handle threshold correctly" at 120s × 3 retries = 360s exhausted before
+// dropping to 3.
+const MAX_CONCURRENT_TESTS = 3;
 
 // Generate timestamped log filename for test output
 // Format: tests/logs/vitest-YYYY-MM-DD-HH-MM-SS.log
