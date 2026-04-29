@@ -21,8 +21,9 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
 
 // CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
-// sbb-test launches a browser, so needs extra time
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): sbb-test launches browsers; under release-pipeline
+// parallel load 60s was insufficient. 120s matches PROTOCOL_TIMEOUT_MS.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 describe('sbb-test CLI Output Options', () => {
   let tempDir;

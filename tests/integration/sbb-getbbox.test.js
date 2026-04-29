@@ -22,7 +22,11 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
 
 // CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): Under release-pipeline parallel load, CLI subprocesses
+// queue for browser-pool slots and CDP bandwidth; 60s was insufficient.
+// 120s matches PROTOCOL_TIMEOUT_MS (config/timeouts.cjs) so the CLI gets
+// its full Puppeteer budget plus a few seconds of vitest overhead.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 describe('sbb-getbbox CLI Integration Tests', () => {
   let tempDir;

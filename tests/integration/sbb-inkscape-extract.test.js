@@ -18,7 +18,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): release-pipeline parallel load — see sibling test files.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 const EXTRACT_PATH = path.join(__dirname, '../../sbb-inkscape-extract.cjs');
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');

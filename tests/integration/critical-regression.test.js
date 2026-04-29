@@ -54,7 +54,8 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
 
 // CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): release-pipeline parallel load — see sibling test files.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 /**
  * Parse PNG file and return dimensions and pixel data

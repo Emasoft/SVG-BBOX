@@ -42,7 +42,8 @@ import path from 'path';
 import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 // CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): release-pipeline parallel load — see sibling test files.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 // Make this test optional by checking for ENABLE_VIEWBOX_ACCURACY_TEST env var
 const testIfEnabled = process.env.ENABLE_VIEWBOX_ACCURACY_TEST ? it : it.skip;

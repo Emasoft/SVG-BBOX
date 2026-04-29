@@ -30,7 +30,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
 
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): release-pipeline parallel load — see sibling test files.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 const FBF_FIXTURE = path.join(projectRoot, 'tests/fixtures/fbf-three-frames.fbf.svg');
 

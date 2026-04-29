@@ -24,7 +24,9 @@ const projectRoot = path.resolve(__dirname, '../..');
 // Same buffer factor used by sbb-svg2png.test.js — CLI tools spawn a real
 // browser, which adds non-trivial overhead on top of the configured
 // per-test timeout.
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): see sbb-svg2png.test.js — release-pipeline parallel
+// load needs 120s, matching PROTOCOL_TIMEOUT_MS.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 const FIXTURE_PATH = path.join(projectRoot, 'tests/fixtures/fbf-three-frames.fbf.svg');
 

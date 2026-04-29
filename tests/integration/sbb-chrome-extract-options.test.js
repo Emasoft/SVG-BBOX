@@ -26,9 +26,9 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
 
 // CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
-// WHY use CLI_TIMEOUT_MS * 2: CLI tools internally launch browsers, need overhead buffer
-// Allows CI environment to override via config (CI is slower than local)
-const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
+// WHY * 4 (was * 2): release-pipeline parallel load — see sibling test files.
+// 120s matches PROTOCOL_TIMEOUT_MS so CLI subprocess gets full Puppeteer budget.
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 /**
  * Helper to parse SVG and extract attributes
