@@ -236,6 +236,13 @@ function parseArgs(argv) {
   const parser = createModeArgParser({
     name: 'sbb-extract',
     description: 'Extract and rename SVG objects',
+    tagline: 'List, extract, export, or rename objects inside an SVG.',
+    longDescription:
+      'sbb-extract is a multi-mode tool. The mode is selected by a single trigger ' +
+      'flag (--list, --extract <id>, --export-all <dir>, --rename <map.json>) — ' +
+      'all other flags apply to whichever mode you picked. Default mode (no trigger) ' +
+      'is --list. Works on any SVG, including FBF.SVG (svg2fbf) when combined with ' +
+      '--fbf-frame to pin a specific frame.',
     defaultMode: 'list',
     modeFlags: {
       '--list': 'list',
@@ -245,35 +252,102 @@ function parseArgs(argv) {
       // WHY: --batch-ids also triggers extract mode for batch extraction of multiple elements
       '--batch-ids': { mode: 'extract', consumesValue: true, valueTarget: 'batch-ids' }
     },
+    examples: [
+      {
+        title: 'List every object in an SVG (default mode):',
+        command: 'sbb-extract icons.svg'
+      },
+      {
+        title: 'Extract one object by id and save it:',
+        command: 'sbb-extract icons.svg --extract star star.svg'
+      },
+      {
+        title: 'Extract many objects in one go from a list file:',
+        command: 'sbb-extract icons.svg --batch-ids ids.txt --out-dir ./out'
+      },
+      {
+        title: 'Export every named object to a directory:',
+        command: 'sbb-extract icons.svg --export-all ./icons-out'
+      },
+      {
+        title: 'Rename objects from a JSON mapping {oldId: newId}:',
+        command: 'sbb-extract icons.svg --rename map.json -o renamed.svg'
+      },
+      {
+        title: 'List objects in frame 5 of an FBF.SVG:',
+        command: 'sbb-extract animation.fbf.svg --fbf-frame 5'
+      }
+    ],
     globalFlags: [
-      { name: 'json', alias: 'j', type: 'boolean', description: 'Output in JSON format' },
-      { name: 'auto-open', type: 'boolean', description: 'Open result in Chrome' },
+      {
+        name: 'json',
+        alias: 'j',
+        type: 'boolean',
+        description: 'Emit machine-readable JSON instead of human-readable text.'
+      },
+      {
+        name: 'auto-open',
+        type: 'boolean',
+        description: 'Open the resulting SVG / preview in Chrome when the operation completes.'
+      },
       {
         name: 'ignore-resolution',
         type: 'boolean',
-        description: 'Use full drawing bbox instead of width/height for viewBox'
+        description:
+          'Use the full visual bbox (ignore the SVG width/height attributes) when ' +
+          'computing the output viewBox for extracted objects.',
+        advanced: true
       },
       {
         name: 'quiet',
         alias: 'q',
         type: 'boolean',
-        description: 'Minimal output - only essential info'
+        description: 'Minimal output — only essential info on success.'
       },
       {
         name: 'verbose',
         alias: 'v',
         type: 'boolean',
-        description: 'Show detailed progress information'
+        description: 'Show detailed progress information for long batch runs.'
       },
       {
         name: 'fbf-frame',
         type: 'number',
+        valueLabel: '<N>',
         description:
-          'Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame SVG from svg2fbf) ' +
-          'before list / extract / export / rename. Single-input only.',
+          'FBF.SVG only: pin frame N (1-based) before list / extract / export / rename. ' +
+          'Single-input only. See the FBF.SVG section below.',
         validator: (v) => Number.isInteger(v) && v >= 1,
         validationError: '--fbf-frame must be a positive integer (1-based)'
       }
+    ],
+    batch: {
+      flag: '--batch-ids',
+      argLabel: '<ids.txt>',
+      formatBody:
+        'Extract many objects in one run. <ids.txt> is a UTF-8 text file with ONE entry ' +
+        'per line. Each line is either a bare object ID, or an "id|output.svg" pair ' +
+        '(pipe-separated) when you want a custom output filename per object. Use ' +
+        '--out-dir to set a common output directory; default is the current directory.',
+      examples: [
+        'sbb-extract icons.svg --batch-ids ids.txt --out-dir ./out',
+        'sbb-extract icons.svg --batch-ids ids.txt --out-dir ./out --json'
+      ]
+    },
+    fbf: {
+      flags: [
+        {
+          flag: '--fbf-frame <N>',
+          description:
+            'Pin frame N (1-based) of an FBF.SVG before any operation. Works in every ' +
+            'mode — list, extract, export-all, rename.'
+        }
+      ]
+    },
+    exitCodes: [
+      [0, 'Success'],
+      [1, 'Invalid argument or runtime error'],
+      [2, 'File not found / unreadable']
     ],
     modes: {
       list: {

@@ -104,67 +104,178 @@ create your own comparison with timestamped output directory.
 
 ## 📦 Installation
 
-### Quick Install (npx - No Installation Required!)
+### Quick Install (no installation required)
 
-You can run any svg-bbox tool directly without installing:
+Run any tool on demand with `npx` (npm) or `bunx` (bun):
 
 ```bash
-# See all available commands
-npx svg-bbox
-
-# Run specific tools
+npx svg-bbox                         # interactive launcher
 npx sbb-getbbox myfile.svg
-npx sbb-svg2png myfile.svg output.png
+npx sbb-svg2png myfile.svg out.png
 npx sbb-extract myfile.svg --list
+
+# bun equivalent
+bunx svg-bbox
+bunx sbb-getbbox myfile.svg
 ```
 
-### Global Install (Recommended for Frequent Use)
+### Global install (recommended for frequent use)
+
+| Package manager | Install                    | Update                         | Uninstall                     |
+| --------------- | -------------------------- | ------------------------------ | ----------------------------- |
+| **npm**         | `npm install -g svg-bbox`  | `npm update -g svg-bbox`       | `npm uninstall -g svg-bbox`   |
+| **bun**         | `bun add -g svg-bbox`      | `bun update -g svg-bbox`       | `bun remove -g svg-bbox`      |
+| **pnpm**        | `pnpm add -g svg-bbox`     | `pnpm update -g svg-bbox`      | `pnpm remove -g svg-bbox`     |
+| **yarn**        | `yarn global add svg-bbox` | `yarn global upgrade svg-bbox` | `yarn global remove svg-bbox` |
+
+After a global install the 13 binaries are on `$PATH`:
 
 ```bash
-# bun (recommended - fastest)
-bun add -g svg-bbox
-
-# npm
-npm install -g svg-bbox
-
-# pnpm
-pnpm add -g svg-bbox
-
-# yarn
-yarn global add svg-bbox
-
-# After global install, run commands directly:
-svg-bbox              # Show all available commands
-sbb-getbbox file.svg  # Compute bounding box
-sbb-svg2png file.svg output.png
+svg-bbox              # interactive launcher (or shows the suite menu with --help)
+sbb-getbbox file.svg
+sbb-svg2png file.svg out.png
+# …etc
 ```
 
-### Local Install (For Projects)
+### Local install (per-project dependency)
 
 ```bash
-# bun (recommended - fastest)
-bun add svg-bbox
+npm install svg-bbox        # or: bun add svg-bbox / pnpm add svg-bbox / yarn add svg-bbox
 
-# npm
-npm install svg-bbox
-
-# pnpm
-pnpm add svg-bbox
-
-# yarn
-yarn add svg-bbox
-
-# Then use via bunx/npx or package.json scripts:
-bunx sbb-getbbox file.svg
+# Run via your package manager:
 npx sbb-getbbox file.svg
+bunx sbb-getbbox file.svg
+pnpm exec sbb-getbbox file.svg
+yarn sbb-getbbox file.svg
 ```
 
-### Via CDN (Browser - No Build Tools Required!)
+### Mixing package managers (avoid this)
+
+Installing svg-bbox with **two** package managers at the same time leads to two
+parallel copies, two `node_modules` trees, and two `$PATH` entries that race for
+which `sbb-*` binary wins. **Always uninstall before switching:**
+
+```bash
+# Switching from npm-global → bun-global
+npm uninstall -g svg-bbox    # remove the npm copy first
+bun add -g svg-bbox          # then install with bun
+
+# Switching from bun-global → npm-global
+bun remove -g svg-bbox
+npm install -g svg-bbox
+```
+
+For local installs the same rule applies: **delete `node_modules/` and the
+existing lockfile** (or use `npm uninstall svg-bbox` / `bun remove svg-bbox`)
+before re-installing with the other manager. Do not commit two lockfiles
+(`package-lock.json` + `bun.lock` + `pnpm-lock.yaml`) into one repo — pick one
+package manager per project.
+
+If you have already created a mixed install, this is the safe cleanup:
+
+```bash
+# 1. Remove the package from every manager you used
+npm uninstall -g svg-bbox 2>/dev/null
+bun remove -g svg-bbox 2>/dev/null
+pnpm remove -g svg-bbox 2>/dev/null
+yarn global remove svg-bbox 2>/dev/null
+
+# 2. Verify nothing remains on PATH
+which svg-bbox sbb-getbbox sbb-compare    # should print nothing
+
+# 3. Install fresh with your chosen manager
+bun add -g svg-bbox
+```
+
+### Bun's "minimum release age" — fresh-publish gotcha
+
+By default Bun's resolver **blocks any package version published less than 3
+days ago** (`minimum-release-age: 259200`). This is a defence against
+account-takeover attacks. If you try to install a brand-new svg-bbox release
+within that window, Bun fails with:
+
+```
+error: No version matching "svg-bbox" found for specifier "1.3.0"
+       (blocked by minimum-release-age: 259200 seconds)
+```
+
+Workarounds — pick whichever fits your context:
+
+```bash
+# One-off install (recommended): override per-command
+bun add svg-bbox@1.3.0 --minimum-release-age 0
+
+# Persistent (all installs in this shell)
+BUN_CONFIG_MINIMUM_RELEASE_AGE=0 bun add svg-bbox
+
+# Or wait 3 days and bun installs the version normally
+```
+
+`npm` / `pnpm` / `yarn` do not implement this policy and are unaffected.
+
+### Postinstall scripts (what runs, and how to opt out)
+
+`svg-bbox` itself ships **no `postinstall`** hook. However, two transitive
+dependencies do — and `npm install` runs them by default:
+
+| Dependency  | Postinstall does                       | Disk impact |
+| ----------- | -------------------------------------- | ----------- |
+| `puppeteer` | Downloads a matching Chromium build    | ~150 MB     |
+| `esbuild`   | Downloads the platform-specific binary | ~10 MB      |
+
+If you would rather use your **system Chrome** (or you are on a sandboxed CI /
+air-gapped network and want zero downloads), skip them at install time:
+
+```bash
+# npm / pnpm / yarn: --ignore-scripts disables ALL postinstall hooks
+npm install svg-bbox --ignore-scripts
+pnpm install svg-bbox --ignore-scripts
+yarn add svg-bbox --ignore-scripts
+
+# bun: postinstall scripts are OFF by default unless the package is in
+# `trustedDependencies`. svg-bbox lists puppeteer/sharp/esbuild there for
+# convenience — you can drop them from your own package.json if you don't
+# want the auto-download.
+```
+
+Then either point the toolkit at your system Chrome:
+
+```bash
+export SVG_BBOX_BROWSER_PATH="/path/to/chrome"   # or use the macOS/Linux paths svg-bbox auto-detects
+export SVG_BBOX_SKIP_BROWSER_DOWNLOAD=1          # suppress any future auto-downloads
+```
+
+…or run the **opt-in** browser installer when you actually need it:
+
+```bash
+# Manually run the browser-install step that the postinstall would have run
+npm exec -- svg-bbox install-browsers
+# or
+bunx svg-bbox install-browsers
+```
+
+The `svg-bbox install-browsers` script runs
+`playwright install --with-deps chromium && npx puppeteer browsers install chrome`.
+Nothing is downloaded unless you invoke it.
+
+### Clean uninstall
+
+```bash
+# npm                          bun
+npm uninstall svg-bbox      ;  bun remove svg-bbox
+npm uninstall -g svg-bbox   ;  bun remove -g svg-bbox
+
+# Remove the auto-downloaded Chromium too (if you used it)
+rm -rf ~/.cache/puppeteer
+rm -rf ~/.cache/ms-playwright
+```
+
+### Via CDN (browser, no build tools)
 
 For direct browser usage, use the minified UMD build from a CDN:
 
 ```html
-<!-- Via unpkg (Recommended) -->
+<!-- Via unpkg (recommended) -->
 <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
 
 <!-- Via jsdelivr -->
@@ -173,10 +284,7 @@ For direct browser usage, use the minified UMD build from a CDN:
 <!-- Then use the global SvgVisualBBox object -->
 <script>
   (async () => {
-    // Wait for fonts to load
     await SvgVisualBBox.waitForDocumentFonts(document, 5000);
-
-    // Get bbox for an SVG element
     const bbox =
       await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('my-svg-id');
     console.log('BBox:', bbox);
@@ -184,30 +292,26 @@ For direct browser usage, use the minified UMD build from a CDN:
 </script>
 ```
 
-**File sizes:**
-
-- Original: ~90 KB
-- Minified (CDN): ~25 KB _(72% reduction)_
+CDN bundle sizes: original ~90 KB, minified ~25 KB (≈ 72 % reduction).
 
 ### Clone from GitHub
 
 ```bash
 git clone https://github.com/Emasoft/SVG-BBOX.git
 cd SVG-BBOX
-bun install
+bun install     # or: npm install / pnpm install / yarn install
 
 # Run tools directly from source
 node sbb-getbbox.cjs myfile.svg
 ```
 
-> **Note:** In the documentation below, you'll see two command styles:
+> **Note:** Two equivalent command styles appear throughout the docs:
 >
-> - `bunx sbb-getbbox` or `npx sbb-getbbox` - Use this when installed via
->   package manager (recommended)
-> - `node sbb-getbbox.cjs` - Use this when running from cloned source
+> - `bunx sbb-getbbox` / `npx sbb-getbbox` — when installed via a package
+>   manager
+> - `node sbb-getbbox.cjs` — when running from a cloned checkout
 >
-> Both are equivalent. The bunx/npx style works after `bun add svg-bbox` or
-> `npm install svg-bbox`.
+> Both forms are interchangeable. Help is identical: `<tool> --help`.
 
 After installation, the following CLI commands are available:
 
@@ -237,6 +341,47 @@ After installation, the following CLI commands are available:
 > **⚠️ Accuracy Warning:** Inkscape tools have known issues with font bounding
 > boxes. Use core tools for production. Inkscape tools are for comparison
 > purposes only.
+
+### Discovering tools — `--help` and `--version`
+
+Every binary ships a rich, sectioned help screen. Each one starts with a branded
+header box (tool name, version, parent package, repository URL), followed by a
+multi-paragraph DESCRIPTION, USAGE syntax, real-world EXAMPLES, OPTIONS split
+into Common / Tool / Advanced groups, optional BATCH MODE and FBF.SVG SUPPORT
+sections (where applicable), an ENVIRONMENT variables table, EXIT CODES,
+free-form NOTES, and a LEARN MORE footer with links back to this repo.
+
+```bash
+sbb-compare --help
+```
+
+```text
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║  sbb-compare  v1.3.1                                                       ║
+║  Pixel-diff any pair of images: SVG-vs-SVG, SVG-vs-PNG, PNG-vs-PNG,        ║
+║  FBF.SVG-vs-anything.                                                      ║
+║                                                                            ║
+║  Part of svg-bbox · https://github.com/Emasoft/SVG-BBOX                    ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+DESCRIPTION
+───────────
+  Renders both inputs to bitmaps with headless Chromium and computes the
+  per-pixel difference. Either side can be an SVG, a PNG, or an FBF.SVG ...
+…
+```
+
+```bash
+sbb-getbbox --version    # -> sbb-getbbox version 1.3.1
+```
+
+Every tool also exposes:
+
+- `-h, --help` — full help screen
+- `-v, --version` — version string
+- A consistent EXIT CODES table (see each tool's `--help`)
 
 ### From Source
 

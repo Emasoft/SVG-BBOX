@@ -85,6 +85,8 @@ const { SHELL_METACHARACTERS, SVGBBoxError } = require('./lib/security-utils.cjs
 // running PROSKENION animation would visit across all frames.
 const { extractFbfFrame } = require('./lib/fbf.cjs');
 
+const helpFormatter = require('./lib/help-formatter.cjs');
+
 // WHY: Module-level flags for output verbosity control
 // Set by parseArgs() and respected by log functions
 let MODULE_QUIET = false;
@@ -385,136 +387,200 @@ async function renderToPng(page, svgContent, outputPath, options) {
 }
 
 /**
- * Print help message
+ * Print help message using the unified help formatter.
  * @returns {void}
  */
 function printHelp() {
-  const version = getVersion();
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-chrome-extract - Extract using Chrome .getBBox()                      ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-ℹ Version ${version}
-
-DESCRIPTION:
-  Extract SVG elements using Chrome's native .getBBox() method.
-  This tool is for comparison with SvgVisualBBox and Inkscape extraction.
-
-USAGE:
-  sbb-chrome-extract input.svg --id <element-id> --output <output.svg> [options]
-  sbb-chrome-extract --batch <file> [options]
-
-REQUIRED ARGUMENTS (SINGLE MODE):
-  input.svg               Input SVG file path
-  --id <element-id>       ID of the element to extract
-
-OUTPUT OPTIONS:
-  --output <path>         Output SVG file path (required in single mode)
-  --png <path>            Also render PNG to this path (optional)
-
-BATCH PROCESSING:
-  --batch <file>          Process multiple extractions from batch file
-                          Format per line: input.svg object_id output.svg
-                          (tab or space separated)
-                          Lines starting with # are comments
-
-BATCH FILE FORMAT:
-  Each line contains: input.svg object_id output.svg
-  - Tab-separated or space-separated
-  - Lines starting with # are comments
-
-  Example batch file (extractions.txt):
-    # Extract text elements from drawing
-    drawing.svg text39 text39.svg
-    drawing.svg text40 text40.svg
-    drawing.svg logo logo.svg
-
-BBOX OPTIONS:
-  --margin <number>       Margin around bbox in SVG units (default: 5)
-  --fbf-frame <N>         Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                          SVG produced by https://github.com/Emasoft/svg2fbf)
-                          before extraction. The PROSKENION <use> is
-                          rewritten to #FRAMEnnnnn and its <animate> is
-                          dropped, so the extracted SVG/PNG reflects that
-                          specific frame. Single-file mode only — cannot be
-                          combined with --batch.
-
-PNG RENDERING OPTIONS:
-  --scale <number>        Resolution multiplier (default: 4)
-                          Higher = better quality but larger file
-
-  --width <pixels>        Exact PNG width in pixels
-  --height <pixels>       Exact PNG height in pixels
-                          If only one dimension specified, other is computed
-                          If both omitted, uses scale factor
-
-  --background <color>    Background color (default: transparent)
-                          Options:
-                            - transparent (PNG transparency)
-                            - white, black, red, etc. (CSS colors)
-                            - #RRGGBB (hex colors)
-                            - rgba(r,g,b,a) (CSS rgba format)
-
-GENERAL OPTIONS:
-  --help, -h              Show this help message
-  --version, -v           Show version number
-  --quiet                 Minimal output - only prints extracted file paths
-                          Useful for scripting and automation
-  --verbose               Show detailed progress information
-
-═══════════════════════════════════════════════════════════════════════════════
-
-EXAMPLES:
-
-  # Extract element with default margin
-  sbb-chrome-extract drawing.svg --id text39 --output text39.svg
-
-  # Extract and render PNG with transparent background
-  sbb-chrome-extract drawing.svg --id text39 \\
-    --output text39.svg --png text39.png
-
-  # Extract with custom margin and white background PNG
-  sbb-chrome-extract drawing.svg --id logo \\
-    --output logo.svg --png logo.png \\
-    --margin 10 --background white
-
-  # Extract with exact PNG dimensions at high resolution
-  sbb-chrome-extract chart.svg --id graph \\
-    --output graph.svg --png graph.png \\
-    --width 1920 --height 1080 --background "#f0f0f0"
-
-  # Extract with custom scale and colored background
-  sbb-chrome-extract icon.svg --id main_icon \\
-    --output icon.svg --png icon.png \\
-    --scale 8 --background "rgba(255, 255, 255, 0.9)"
-
-  # Batch extraction from file list
-  sbb-chrome-extract --batch extractions.txt
-
-  # Batch extraction with margin and PNG output
-  sbb-chrome-extract --batch extractions.txt --margin 10
-
-═══════════════════════════════════════════════════════════════════════════════
-
-COMPARISON NOTES:
-
-  This tool uses Chrome's native .getBBox() method, which:
-  • Uses geometric calculations based on element bounds
-  • Often OVERSIZES vertically due to font metrics (ascender/descender)
-  • Ignores visual effects like filters, shadows, glows
-  • May not accurately reflect actual rendered pixels
-
-  Compare with:
-  • sbb-extract: Uses SvgVisualBBox (pixel-accurate canvas rasterization)
-  • sbb-inkscape-extract: Uses Inkscape (often UNDERSIZES due to font issues)
-
-USE CASES:
-  • Demonstrate .getBBox() limitations vs SvgVisualBBox
-  • Create comparison test cases
-  • Benchmark against other extraction methods
-  • Educational purposes showing why accurate bbox matters
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-chrome-extract',
+      tagline:
+        "Extract one element from an SVG using Chromium's native .getBBox() (and optionally render a PNG of it).",
+      description:
+        'Loads the SVG into headless Chromium, finds the element by ID, computes its bounding ' +
+        "box with the browser's native .getBBox() (geometric, not pixel-accurate), and writes a " +
+        'standalone SVG cropped to that bbox. Optionally rasterises the result to PNG with ' +
+        'configurable scale, exact pixel dimensions, and background colour. Useful for ' +
+        'comparing bbox results against SvgVisualBBox (sbb-extract) and Inkscape ' +
+        '(sbb-inkscape-extract). Note: .getBBox() often OVERSIZES vertically due to font ' +
+        'metrics — use sbb-extract for pixel-accurate results.',
+      usage: [
+        'sbb-chrome-extract <input.svg> --id <element-id> --output <out.svg> [options]',
+        'sbb-chrome-extract <input.svg> --id <element-id> --output <out.svg> --png <out.png> [options]',
+        'sbb-chrome-extract --batch <list.txt> [options]'
+      ],
+      examples: [
+        {
+          title: 'Extract one element with the default 5-unit margin:',
+          command: 'sbb-chrome-extract drawing.svg --id text39 --output text39.svg'
+        },
+        {
+          title: 'Extract and render a transparent-background PNG:',
+          command: 'sbb-chrome-extract drawing.svg --id text39 --output text39.svg --png text39.png'
+        },
+        {
+          title: 'Extract with a wider margin and a white-background PNG:',
+          command:
+            'sbb-chrome-extract drawing.svg --id logo --output logo.svg --png logo.png --margin 10 --background white'
+        },
+        {
+          title: 'Render PNG at an exact resolution (1920x1080) with a hex background:',
+          command:
+            'sbb-chrome-extract chart.svg --id graph --output graph.svg --png graph.png --width 1920 --height 1080 --background "#f0f0f0"'
+        },
+        {
+          title: 'High-DPI extraction with semi-transparent background:',
+          command:
+            'sbb-chrome-extract icon.svg --id main_icon --output icon.svg --png icon.png --scale 8 --background "rgba(255,255,255,0.9)"'
+        },
+        {
+          title: 'Pin frame 3 of an FBF.SVG before extraction:',
+          command:
+            'sbb-chrome-extract animation.fbf.svg --id text40 --output frame3.svg --fbf-frame 3'
+        },
+        {
+          title: 'Batch-extract many elements listed in a text file:',
+          command: 'sbb-chrome-extract --batch extractions.txt'
+        },
+        {
+          title: 'Batch extract with custom margin applied to every entry:',
+          command: 'sbb-chrome-extract --batch extractions.txt --margin 10'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'id',
+          type: 'string',
+          valueLabel: '<element-id>',
+          description: 'ID of the SVG element to extract. Required in single-file mode.'
+        },
+        {
+          name: 'output',
+          type: 'string',
+          valueLabel: '<out.svg>',
+          description:
+            'Path for the cropped output SVG. Required in single-file mode (batch mode reads ' +
+            'output paths from the batch file).'
+        },
+        {
+          name: 'png',
+          type: 'string',
+          valueLabel: '<out.png>',
+          description:
+            'Also render the extracted region to a PNG at this path. Combine with --scale, ' +
+            '--width/--height, and --background to control rasterisation.'
+        },
+        {
+          name: 'margin',
+          type: 'number',
+          valueLabel: '<units>',
+          description: 'Margin around the bbox in SVG user units.',
+          default: 5
+        },
+        {
+          name: 'batch',
+          type: 'string',
+          valueLabel: '<list.txt>',
+          description:
+            'Process many extractions in one run. See the BATCH MODE section below for the file format.'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before extraction. The PROSKENION <use> is ' +
+            'rewritten to #FRAMEnnnnn and its <animate> is dropped, so the extracted SVG/PNG ' +
+            'reflects that specific frame. Single-file mode only — cannot be combined with --batch.'
+        },
+        {
+          name: 'quiet',
+          type: 'boolean',
+          description: 'Minimal output — only prints extracted file paths (good for scripts).'
+        },
+        {
+          name: 'verbose',
+          type: 'boolean',
+          description: 'Show detailed progress information for debugging.'
+        },
+        {
+          name: 'scale',
+          type: 'number',
+          valueLabel: '<factor>',
+          description:
+            'PNG resolution multiplier (1-20). Ignored when --width or --height are set. ' +
+            'Higher = better quality but larger file.',
+          default: 4,
+          advanced: true
+        },
+        {
+          name: 'width',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description:
+            'Exact PNG width in pixels. If only one dimension is given, the other is computed ' +
+            'from the bbox aspect ratio. Overrides --scale.',
+          advanced: true
+        },
+        {
+          name: 'height',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description:
+            'Exact PNG height in pixels. If only one dimension is given, the other is computed ' +
+            'from the bbox aspect ratio. Overrides --scale.',
+          advanced: true
+        },
+        {
+          name: 'background',
+          type: 'string',
+          valueLabel: '<color>',
+          description:
+            'PNG background. Accepts "transparent", any CSS colour name (white, red, ...), a ' +
+            'hex string (#RRGGBB), or an rgba() expression.',
+          default: 'transparent',
+          advanced: true
+        }
+      ],
+      batch: {
+        flag: '--batch',
+        argLabel: '<list.txt>',
+        formatBody:
+          'A UTF-8 text file with one extraction per line. Each line is "input.svg object_id ' +
+          'output.svg" — tab or whitespace separated. Lines starting with # are comments. ' +
+          'Empty lines are ignored. Useful for extracting many elements (e.g. all icons in a ' +
+          'sprite sheet) in one Chromium launch.',
+        examples: [
+          'sbb-chrome-extract --batch extractions.txt',
+          'sbb-chrome-extract --batch extractions.txt --margin 10',
+          'sbb-chrome-extract --batch extractions.txt --margin 10 --background white'
+        ]
+      },
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              "Pin frame N (1-based) of an FBF.SVG before extracting. PROSKENION's <use> is " +
+              'rewritten to #FRAMEnnnnn and its <animate> is dropped, so the extracted SVG/PNG ' +
+              'reflects that specific frame instead of the union across the whole animation.'
+          }
+        ]
+      },
+      exitCodes: [
+        [0, 'Success — extraction completed'],
+        [1, 'Generic error (invalid argument, runtime failure)'],
+        [2, 'File not found / unreadable']
+      ],
+      notes:
+        'COMPARISON NOTES: Chrome .getBBox() uses geometric calculations based on element ' +
+        'bounds and often OVERSIZES vertically due to font metrics (ascender/descender). It ' +
+        'ignores visual effects like filters, shadows, and glows. For pixel-accurate results ' +
+        'use sbb-extract (SvgVisualBBox); for the Inkscape engine use sbb-inkscape-extract ' +
+        '(which often UNDERSIZES text).'
+    })
+  );
 }
 
 /**

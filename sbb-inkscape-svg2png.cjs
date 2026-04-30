@@ -33,6 +33,7 @@ const {
 } = require('./lib/security-utils.cjs');
 
 const { runCLI, printSuccess, printError, printInfo, printBanner } = require('./lib/cli-utils.cjs');
+const helpFormatter = require('./lib/help-formatter.cjs');
 
 // FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
 // WHY: --fbf-frame N pins PROSKENION to one frame BEFORE Inkscape sees the
@@ -140,140 +141,230 @@ const { applyStartupJitter, INKSCAPE_EXPORT_TIMEOUT_MS } = require('./lib/inksca
 // ═══════════════════════════════════════════════════════════════════════════
 
 function printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-inkscape-svg2png.cjs - Advanced SVG to PNG Export Tool          ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-DESCRIPTION:
-  Export SVG files to PNG format using Inkscape with comprehensive control
-  over all export parameters including dimensions, DPI, color modes,
-  compression, antialiasing, background, and export areas.
-
-USAGE:
-  node sbb-inkscape-svg2png.cjs input.svg [options]
-  node sbb-inkscape-svg2png.cjs --batch <file> [options]
-
-DIMENSION & RESOLUTION OPTIONS:
-  --output <file>           Output PNG file (default: <input>.png)
-  --width <pixels>          Export width in pixels
-  --height <pixels>         Export height in pixels
-  --dpi <dpi>               Export DPI (default: 96)
-                            96 DPI = 1 SVG user unit (px) = 1 bitmap pixel
-  --margin <pixels>         Margin around export area in pixels
-
-EXPORT AREA OPTIONS:
-  --area-drawing            Export bounding box of all objects (default)
-  --area-page               Export full SVG page/viewBox area
-  --area-snap               Snap export area outwards to nearest integer px
-                            (preserves pixel alignment for pixel-snapped graphics)
-  --id <object-id>          Export specific object by ID (with --area-drawing)
-
-COLOR & QUALITY OPTIONS:
-  --color-mode <mode>       Bit depth and color type:
-                            Gray_1, Gray_2, Gray_4, Gray_8, Gray_16
-                            RGB_8, RGB_16
-                            GrayAlpha_8, GrayAlpha_16
-                            RGBA_8, RGBA_16 (default)
-  --compression <0-9>       PNG compression level (default: 6)
-                            0=no compression, 9=maximum compression
-  --antialias <0-3>         Antialiasing level (default: 2)
-                            0=none, 3=maximum
-
-BACKGROUND OPTIONS:
-  --background <color>      Background color (SVG color string)
-                            Examples: "#ff007f", "rgb(255,0,128)", "white"
-  --background-opacity <n>  Background opacity: 0.0-1.0 or 1-255
-                            (default: 255 = fully opaque if --background set)
-
-LEGACY FILE HANDLING:
-  --convert-dpi <method>    Method for legacy (pre-0.92) files (default: none)
-                            none          - No change (renders at 94% size)
-                            scale-viewbox - Rescale globally
-                            scale-document - Rescale each length individually
-
-BATCH PROCESSING:
-  --batch <file>            Batch export mode using file list
-                            Supports two formats per line:
-                            - Input only: input.svg (output auto-generated)
-                            - Input/output pair: input.svg<TAB>output.png
-                            Lines starting with # are comments
-                            All export options apply to each file
-
-JPEG CONVERSION:
-  --jpg                     Also produce a JPEG version at 100% quality
-                            The PNG is always created first, then converted
-                            Both files are saved by default
-                            JPEG filename: output.png -> output.jpg
-
-  --delete-png-after        Delete the PNG file after creating JPEG version
-                            Useful for batch processing to save disk space
-                            REQUIRES: --jpg must be specified
-
-FBF.SVG OPTIONS:
-  --fbf-frame N             Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                            SVG from svg2fbf) before exporting to PNG. PROSKENION's
-                            <use> is rewritten to #FRAMEnnnnn and its <animate>
-                            is dropped, so the PNG snapshots that specific frame.
-                            Single-file mode only (cannot be combined with --batch).
-
-OTHER OPTIONS:
-  --help                    Show this help
-  --version                 Show version
-
-EXAMPLES:
-
-  # Basic PNG export (default: area-drawing, 96 DPI)
-  node sbb-inkscape-svg2png.cjs icon.svg
-
-  # Export with specific dimensions
-  node sbb-inkscape-svg2png.cjs icon.svg --width 512 --height 512
-
-  # Export at high DPI with margin
-  node sbb-inkscape-svg2png.cjs icon.svg --dpi 300 --margin 10
-
-  # Export specific object by ID
-  node sbb-inkscape-svg2png.cjs sprite.svg --id icon_home --output home.png
-
-  # Export full page area with white background
-  node sbb-inkscape-svg2png.cjs document.svg --area-page \\
-    --background white --background-opacity 1.0
-
-  # High-quality export with maximum compression
-  node sbb-inkscape-svg2png.cjs logo.svg --width 1024 --height 1024 \\
-    --antialias 3 --compression 9
-
-  # Export to grayscale 8-bit PNG
-  node sbb-inkscape-svg2png.cjs drawing.svg --color-mode Gray_8
-
-  # Pixel-perfect export with snap
-  node sbb-inkscape-svg2png.cjs pixel-art.svg --area-snap --dpi 96
-
-  # Batch export with shared settings
-  node sbb-inkscape-svg2png.cjs --batch icons.txt \\
-    --width 256 --height 256 --compression 9
-
-  # Export to PNG and also create JPEG at 100% quality
-  node sbb-inkscape-svg2png.cjs icon.svg --jpg
-
-  # Batch export to JPEG only (delete PNG after conversion)
-  node sbb-inkscape-svg2png.cjs --batch icons.txt --jpg --delete-png-after
-
-OUTPUT:
-  Creates PNG file(s) from SVG input with specified parameters.
-
-  Exit codes:
-  • 0: Export successful
-  • 1: Error occurred
-  • 2: Invalid arguments
-
-NOTES:
-  - By default, exported area is the bounding box of all objects (--area-drawing)
-  - Default DPI of 96 means 1 SVG user unit = 1 bitmap pixel
-  - --area-snap is useful for preserving pixel alignment in pixel art
-  - Legacy file handling only affects pre-Inkscape 0.92 files
-  - Text baseline spacing is never converted (--no-convert-text-baseline-spacing)
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-inkscape-svg2png',
+      tagline: 'Export SVG files to PNG (and optionally JPEG) using the Inkscape CLI.',
+      description:
+        'Drives Inkscape from the command line to render SVGs to raster images with ' +
+        'comprehensive control over every export parameter: dimensions, DPI, color mode, ' +
+        'compression, antialiasing, background, export area, and pre-0.92 DPI handling. ' +
+        'Optionally produces a JPEG at 100% quality alongside the PNG, with batch ' +
+        'processing for large icon sets. Inkscape must be installed and on PATH (or ' +
+        'pointed to via SBB_INKSCAPE_PATH).',
+      usage: [
+        'sbb-inkscape-svg2png <input.svg> [options]',
+        'sbb-inkscape-svg2png --batch <list.txt> [options]'
+      ],
+      examples: [
+        {
+          title: 'Basic PNG export (area-drawing, 96 DPI):',
+          command: 'sbb-inkscape-svg2png icon.svg'
+        },
+        {
+          title: 'Export at fixed dimensions:',
+          command: 'sbb-inkscape-svg2png icon.svg --width 512 --height 512'
+        },
+        {
+          title: 'High-DPI export with a margin:',
+          command: 'sbb-inkscape-svg2png icon.svg --dpi 300 --margin 10'
+        },
+        {
+          title: 'Export one object from a sprite by ID:',
+          command: 'sbb-inkscape-svg2png sprite.svg --id icon_home --output home.png'
+        },
+        {
+          title: 'Export the full page area with a white background:',
+          command:
+            'sbb-inkscape-svg2png document.svg --area-page --background white --background-opacity 1.0'
+        },
+        {
+          title: 'Pixel-perfect export with snap (preserves pixel alignment):',
+          command: 'sbb-inkscape-svg2png pixel-art.svg --area-snap --dpi 96'
+        },
+        {
+          title: 'Also produce a JPEG at 100% quality:',
+          command: 'sbb-inkscape-svg2png icon.svg --jpg'
+        },
+        {
+          title: 'Batch export to JPEG only (deletes intermediate PNGs):',
+          command: 'sbb-inkscape-svg2png --batch icons.txt --jpg --delete-png-after'
+        },
+        {
+          title: 'Pin frame 7 of an FBF.SVG before export:',
+          command: 'sbb-inkscape-svg2png animation.fbf.svg --fbf-frame 7 --width 1920'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'output',
+          type: 'string',
+          valueLabel: '<file.png>',
+          description: 'Output PNG file path.',
+          default: '<input>.png'
+        },
+        {
+          name: 'width',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description: 'Export width in pixels (positive integer).'
+        },
+        {
+          name: 'height',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description: 'Export height in pixels (positive integer).'
+        },
+        {
+          name: 'dpi',
+          type: 'number',
+          valueLabel: '<dpi>',
+          description: 'Export DPI. 96 DPI means 1 SVG user unit (px) maps to 1 bitmap pixel.',
+          default: 96
+        },
+        {
+          name: 'margin',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description: 'Margin around the export area, in pixels.'
+        },
+        {
+          name: 'area-drawing',
+          type: 'boolean',
+          description: 'Export the bounding box of all drawn objects. This is the default.'
+        },
+        {
+          name: 'area-page',
+          type: 'boolean',
+          description: 'Export the full SVG page (the viewBox area) instead of the drawing bbox.'
+        },
+        {
+          name: 'area-snap',
+          type: 'boolean',
+          description:
+            'Snap the export area outwards to the nearest integer pixel — preserves pixel ' +
+            'alignment for pixel-snapped graphics.'
+        },
+        {
+          name: 'id',
+          type: 'string',
+          valueLabel: '<object-id>',
+          description: 'Export only the object with this ID (combined with --area-drawing).'
+        },
+        {
+          name: 'color-mode',
+          type: 'string',
+          valueLabel: '<mode>',
+          description:
+            'Bit depth and color type. One of: Gray_1, Gray_2, Gray_4, Gray_8, Gray_16, ' +
+            'RGB_8, RGB_16, GrayAlpha_8, GrayAlpha_16, RGBA_8, RGBA_16.',
+          default: 'RGBA_8'
+        },
+        {
+          name: 'compression',
+          type: 'number',
+          valueLabel: '<0-9>',
+          description: 'PNG compression level: 0 = none, 9 = maximum.',
+          default: 6
+        },
+        {
+          name: 'antialias',
+          type: 'number',
+          valueLabel: '<0-3>',
+          description: 'Antialiasing level: 0 = none, 3 = maximum.',
+          default: 2
+        },
+        {
+          name: 'background',
+          type: 'string',
+          valueLabel: '<color>',
+          description:
+            'Background color as an SVG color string (e.g. "#ff007f", "rgb(255,0,128)", "white").'
+        },
+        {
+          name: 'background-opacity',
+          type: 'number',
+          valueLabel: '<n>',
+          description:
+            'Background opacity. Accepts 0.0-1.0 or 1-255. Defaults to fully opaque (255) when ' +
+            '--background is set.'
+        },
+        {
+          name: 'jpg',
+          type: 'boolean',
+          description:
+            'Also produce a JPEG version at 100% quality (PNG is created first, then converted).'
+        },
+        {
+          name: 'delete-png-after',
+          type: 'boolean',
+          description: 'Delete the intermediate PNG after the JPEG is written. Requires --jpg.'
+        },
+        {
+          name: 'batch',
+          type: 'string',
+          valueLabel: '<list.txt>',
+          description: 'Process many SVGs in one run. See the BATCH MODE section below.'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before export so the PNG snapshots that ' +
+            'single frame instead of the union of all PROSKENION targets. Single-file mode only.'
+        },
+        {
+          name: 'convert-dpi',
+          type: 'string',
+          valueLabel: '<method>',
+          description:
+            'Legacy (pre-Inkscape 0.92) DPI handling. One of: none (no change, renders at 94%), ' +
+            'scale-viewbox (rescale globally), scale-document (rescale each length individually).',
+          default: 'none',
+          advanced: true
+        }
+      ],
+      batch: {
+        flag: '--batch',
+        argLabel: '<list.txt>',
+        formatBody:
+          'A UTF-8 text file with one entry per line. Each entry is either a bare input ' +
+          'path (output auto-named as <basename>.png in the same directory) or an ' +
+          'input/output PAIR separated by a tab or whitespace (e.g. "icon.svg<TAB>icon.png"). ' +
+          'Lines starting with # are comments. Empty lines are ignored. All export options ' +
+          'apply uniformly to every file in the batch.',
+        examples: [
+          'sbb-inkscape-svg2png --batch icons.txt --width 256 --height 256 --compression 9',
+          'sbb-inkscape-svg2png --batch icons.txt --jpg --delete-png-after'
+        ]
+      },
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              "Pin frame N (1-based) of an FBF.SVG before export. PROSKENION's <use> is " +
+              'rewritten to #FRAMEnnnnn and its <animate> is dropped, so the PNG snapshots ' +
+              'that specific frame instead of the union of all frames the SMIL timeline visits. ' +
+              'Single-file mode only.'
+          }
+        ]
+      },
+      environment: { inkscape: true },
+      exitCodes: [
+        [0, 'Success — PNG (and optional JPEG) was written'],
+        [1, 'Runtime error (Inkscape failed, file system error, etc.)'],
+        [2, 'Invalid arguments or validation failure']
+      ],
+      notes:
+        'Defaults: area-drawing (bounding box of all objects) at 96 DPI. --area-snap is ' +
+        'useful for preserving pixel alignment in pixel art. Legacy DPI handling only ' +
+        'affects pre-Inkscape 0.92 files. Text baseline spacing is never converted ' +
+        '(--no-convert-text-baseline-spacing is always passed).'
+    })
+  );
 }
 
 /**

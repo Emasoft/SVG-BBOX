@@ -211,199 +211,10 @@ function getTimeoutMs() {
 // HELP TEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Print help text with usage instructions, options, and examples.
- * Called when --help flag is passed or when required arguments are missing.
- * @returns {void}
- */
-function _printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-compare.cjs - SVG/PNG Visual Comparison Tool                           ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-DESCRIPTION:
-  Compares two image files (SVG and/or PNG) by performing pixel-by-pixel
-  comparison. Returns difference percentage and generates a visual diff image.
-
-  Supported comparison modes:
-  • SVG vs SVG: Both rendered to PNG at specified resolution, then compared
-  • PNG vs PNG: Direct pixel comparison (must have same dimensions)
-  • SVG vs PNG: SVG rendered to match PNG resolution exactly, then compared
-  • PNG vs SVG: Same as above (order doesn't matter)
-
-USAGE:
-  node sbb-compare.cjs file1 file2 [options]
-
-  Where file1 and file2 can be .svg or .png files.
-
-OPTIONS:
-  --out-diff <file>         Output diff PNG file (white=different, black=same)
-                            Default: <svg1>_vs_<svg2>_diff.png
-
-  --threshold <1-255>       Pixel difference threshold (default: 1)
-                            Pixels differ if any RGBA channel differs by more
-                            than threshold/256. Range: 1-255
-
-  --alignment <mode>        How to align the two SVGs (default: origin)
-    origin                  Align using respective SVG origins (0,0)
-    viewbox-topleft         Align using top-left corners of viewBox
-    viewbox-center          Align using centers of viewBox
-    object:<id>             Align using coordinates of specified object ID
-    custom:<x>,<y>          Align using custom coordinates
-
-  --resolution <mode>       How to determine render resolution (default: viewbox)
-    nominal                 Use respective nominal resolutions (no viewBox)
-    viewbox                 Use respective viewBox dimensions
-    full                    Use full drawing content (ignore viewBox)
-    scale                   Scale to match larger SVG (uniform, meet rules)
-    stretch                 Stretch to match larger SVG (non-uniform)
-    clip                    Clip to match smaller SVG (slice rules)
-
-  --meet-rule <rule>        Aspect ratio rule for 'scale' mode (default: xMidYMid)
-    xMinYMin, xMinYMid, xMinYMax
-    xMidYMin, xMidYMid, xMidYMax
-    xMaxYMin, xMaxYMid, xMaxYMax
-
-  --slice-rule <rule>       Aspect ratio rule for 'clip' mode (default: xMidYMid)
-    (same options as --meet-rule)
-
-  --batch <file>            Batch comparison mode using tab-separated file
-                            Format: svg1_path.svg<TAB>svg2_path.svg (one pair per line)
-                            Output will be in JSON format with results array
-
-  --add-missing-viewbox     Force regenerate viewBox for SVGs that lack one
-                            Uses sbb-fix-viewbox --force to generate accurate viewBox
-
-  --aspect-ratio-threshold <n>  Maximum allowed difference in aspect ratios (default: 0.001)
-                            SVGs with aspect ratios differing beyond this threshold
-                            will be rejected with 100% difference
-
-  --scale <number>          Resolution multiplier for rendering (default: 4)
-                            SVGs are extremely detailed - fine differences hidden at low
-                            resolution become visible at higher resolution. A flower and
-                            a planet may look identical at 1024px but are completely
-                            different at 4096px. Use higher values for more precision.
-
-  --timeout <ms>            Timeout for browser operations in milliseconds
-                            Default: 30000 (30 seconds). Increase for complex SVGs.
-
-  --quiet                   Minimal output mode - only prints diff percentage
-                            Useful for scripting and automation
-
-  --allow-paths <paths>     Allow file paths outside the current working directory
-                            Comma-separated list of allowed directory paths
-                            Security feature: by default only CWD files are accessible
-
-  --trusted-mode            Trust all file paths without CWD restriction
-                            WARNING: Use only in controlled environments
-
-  --json                    Output results as JSON
-  --verbose                 Show detailed progress information
-  --no-html                 Do not open HTML report in browser (report is still generated)
-  --headless                Alias for --no-html (do not open browser)
-
-  --fbf-frame <N>           FBF.SVG (svg2fbf format) frame pinning.
-                            When ANY input is an FBF.SVG, pin its PROSKENION
-                            <use xlink:href> to #FRAME0000N and drop the swap
-                            <animate> child before rendering, so the
-                            comparison sees exactly that frame instead of
-                            whatever the SMIL timeline lands on.
-                            • If only one side is FBF, only that side is
-                              pinned. The other side is compared verbatim.
-                            • If BOTH sides are FBF, both are pinned to N
-                              (use --fbf-frame-a / --fbf-frame-b for
-                              different frames per side).
-                            • Errors loudly when NEITHER input is FBF
-                              (likely user mistake).
-
-  --fbf-frame-a <N>         Pin frame N on the FIRST input only.
-                            Errors if side A is not an FBF.SVG.
-                            Overrides --fbf-frame for side A only.
-
-  --fbf-frame-b <N>         Pin frame N on the SECOND input only.
-                            Errors if side B is not an FBF.SVG.
-                            Overrides --fbf-frame for side B only.
-
-                            Aspect-ratio enforcement is unchanged: pinning
-                            inherits the FBF's viewBox/width/height
-                            verbatim, so --aspect-ratio-threshold continues
-                            to apply to the pinned side.
-
-  --help                    Show this help
-  --version                 Show version
-
-EXAMPLES:
-
-  # Basic comparison with default settings
-  node sbb-compare.cjs original.svg modified.svg
-
-  # Compare with custom diff output and threshold
-  node sbb-compare.cjs v1.svg v2.svg --out-diff diff.png --threshold 5
-
-  # Align by viewBox centers, scale to match larger
-  node sbb-compare.cjs icon1.svg icon2.svg \\
-    --alignment viewbox-center \\
-    --resolution scale \\
-    --meet-rule xMidYMid
-
-  # Compare specific objects by ID
-  node sbb-compare.cjs sprite1.svg sprite2.svg \\
-    --alignment object:icon_home
-
-  # JSON output for automation
-  node sbb-compare.cjs test1.svg test2.svg --json
-
-  # Batch comparison from tab-separated file
-  node sbb-compare.cjs --batch comparisons.txt
-
-  # Compare two PNG files directly
-  node sbb-compare.cjs render1.png render2.png
-
-  # Compare SVG against reference PNG (SVG scaled to match PNG resolution)
-  node sbb-compare.cjs design.svg reference.png
-
-  # Compare PNG against SVG (order doesn't matter)
-  node sbb-compare.cjs screenshot.png expected.svg --threshold 5
-
-  # FBF.SVG: compare a static reference against frame 7 of an animation
-  node sbb-compare.cjs reference.svg anim.fbf.svg --fbf-frame-b 7
-
-  # FBF.SVG: compare a rendered PNG against frame 7
-  node sbb-compare.cjs png-ref.png anim.fbf.svg --fbf-frame-b 7
-
-  # FBF.SVG: compare two frames of the SAME animation (regression test)
-  node sbb-compare.cjs anim.fbf.svg anim.fbf.svg \\
-    --fbf-frame-a 5 --fbf-frame-b 5
-
-OUTPUT:
-  Returns:
-  • Diff score percentage: (different pixels / total pixels) × 100
-    This is an exact calculation of how many pixels differ between the two
-    rendered PNGs. A pixel is "different" if any RGBA channel differs by
-    more than the threshold. The score ranges from 0% (identical) to 100%
-    (completely different).
-
-  • Total pixels: Total number of pixels in the rendered image (width × height)
-  • Different pixels: Count of pixels where any RGBA channel exceeds threshold
-  • Diff PNG image: Visual representation (white = different, black = identical)
-
-  Exit codes (follows Unix diff convention):
-  • 0: Comparison successful - files are identical (0% difference)
-  • 1: Comparison successful - files differ (>0% difference)
-  • 2: Error occurred (file not found, browser error, invalid arguments, etc.)
-`);
-}
-
-/**
- * Print version information
- * @param {string} toolName - Name of the tool
- * @returns {void}
- */
-function _printVersion(toolName) {
-  const version = getVersion();
-  console.log(`${toolName} v${version} | svg-bbox toolkit`);
-}
+// Help and version output is rendered by the unified help formatter via
+// createModeArgParser (see lib/cli-utils.cjs + lib/help-formatter.cjs).
+// The previous _printHelp() / _printVersion() locals were dead code after
+// that refactor and have been removed.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ARGUMENT PARSING
@@ -420,125 +231,283 @@ function parseArgs(argv) {
   // Create the mode-aware parser with flag-based mode triggers
   const parser = createModeArgParser({
     name: 'sbb-compare',
-    description: 'Compare two image files visually (SVG and/or PNG)',
+    description: 'Compare two image files visually (SVG and/or PNG, supports FBF.SVG)',
+    tagline:
+      'Pixel-diff any pair of images: SVG-vs-SVG, SVG-vs-PNG, PNG-vs-PNG, FBF.SVG-vs-anything.',
+    longDescription:
+      'Renders both inputs to bitmaps with headless Chromium and computes the per-pixel ' +
+      'difference. Either side can be an SVG, a PNG, or an FBF.SVG (Frame-By-Frame SVG ' +
+      'from svg2fbf). The HTML report is opened in your default browser by default; pass ' +
+      '--no-html for headless / CI use. Defaults are tuned for high-fidelity SVG diffing ' +
+      '(4× rendering scale, threshold 1) — the advanced section below is for power users.',
     defaultMode: 'normal',
     modeFlags: {
       '--batch': { mode: 'batch', consumesValue: true, valueTarget: 'batchFile' }
     },
+    examples: [
+      {
+        title: 'Compare two SVGs (HTML diff opens in browser):',
+        command: 'sbb-compare design.svg reference.svg'
+      },
+      {
+        title: 'Compare an SVG against a PNG reference:',
+        command: 'sbb-compare logo.svg logo-reference.png'
+      },
+      {
+        title: 'Compare two PNG screenshots:',
+        command: 'sbb-compare actual.png expected.png'
+      },
+      {
+        title: 'Headless run for CI (machine-readable, no browser):',
+        command: 'sbb-compare a.svg b.svg --no-html --json --quiet'
+      },
+      {
+        title: 'Pin frame 7 of an FBF.SVG and diff against a static SVG:',
+        command: 'sbb-compare animation.fbf.svg keyframe.svg --fbf-frame-a 7'
+      },
+      {
+        title: 'Diff frame 3 of one FBF.SVG against frame 12 of another:',
+        command: 'sbb-compare in.fbf.svg out.fbf.svg --fbf-frame-a 3 --fbf-frame-b 12'
+      },
+      {
+        title: 'Save the diff image and tighten the threshold:',
+        command: 'sbb-compare a.svg b.svg --out-diff diff.png --threshold 5'
+      },
+      {
+        title: 'Batch-compare a list of pairs from a text file:',
+        command: 'sbb-compare --batch pairs.txt --no-html --json'
+      }
+    ],
     globalFlags: [
-      { name: 'json', type: 'boolean', description: 'Output results as JSON' },
-      { name: 'verbose', type: 'boolean', description: 'Show detailed progress information' },
+      // -------- Output & reporting (basic) --------
       {
-        name: 'no-html',
+        name: 'json',
         type: 'boolean',
-        description: 'Do not open HTML report in browser (report still generated)'
-      },
-      {
-        name: 'headless',
-        type: 'boolean',
-        description: 'Alias for --no-html (do not open browser)'
-      },
-      { name: 'out-diff', type: 'string', description: 'Output diff PNG file path' },
-      {
-        name: 'threshold',
-        type: 'number',
-        default: 1,
-        description: 'Pixel difference threshold (1-255)'
-      },
-      {
-        name: 'alignment',
-        type: 'string',
-        default: 'origin',
-        description: 'Alignment mode: origin|viewbox-topleft|viewbox-center|object:ID|custom:x,y'
-      },
-      {
-        name: 'resolution',
-        type: 'string',
-        default: 'viewbox',
-        description: 'Resolution mode: nominal|viewbox|full|scale|stretch|clip'
-      },
-      {
-        name: 'meet-rule',
-        type: 'string',
-        default: 'xMidYMid',
-        description: 'Aspect ratio rule for scale mode'
-      },
-      {
-        name: 'slice-rule',
-        type: 'string',
-        default: 'xMidYMid',
-        description: 'Aspect ratio rule for clip mode'
-      },
-      {
-        name: 'add-missing-viewbox',
-        type: 'boolean',
-        description: 'Force regenerate viewBox for SVGs without one'
-      },
-      {
-        name: 'aspect-ratio-threshold',
-        type: 'number',
-        default: 0.001,
-        description: 'Maximum allowed aspect ratio difference (0-1)'
-      },
-      {
-        name: 'scale',
-        type: 'number',
-        default: 4,
-        description: 'Resolution multiplier for rendering (default: 4x for detailed comparison)'
-      },
-      {
-        name: 'timeout',
-        type: 'number',
-        default: 30000,
-        description: 'Browser operation timeout in milliseconds (default: 30000)'
+        description:
+          'Emit machine-readable JSON to stdout instead of human-readable text. ' +
+          'Use this in CI or when piping to other tools.'
       },
       {
         name: 'quiet',
         type: 'boolean',
-        description: 'Minimal output - only prints diff percentage'
+        description:
+          'Minimal output — print only the diff percentage. Implies --no-html so ' +
+          'no browser window is opened.'
       },
+      {
+        name: 'no-html',
+        type: 'boolean',
+        description:
+          'Generate the HTML report on disk but do NOT open it in a browser. ' +
+          'Use for CI, headless servers, or piping the JSON output.'
+      },
+      {
+        name: 'headless',
+        type: 'boolean',
+        description: 'Alias for --no-html (kept for backwards compatibility).'
+      },
+      {
+        name: 'out-diff',
+        type: 'string',
+        valueLabel: '<path>',
+        description:
+          'Write the per-pixel difference PNG to <path>. Useful for archiving the ' +
+          'diff alongside CI artefacts.'
+      },
+      {
+        name: 'verbose',
+        type: 'boolean',
+        description: 'Show detailed progress information (rendering steps, timings).'
+      },
+
+      // -------- Rendering & comparison tuning (advanced) --------
+      {
+        name: 'threshold',
+        type: 'number',
+        valueLabel: '<1-255>',
+        default: 1,
+        description:
+          'Per-channel pixel difference threshold. 1 is the strictest setting that ' +
+          'still ignores rounding noise; raise it to absorb anti-aliasing differences ' +
+          'between Chromium versions or fonts.',
+        advanced: true
+      },
+      {
+        name: 'alignment',
+        type: 'string',
+        valueLabel: '<mode>',
+        default: 'origin',
+        description:
+          'How the two images are aligned before diffing. Modes: origin (top-left), ' +
+          'viewbox-topleft, viewbox-center, object:<ID> (centre on element ID), or ' +
+          'custom:<x>,<y> (explicit pixel offset).',
+        advanced: true
+      },
+      {
+        name: 'resolution',
+        type: 'string',
+        valueLabel: '<mode>',
+        default: 'viewbox',
+        description:
+          'How rendering resolution is chosen. Modes: nominal (use width/height), ' +
+          'viewbox (default), full (use union of bboxes), scale (--scale multiplier), ' +
+          'stretch (force same size), clip (slice to common box).',
+        advanced: true
+      },
+      {
+        name: 'meet-rule',
+        type: 'string',
+        valueLabel: '<rule>',
+        default: 'xMidYMid',
+        description: 'preserveAspectRatio "meet" rule used when resolution=scale.',
+        advanced: true
+      },
+      {
+        name: 'slice-rule',
+        type: 'string',
+        valueLabel: '<rule>',
+        default: 'xMidYMid',
+        description: 'preserveAspectRatio "slice" rule used when resolution=clip.',
+        advanced: true
+      },
+      {
+        name: 'add-missing-viewbox',
+        type: 'boolean',
+        description:
+          'Force-regenerate a viewBox for any SVG that is missing one (computed from ' +
+          'the visual bbox). Without this, SVGs without a viewBox render at 300×150.',
+        advanced: true
+      },
+      {
+        name: 'aspect-ratio-threshold',
+        type: 'number',
+        valueLabel: '<0-1>',
+        default: 0.001,
+        description:
+          'Maximum allowed aspect-ratio mismatch between inputs (0–1). Below this the ' +
+          'images are treated as compatible; above it the comparison fails fast.',
+        advanced: true
+      },
+      {
+        name: 'scale',
+        type: 'number',
+        valueLabel: '<N>',
+        default: 4,
+        description:
+          'Resolution multiplier for rendering. The default 4× catches sub-pixel ' +
+          'differences invisible at nominal size — a flower and a planet may look ' +
+          'identical at 1024 px but completely different at 4096 px.',
+        advanced: true
+      },
+      {
+        name: 'timeout',
+        type: 'number',
+        valueLabel: '<ms>',
+        default: 30000,
+        description: 'Browser operation timeout in milliseconds.',
+        advanced: true
+      },
+
+      // -------- Security (advanced) --------
       {
         name: 'allow-paths',
         type: 'string',
-        description: 'Comma-separated list of allowed directory paths outside CWD'
+        valueLabel: '<paths>',
+        description:
+          'Comma-separated list of additional directories outside the CWD that may be ' +
+          'read or written. Use sparingly.',
+        advanced: true
       },
       {
         name: 'trusted-mode',
         type: 'boolean',
-        description: 'Trust all file paths without CWD restriction (WARNING: security risk)'
+        description:
+          'Disable CWD-restriction entirely and trust every file path passed in. ' +
+          'WARNING: only use with input you fully control.',
+        advanced: true
       },
+
+      // -------- FBF.SVG (basic — directly user-facing) --------
       {
         name: 'fbf-frame',
         type: 'number',
+        valueLabel: '<N>',
         description:
-          'FBF.SVG: 1-based frame number to pin on any input that is an FBF.SVG (svg2fbf format)'
+          'Pin frame N (1-based) on any input that is an FBF.SVG. See the FBF.SVG ' +
+          'section below for details.'
       },
       {
         name: 'fbf-frame-a',
         type: 'number',
-        description:
-          'FBF.SVG: pin frame N on the FIRST input only (overrides --fbf-frame for side A)'
+        valueLabel: '<N>',
+        description: 'Pin frame N on the FIRST input only (overrides --fbf-frame for side A).'
       },
       {
         name: 'fbf-frame-b',
         type: 'number',
-        description:
-          'FBF.SVG: pin frame N on the SECOND input only (overrides --fbf-frame for side B)'
+        valueLabel: '<N>',
+        description: 'Pin frame N on the SECOND input only (overrides --fbf-frame for side B).'
       }
     ],
     modes: {
       normal: {
-        description: 'Compare two image files (SVG or PNG)',
+        description: 'Compare two image files (SVG, PNG, or FBF.SVG)',
         positional: [
-          { name: 'svg1', required: true, description: 'First file (SVG or PNG)' },
-          { name: 'svg2', required: true, description: 'Second file (SVG or PNG)' }
+          {
+            name: 'file-a',
+            required: true,
+            description: 'First image (SVG, PNG, or FBF.SVG)'
+          },
+          {
+            name: 'file-b',
+            required: true,
+            description: 'Second image (SVG, PNG, or FBF.SVG)'
+          }
         ]
       },
       batch: {
-        description: 'Compare multiple file pairs from a file',
-        positional: [] // No positional args, uses batchFile from modeFlag
+        description: 'Compare multiple file pairs from a text file (--batch <list.txt>)',
+        positional: []
       }
-    }
+    },
+    batch: {
+      flag: '--batch',
+      argLabel: '<list.txt>',
+      formatBody:
+        'Compare many image pairs in one run. <list.txt> is a UTF-8 text file with ' +
+        'one PAIR per line: the two paths separated by a single pipe character (|). ' +
+        'Lines starting with # are comments. Empty lines are ignored. Both relative ' +
+        'paths (resolved from CWD) and absolute paths are accepted.',
+      examples: [
+        'sbb-compare --batch pairs.txt',
+        'sbb-compare --batch pairs.txt --no-html --json --quiet'
+      ]
+    },
+    fbf: {
+      flags: [
+        {
+          flag: '--fbf-frame <N>',
+          description: 'Pin frame N (1-based) on any input that is an FBF.SVG.'
+        },
+        {
+          flag: '--fbf-frame-a <N>',
+          description: 'Pin frame N on the FIRST input only (overrides --fbf-frame for side A).'
+        },
+        {
+          flag: '--fbf-frame-b <N>',
+          description: 'Pin frame N on the SECOND input only (overrides --fbf-frame for side B).'
+        }
+      ]
+    },
+    exitCodes: [
+      [0, 'Success — images compared (the diff % is in the report)'],
+      [1, 'Invalid arguments / runtime error'],
+      [2, 'File not found / unreadable']
+    ],
+    notes:
+      'Supported input combinations: SVG×SVG, SVG×PNG, PNG×SVG, PNG×PNG, FBF.SVG×anything ' +
+      'with the matching --fbf-frame[-a/-b] flag. The HTML report is written next to the ' +
+      'first input by default; use --out-diff to also save the difference PNG.'
   });
 
   // Parse the arguments

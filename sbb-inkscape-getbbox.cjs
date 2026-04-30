@@ -44,6 +44,8 @@ const {
   INKSCAPE_QUERY_TIMEOUT_MS
 } = require('./lib/inkscape-utils.cjs');
 
+const helpFormatter = require('./lib/help-formatter.cjs');
+
 const execFilePromise = promisify(execFile);
 
 const INKSCAPE_VERSION_TIMEOUT = INKSCAPE_DETECT_TIMEOUT_MS;
@@ -333,82 +335,112 @@ function saveJSON(result, outputPath) {
 }
 
 /**
- * Print help message
+ * Print help message using the unified help formatter.
  * @returns {void}
  */
 function printHelp() {
-  const version = getVersion();
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-inkscape-getbbox - Get bbox using Inkscape                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-ℹ Version ${version}
-
-DESCRIPTION:
-  Get bounding box information using Inkscape's query commands.
-  This tool is for comparison with SvgVisualBBox and Chrome .getBBox().
-
-  ⚠️  REQUIRES: Inkscape must be installed and in your PATH
-
-USAGE:
-  sbb-inkscape-getbbox <input.svg> [element-ids...] [options]
-
-REQUIRED ARGUMENTS:
-  input.svg               Input SVG file path
-
-OPTIONAL ARGUMENTS:
-  element-ids...          Element IDs to get bbox for (if omitted, gets whole content)
-
-OPTIONS:
-  --json <path>           Save results as JSON to specified file (use - for stdout)
-  --inkscape-path <path>  Specify custom Inkscape executable path
-  --fbf-frame N           Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                          SVG from svg2fbf) before computing the bbox.
-                          PROSKENION's <use> is rewritten to #FRAMEnnnnn and
-                          its <animate> is dropped, so the bbox describes
-                          that specific frame. Single-file mode only.
-  --help, -h              Show this help message
-  --version, -v           Show version number
-
-═══════════════════════════════════════════════════════════════════════════════
-
-EXAMPLES:
-
-  # Get bbox for whole content
-  sbb-inkscape-getbbox drawing.svg
-
-  # Get bbox for specific elements
-  sbb-inkscape-getbbox drawing.svg text39 rect42 path55
-
-  # Save results as JSON
-  sbb-inkscape-getbbox drawing.svg --json results.json
-
-  # Specify custom Inkscape path (macOS Homebrew ARM)
-  sbb-inkscape-getbbox drawing.svg --inkscape-path /opt/homebrew/bin/inkscape
-
-  # Specify custom Inkscape path (macOS app bundle)
-  sbb-inkscape-getbbox drawing.svg --inkscape-path /Applications/Inkscape.app/Contents/MacOS/inkscape
-
-═══════════════════════════════════════════════════════════════════════════════
-
-COMPARISON NOTES:
-
-  This tool uses Inkscape's query commands (--query-x, --query-y, etc.), which:
-  • Often UNDERSIZES text elements due to font rendering differences
-  • May not accurately reflect visual appearance in browsers
-  • Depends on Inkscape's internal SVG rendering
-
-  Compare with:
-  • sbb-getbbox: Uses SvgVisualBBox (pixel-accurate canvas rasterization)
-  • sbb-chrome-getbbox: Uses Chrome's .getBBox() (often OVERSIZES vertically)
-
-USE CASES:
-  • Demonstrate Inkscape bbox limitations vs SvgVisualBBox
-  • Create comparison test cases
-  • Benchmark against other bbox methods
-  • Verify Inkscape's bbox calculation for your SVGs
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-inkscape-getbbox',
+      tagline: 'Compute SVG bounding boxes using the Inkscape CLI (--query-x/y/width/height).',
+      description:
+        "Invokes Inkscape's built-in geometry query commands (--query-x, --query-y, " +
+        '--query-width, --query-height) to compute the bounding box of one or more elements ' +
+        'in an SVG file. With no element IDs, it queries the whole drawing. Output is human ' +
+        'text by default; use --json to capture machine-readable results. Inkscape often ' +
+        'UNDERSIZES text vs the actual visual bbox in browsers — use sbb-getbbox for ' +
+        'pixel-accurate results, or sbb-chrome-getbbox for the Chromium .getBBox() variant. ' +
+        'Inkscape must be installed and on $PATH (or pointed to via --inkscape-path / ' +
+        'SBB_INKSCAPE_PATH).',
+      usage: [
+        'sbb-inkscape-getbbox <input.svg> [options]',
+        'sbb-inkscape-getbbox <input.svg> <element-id>... [options]',
+        'sbb-inkscape-getbbox <input.svg> --json <results.json> [options]'
+      ],
+      examples: [
+        {
+          title: 'Compute the bbox of the whole drawing:',
+          command: 'sbb-inkscape-getbbox drawing.svg'
+        },
+        {
+          title: 'Compute bboxes for specific elements (positional IDs):',
+          command: 'sbb-inkscape-getbbox drawing.svg text39 rect42 path55'
+        },
+        {
+          title: 'Save results as JSON to a file:',
+          command: 'sbb-inkscape-getbbox drawing.svg text39 --json results.json'
+        },
+        {
+          title: 'Stream JSON results to stdout (use "-"):',
+          command: 'sbb-inkscape-getbbox drawing.svg --json -'
+        },
+        {
+          title: 'Use a custom Inkscape executable (macOS Homebrew ARM):',
+          command: 'sbb-inkscape-getbbox drawing.svg --inkscape-path /opt/homebrew/bin/inkscape'
+        },
+        {
+          title: 'Use the Inkscape.app bundle binary on macOS:',
+          command:
+            'sbb-inkscape-getbbox drawing.svg --inkscape-path /Applications/Inkscape.app/Contents/MacOS/inkscape'
+        },
+        {
+          title: 'Pin frame 3 of an FBF.SVG before computing the bbox:',
+          command: 'sbb-inkscape-getbbox animation.fbf.svg --fbf-frame 3'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'json',
+          type: 'string',
+          valueLabel: '<path|->',
+          description:
+            'Save results as JSON to the given path. Use "-" to stream JSON to stdout instead.'
+        },
+        {
+          name: 'inkscape-path',
+          type: 'string',
+          valueLabel: '<path>',
+          description:
+            'Specify custom Inkscape executable path. Overrides $PATH discovery and ' +
+            '$SBB_INKSCAPE_PATH. Useful when Inkscape is installed in a non-standard ' +
+            'location (e.g. macOS .app bundle, custom build).'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before invoking Inkscape. The PROSKENION ' +
+            '<use> is rewritten to #FRAMEnnnnn and its <animate> is dropped, so the bbox ' +
+            'describes that specific frame instead of the union the SMIL animation would ' +
+            'span across all frames. Single-file mode only.'
+        }
+      ],
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              "Pin frame N (1-based) of an FBF.SVG before querying. PROSKENION's <use> is " +
+              'rewritten to #FRAMEnnnnn and its <animate> is dropped, so the bbox describes ' +
+              'that specific frame instead of the union across all PROSKENION targets.'
+          }
+        ]
+      },
+      environment: { inkscape: true },
+      exitCodes: [
+        [0, 'Success — bbox(es) computed and reported'],
+        [1, 'Generic error (Inkscape failure, query timeout, etc.)'],
+        [2, 'Invalid argument / file not found / Inkscape not installed']
+      ],
+      notes:
+        "COMPARISON NOTES: Inkscape's --query-* commands often UNDERSIZE text elements due " +
+        "to font rendering differences vs the browser, and depend on Inkscape's internal " +
+        'SVG renderer. For pixel-accurate visual bboxes use sbb-getbbox (SvgVisualBBox); for ' +
+        "Chrome's native .getBBox() (which often OVERSIZES vertically) use sbb-chrome-getbbox."
+    })
+  );
 }
 
 /**

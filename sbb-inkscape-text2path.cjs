@@ -36,6 +36,10 @@ const {
   printBanner
 } = require('./lib/cli-utils.cjs');
 
+// Unified help-screen formatter — single source of truth for the
+// branded header box, sectioned options, batch/FBF blocks, etc.
+const helpFormatter = require('./lib/help-formatter.cjs');
+
 // FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
 // WHY: --fbf-frame N pins PROSKENION to one frame BEFORE Inkscape sees the
 // file, so the text→path conversion runs against that single frame instead
@@ -118,96 +122,142 @@ const {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Prints CLI help text to stdout.
+ * Prints CLI help text using the unified help formatter.
  * @returns {void}
  */
 function printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-inkscape-text2path.cjs - SVG Text to Path Converter                   ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-DESCRIPTION:
-  Converts all text elements in an SVG file to paths using Inkscape.
-  This makes text rendering consistent across all platforms and browsers,
-  independent of font availability.
-
-REQUIREMENTS:
-  • Inkscape must be installed on your system
-  • Supported platforms: Windows, macOS, Linux
-
-USAGE:
-  node sbb-inkscape-text2path.cjs input.svg [output.svg] [options]
-  node sbb-inkscape-text2path.cjs --batch files.txt [options]
-
-ARGUMENTS:
-  input.svg             Input SVG file with text elements
-  output.svg            Output SVG file with text converted to paths
-                        Default: <input>-paths.svg
-
-OPTIONS:
-  --batch <file.txt>    Process multiple SVG files listed in text file
-                        Supports two formats per line:
-                        - Input only: input.svg (output auto-generated)
-                        - Input/output pair: input.svg<TAB>output.svg
-                        Lines starting with # are comments
-  --overwrite           Overwrite output file if it exists
-  --skip-comparison     Skip automatic similarity check with sbb-compare
-                        (only applies to single file mode)
-  --json                Output results as JSON
-  --fbf-frame N         Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                        SVG from svg2fbf) before converting text to paths.
-                        Single-file mode only (cannot be combined with --batch).
-  --help                Show this help
-  --version             Show version
-
-BATCH FILE FORMAT:
-  Each line can be:
-  - Input file only:     input.svg
-    (Output: input-paths.svg in same directory)
-  - Input/output pair:   input.svg<TAB>output.svg
-    (Tab-separated or space-separated if both end in .svg)
-
-  Example batch file (files.txt):
-    # Comment line - ignored
-    simple.svg
-    drawing.svg    drawing_converted.svg
-    /path/to/input.svg    /other/path/output_inkscape.svg
-
-EXAMPLES:
-
-  # Basic conversion (creates input-paths.svg, then compares with sbb-compare)
-  node sbb-inkscape-text2path.cjs drawing.svg
-
-  # Specify output file
-  node sbb-inkscape-text2path.cjs input.svg output.svg
-
-  # Skip automatic comparison
-  node sbb-inkscape-text2path.cjs input.svg output.svg --skip-comparison
-
-  # Batch conversion with explicit output paths
-  node sbb-inkscape-text2path.cjs --batch files.txt
-
-  # Batch conversion without comparison (faster)
-  node sbb-inkscape-text2path.cjs --batch files.txt --skip-comparison
-
-  # Overwrite existing files
-  node sbb-inkscape-text2path.cjs input.svg output.svg --overwrite
-
-  # JSON output for automation
-  node sbb-inkscape-text2path.cjs input.svg output.svg --json
-
-NOTES:
-  • Original file is never modified
-  • Text elements are converted to <path> elements
-  • Font information is lost (paths only)
-  • File size typically increases (paths are more verbose than text)
-  • Conversion preserves visual appearance exactly
-
-EXIT CODES:
-  • 0: Conversion successful
-  • 1: Error occurred (includes invalid arguments, Inkscape not found, etc.)
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-inkscape-text2path',
+      tagline:
+        'Convert every <text> in an SVG to <path> using Inkscape — kill font dependencies forever.',
+      description:
+        'Runs Inkscape in headless mode and rewrites all text elements in the input ' +
+        'SVG into the equivalent <path> element. The output renders pixel-identically ' +
+        'on any system regardless of which fonts are installed — useful for sprites, ' +
+        'icon sets, archived diagrams, and anything you need to look the same a decade ' +
+        'from now. The original file is never modified; the output goes to a sibling ' +
+        '<input>-paths.svg by default. Single-file mode (with optional similarity check ' +
+        'against the original via sbb-compare) and batch mode are both supported. ' +
+        'Requires a working Inkscape installation (auto-detected on Windows, macOS, ' +
+        'and Linux; override with $SBB_INKSCAPE_PATH).',
+      usage: [
+        'sbb-inkscape-text2path <input.svg> [output.svg] [options]',
+        'sbb-inkscape-text2path --batch <files.txt> [options]'
+      ],
+      examples: [
+        {
+          title: 'Basic conversion (output auto-named drawing-paths.svg, then compared):',
+          command: 'sbb-inkscape-text2path drawing.svg'
+        },
+        {
+          title: 'Specify output file:',
+          command: 'sbb-inkscape-text2path input.svg output.svg'
+        },
+        {
+          title: 'Skip the post-conversion similarity check (faster):',
+          command: 'sbb-inkscape-text2path input.svg output.svg --skip-comparison'
+        },
+        {
+          title: 'Overwrite an existing output file:',
+          command: 'sbb-inkscape-text2path input.svg output.svg --overwrite'
+        },
+        {
+          title: 'Batch convert many SVGs (one per line in files.txt):',
+          command: 'sbb-inkscape-text2path --batch files.txt'
+        },
+        {
+          title: 'Batch convert without comparison (much faster):',
+          command: 'sbb-inkscape-text2path --batch files.txt --skip-comparison'
+        },
+        {
+          title: 'Pin frame 7 of an FBF.SVG before converting (single-file mode only):',
+          command: 'sbb-inkscape-text2path animation.fbf.svg frame-007.svg --fbf-frame 7'
+        },
+        {
+          title: 'JSON-formatted output for automation pipelines:',
+          command: 'sbb-inkscape-text2path input.svg output.svg --json'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'batch',
+          type: 'string',
+          valueLabel: '<files.txt>',
+          description:
+            'Process many SVGs in one run. See the BATCH MODE section below for ' +
+            'the file format. Cannot be combined with --fbf-frame.'
+        },
+        {
+          name: 'overwrite',
+          type: 'boolean',
+          description:
+            'Overwrite the output file if it already exists. Without this flag, ' +
+            'an existing output file is treated as an error.'
+        },
+        {
+          name: 'skip-comparison',
+          type: 'boolean',
+          description:
+            'Skip the automatic post-conversion similarity check that runs sbb-compare ' +
+            'between the original and the converted SVG. The check is only run in ' +
+            'single-file mode anyway, so this flag is mainly useful when scripting.'
+        },
+        {
+          name: 'json',
+          type: 'boolean',
+          description:
+            'Emit the conversion result (input/output paths, comparison score, ' +
+            'timings) as JSON instead of human-readable text.'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before running Inkscape so the ' +
+            'text→path conversion runs against that single frame instead of the ' +
+            'whole multi-frame document. Single-file mode only — cannot be combined ' +
+            'with --batch.'
+        }
+      ],
+      batch: {
+        flag: '--batch',
+        argLabel: '<files.txt>',
+        formatBody:
+          'A UTF-8 text file with one SVG per line. Each line is either a bare input ' +
+          'path (output auto-named <basename>-paths.svg next to the input) or an ' +
+          'input/output PAIR separated by a tab or whitespace (both halves must end ' +
+          'in .svg). Lines starting with # are comments; empty lines are ignored. ' +
+          'Both relative and absolute paths are accepted.',
+        examples: [
+          'sbb-inkscape-text2path --batch files.txt',
+          'sbb-inkscape-text2path --batch files.txt --skip-comparison --overwrite'
+        ]
+      },
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              'Pin frame N (1-based) of an FBF.SVG before converting, so text→path ' +
+              'runs against that single frame. Single-file mode only.'
+          }
+        ]
+      },
+      environment: { inkscape: true },
+      exitCodes: [
+        [0, 'Success — every SVG was converted'],
+        [1, 'Error (invalid arguments, Inkscape not found, conversion failed, etc.)']
+      ],
+      notes:
+        'The original file is never modified. Text elements become <path> elements, ' +
+        'so font information is lost in the output (paths only). File size typically ' +
+        'increases — paths are more verbose than text — but rendering is now ' +
+        'completely independent of font availability on the rendering system.'
+    })
+  );
 }
 
 /**

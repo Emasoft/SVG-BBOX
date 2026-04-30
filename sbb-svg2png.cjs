@@ -122,6 +122,11 @@ const {
   printBanner
 } = require('./lib/cli-utils.cjs');
 
+// Unified help-screen formatter — single source of truth for the
+// branded header box, sectioned options, batch/FBF blocks, etc.
+const helpFormatter = require('./lib/help-formatter.cjs');
+const { printVersion } = require('./version.cjs');
+
 // FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helpers.
 // Used by --fbf-frame N to pin PROSKENION to a specific frame and drop the
 // <animate> child before rendering, so the screenshot captures exactly that
@@ -350,209 +355,270 @@ function expandFbfFrameOutputs(basePath, frames, fbfSourcePath) {
 }
 
 /**
- * Print CLI help message with usage instructions and examples
+ * Print CLI help message using the unified help formatter.
  * @returns {void}
  */
 function printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-svg2png.cjs - Render SVG to PNG via Headless Chrome             ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-DESCRIPTION:
-  High-quality SVG to PNG rendering using Chrome's rendering engine with
-  precise control over what gets rendered and how.
-
-USAGE:
-  node sbb-svg2png.cjs input.svg output.png [options]
-  node sbb-svg2png.cjs --batch <file> [options]
-
-ARGUMENTS:
-  input.svg           Input SVG file to render
-  output.png          Output PNG file path
-
-═══════════════════════════════════════════════════════════════════════════════
-
-RENDERING MODES (--mode):
-
-  --mode visible      (DEFAULT)
-    Render only content inside current viewBox
-    Respects viewBox clipping exactly as browser would display it
-    Best for: SVGs with correct viewBox already set
-
-  --mode full
-    Render whole drawing, ignoring current viewBox
-    Computes full visual bbox and adjusts viewBox automatically
-    Best for: SVGs with missing/incorrect viewBox, seeing all content
-
-  --mode element --element-id <ID>
-    Render single element only
-    Hides all other elements, crops viewBox to element bbox
-    Best for: Extracting individual objects/icons from larger SVG
-
-═══════════════════════════════════════════════════════════════════════════════
-
-OPTIONS:
-
-  --mode <mode>
-      Rendering mode: visible | full | element
-      Default: visible
-
-  --element-id <ID>
-      Element ID to render (required with --mode element)
-
-  --scale <number>
-      Resolution multiplier (default: 4)
-      Higher = better quality but larger file
-      Example: --scale 2 for lower res, --scale 8 for very high res
-
-  --width <pixels> --height <pixels>
-      Override output dimensions in pixels
-      If not specified, computed from viewBox and scale
-
-  --background <color>
-      Background color (default: white)
-      Options:
-        - transparent (for PNG transparency)
-        - white, black, red, blue, etc. (CSS color names)
-        - #RRGGBB (hex colors)
-        - rgba(r, g, b, a) (CSS rgba format)
-
-  --margin <number>
-      Extra padding in SVG user units (default: 0)
-      In visible mode, margin clamped to viewBox boundaries
-
-  --auto-open
-      Automatically open PNG in Chrome/Chromium after rendering
-
-  --jpg
-      Also produce a JPEG version of the image at 100% quality
-      The PNG is always created first, then converted to JPEG
-      Both files are saved by default (see --delete-png-after)
-      JPEG filename is derived from PNG path (e.g., output.png -> output.jpg)
-
-  --delete-png-after
-      Delete the PNG file after creating the JPEG version
-      Useful for batch processing to save disk space
-      REQUIRES: --jpg must be specified (error otherwise)
-
-  --batch <file>
-      Batch processing mode using file list
-      Supports two formats per line:
-        - Input only: input.svg (output auto-generated as input.png)
-        - Input/output pair: input.svg<TAB>output.png
-      Lines starting with # are comments
-      All rendering options apply to each file
-
-  --allow-paths <dirs>
-      Allow files in additional directories (comma-separated)
-      By default, only files in the current working directory are allowed.
-      Example: --allow-paths /tmp,/var/artifacts
-
-  --trusted-mode
-      Disable all path security restrictions
-      USE WITH CAUTION - only for trusted inputs
-      Allows reading/writing files anywhere on the filesystem
-
-  --quiet
-      Minimal output mode - only prints essential info (output file path)
-      Useful for scripting and automation
-
-  --verbose
-      Show detailed progress information
-      Includes mode, viewBox, bbox details, dimensions, background, margin
-
-  --fbf-frame <N | LIST | RANGE>
-      Render one or more frames from a Frame-By-Frame SVG (FBF.SVG)
-      produced by https://github.com/Emasoft/svg2fbf.
-      Accepted forms (1-based, all values must be positive integers):
-        --fbf-frame 7              one frame
-        --fbf-frame 7,23,87,345    explicit list
-        --fbf-frame 1-5            inclusive range
-        --fbf-frame 1-3,10,20-22   any mix of lists and ranges
-      The tool pins PROSKENION's <use xlink:href> to #FRAME0000N and drops
-      the swap <animate> child for each requested frame, then renders the
-      resulting static scene. All other rendering options (--mode, --scale,
-      --background, --margin, --width/--height) apply to every frame.
-      Errors clearly when input is not FBF or any frame is out of range.
-
-      Output naming for multi-frame requests (and single frames with a
-      placeholder):
-        out.png + frames 7,23   →  out-FRAME00007.png, out-FRAME00023.png
-        out-{frame}.png         →  out-FRAME00007.png  (literal id)
-        out-{n}.png             →  out-7.png           (bare number)
-      For a single frame without a placeholder, the output path is used
-      verbatim — same behaviour as v1.1.x.
-
-  --help, -h
-      Show this help message
-
-═══════════════════════════════════════════════════════════════════════════════
-
-EXAMPLES:
-
-  # Render with default settings (visible mode, white background)
-  node sbb-svg2png.cjs drawing.svg output.png
-
-  # Render full drawing regardless of viewBox
-  node sbb-svg2png.cjs drawing.svg full.png --mode full
-
-  # Render with transparent background at high resolution
-  node sbb-svg2png.cjs icon.svg icon.png --background transparent --scale 8
-
-  # Render only a specific element
-  node sbb-svg2png.cjs sprites.svg logo.png \\
-    --mode element --element-id logo_main --margin 5
-
-  # Custom dimensions and background color
-  node sbb-svg2png.cjs chart.svg chart.png \\
-    --width 1920 --height 1080 --background "#f0f0f0"
-
-  # Render and immediately view
-  node sbb-svg2png.cjs drawing.svg preview.png --auto-open
-
-  # Render frame 7 of a Frame-By-Frame SVG (svg2fbf output)
-  node sbb-svg2png.cjs animation.fbf.svg frame-007.png --fbf-frame 7
-
-  # Render an explicit set of frames in one command — outputs are
-  # auto-named: frames-FRAME00007.png, frames-FRAME00023.png, ...
-  node sbb-svg2png.cjs anim.fbf.svg frames.png --fbf-frame 7,23,87,345
-
-  # Render a range of frames using a placeholder for the output name
-  node sbb-svg2png.cjs anim.fbf.svg "thumb-{n}.png" --fbf-frame 1-30 --scale 2
-
-  # Batch render with shared settings
-  node sbb-svg2png.cjs --batch files.txt \\
-    --mode full --scale 8 --background transparent
-
-  # Render to PNG and also create JPEG at 100% quality
-  node sbb-svg2png.cjs drawing.svg output.png --jpg
-
-  # Batch render to JPEG only (delete PNG after conversion)
-  node sbb-svg2png.cjs --batch files.txt --jpg --delete-png-after
-
-═══════════════════════════════════════════════════════════════════════════════
-
-MARGIN BEHAVIOR:
-
-  SVG user units (not pixels):
-    Margin is specified in the SVG's coordinate system
-    Example: viewBox="0 0 100 100" with --margin 10
-    → Adds 10 units on each side
-
-  Mode-specific behavior:
-    • visible mode: Margin clamped to original viewBox boundaries
-    • full mode: Margin added around full drawing bbox
-    • element mode: Margin added around element bbox
-
-USE CASES:
-  • Generate preview images for SVG libraries
-  • Create thumbnails for SVG galleries
-  • Export individual sprites/icons from sprite sheets
-  • Render charts/diagrams for documentation
-  • Convert SVGs for platforms that don't support SVG
-
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-svg2png',
+      tagline: 'Render SVG to PNG (and optional JPEG) at any resolution via headless Chromium.',
+      description:
+        "Uses Chrome's own rendering engine to rasterize SVGs into pixel-perfect PNGs " +
+        '(and optionally a paired JPEG at 100% quality). Three rendering modes give you ' +
+        'precise control over what gets painted: VISIBLE (the current viewBox, exactly ' +
+        'what a browser would show), FULL (the full drawing including content that ' +
+        'extends outside the viewBox), and ELEMENT (a single element by id, isolated ' +
+        'and cropped). Resolution, dimensions, background color, and margin are all ' +
+        'tunable. Single-file and batch modes are supported, and FBF.SVG ' +
+        '(Frame-By-Frame SVG, produced by svg2fbf) can be rendered one frame at a ' +
+        'time, as a list, or as a range — each frame becomes its own PNG.',
+      usage: [
+        'sbb-svg2png <input.svg> <output.png> [options]',
+        'sbb-svg2png --batch <files.txt> [options]'
+      ],
+      examples: [
+        {
+          title: 'Default render (visible mode, white background, scale 4):',
+          command: 'sbb-svg2png drawing.svg output.png'
+        },
+        {
+          title: 'Render the full drawing regardless of viewBox:',
+          command: 'sbb-svg2png drawing.svg full.png --mode full'
+        },
+        {
+          title: 'Transparent background at 8x resolution (great for icons):',
+          command: 'sbb-svg2png icon.svg icon.png --background transparent --scale 8'
+        },
+        {
+          title: 'Render one element from a sprite sheet (cropped to its bbox):',
+          command:
+            'sbb-svg2png sprites.svg logo.png --mode element --element-id logo_main --margin 5'
+        },
+        {
+          title: 'Custom dimensions and a hex background color:',
+          command:
+            'sbb-svg2png chart.svg chart.png --width 1920 --height 1080 --background "#f0f0f0"'
+        },
+        {
+          title: 'Render a single FBF.SVG frame:',
+          command: 'sbb-svg2png animation.fbf.svg frame-007.png --fbf-frame 7'
+        },
+        {
+          title: 'Render a list and a range of FBF.SVG frames at once:',
+          command: 'sbb-svg2png anim.fbf.svg "thumb-{n}.png" --fbf-frame 1-30,45,60-65'
+        },
+        {
+          title: 'Batch-render many SVGs with shared settings:',
+          command: 'sbb-svg2png --batch files.txt --mode full --scale 8 --background transparent'
+        },
+        {
+          title: 'Also produce a 100%-quality JPEG (delete the PNG afterwards):',
+          command: 'sbb-svg2png drawing.svg output.png --jpg --delete-png-after'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'mode',
+          type: 'string',
+          valueLabel: '<visible|full|element>',
+          description:
+            'Rendering mode: VISIBLE (default — paint what is inside the current ' +
+            'viewBox, exactly what a browser would show); FULL (paint everything, ' +
+            'including content that extends outside the viewBox; the viewBox is ' +
+            'auto-adjusted to the full visual bbox); ELEMENT (paint a single element ' +
+            'by id, with everything else hidden — requires --element-id).',
+          default: 'visible'
+        },
+        {
+          name: 'element-id',
+          type: 'string',
+          valueLabel: '<ID>',
+          description:
+            'Element id to render. Required when --mode element is used; ignored ' + 'otherwise.'
+        },
+        {
+          name: 'scale',
+          type: 'number',
+          valueLabel: '<1-32>',
+          description:
+            'Resolution multiplier — higher = sharper image, larger PNG. Useful for ' +
+            'thumbnails (1-2), screen-quality (4), retina (8), or print (16+).',
+          default: 4
+        },
+        {
+          name: 'width',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description:
+            'Override output width in pixels. If only one of --width/--height is ' +
+            'given, the other is derived to preserve aspect ratio. If neither is ' +
+            'given, the dimensions are computed from viewBox × scale.'
+        },
+        {
+          name: 'height',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description:
+            'Override output height in pixels. See --width for the auto-derivation ' + 'rules.'
+        },
+        {
+          name: 'background',
+          type: 'string',
+          valueLabel: '<color>',
+          description:
+            'Background color. Accepts CSS color names (white, black, red, ...), ' +
+            'hex (#RRGGBB or #RRGGBBAA), rgba() syntax, or the literal "transparent" ' +
+            '(only meaningful for PNG output).',
+          default: 'white'
+        },
+        {
+          name: 'margin',
+          type: 'number',
+          valueLabel: '<units>',
+          description:
+            'Extra padding around the rendered content in SVG user units (NOT ' +
+            'pixels). In VISIBLE mode the margin is clamped to the original ' +
+            'viewBox; in FULL/ELEMENT modes it expands the bbox.',
+          default: 0
+        },
+        {
+          name: 'jpg',
+          type: 'boolean',
+          description:
+            'Also produce a JPEG copy (100% quality, derived filename: foo.png → ' +
+            'foo.jpg). Both files are kept by default — see --delete-png-after.'
+        },
+        {
+          name: 'delete-png-after',
+          type: 'boolean',
+          description:
+            'After creating the JPEG, delete the PNG. REQUIRES --jpg (error ' +
+            'otherwise). Use this for batch JPEG output without doubling disk usage.'
+        },
+        {
+          name: 'batch',
+          type: 'string',
+          valueLabel: '<files.txt>',
+          description:
+            'Batch render many SVGs in one run. See the BATCH MODE section below ' +
+            'for the file format. All rendering options apply to every entry.'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'string',
+          valueLabel: '<N|LIST|RANGE>',
+          description:
+            'FBF.SVG only: render one or more frames from a Frame-By-Frame SVG. ' +
+            'Accepts a single number (7), an explicit list (7,23,87), an inclusive ' +
+            'range (1-5), or any mix (1-3,10,20-22). See the FBF.SVG SUPPORT ' +
+            'section for output-naming rules.'
+        },
+        {
+          name: 'auto-open',
+          type: 'boolean',
+          description:
+            'Open the rendered PNG in Chrome/Chromium when done (single-file mode ' + 'only).'
+        },
+        {
+          name: 'quiet',
+          type: 'boolean',
+          description:
+            'Minimal output — only print the output file path. Useful for ' +
+            'scripting and pipelines.'
+        },
+        {
+          name: 'verbose',
+          type: 'boolean',
+          description:
+            'Show detailed progress: rendering mode, computed viewBox, bbox details, ' +
+            'final dimensions, background, and margin.'
+        },
+        {
+          name: 'allow-paths',
+          type: 'string',
+          valueLabel: '<dir1,dir2,...>',
+          description:
+            'Permit reading/writing files in additional directories (comma-separated). ' +
+            'By default only the current working directory is allowed. Example: ' +
+            '--allow-paths /tmp,/var/artifacts.',
+          advanced: true
+        },
+        {
+          name: 'trusted-mode',
+          type: 'boolean',
+          description:
+            'Disable ALL path-security restrictions. USE WITH CAUTION — only enable ' +
+            'this for fully trusted inputs. Allows reading and writing anywhere on ' +
+            'the filesystem.',
+          advanced: true
+        }
+      ],
+      batch: {
+        flag: '--batch',
+        argLabel: '<files.txt>',
+        formatBody:
+          'A UTF-8 text file with one entry per line. Each entry is either a bare ' +
+          'input path (output auto-named <basename>.png next to the input) or an ' +
+          'input/output PAIR separated by a tab or whitespace. Lines starting with ' +
+          '# are comments; empty lines are ignored. All rendering options (--mode, ' +
+          '--scale, --background, --margin, --width/--height, --jpg, ...) apply to ' +
+          'every entry.',
+        examples: [
+          'sbb-svg2png --batch files.txt',
+          'sbb-svg2png --batch files.txt --mode full --scale 8 --background transparent',
+          'sbb-svg2png --batch files.txt --jpg --delete-png-after'
+        ]
+      },
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              'Render a single frame N (1-based). The PROSKENION <use> is rewritten ' +
+              'to #FRAMEnnnnn and its <animate> child is dropped, producing a static ' +
+              'scene. For a single frame WITHOUT a placeholder in the output name, ' +
+              'the output path is used verbatim.'
+          },
+          {
+            flag: '--fbf-frame <N1,N2,N3>',
+            description:
+              'Render an explicit list of frames. Each frame becomes its own PNG; ' +
+              'the output name is auto-suffixed: out.png + frames 7,23 → ' +
+              'out-FRAME00007.png, out-FRAME00023.png.'
+          },
+          {
+            flag: '--fbf-frame <A-B>',
+            description:
+              'Render an inclusive range of frames. Mix lists and ranges freely: ' +
+              '1-3,10,20-22 renders 1,2,3,10,20,21,22.'
+          },
+          {
+            flag: 'Output placeholders',
+            description:
+              'For multi-frame requests, use {frame} for the literal FRAME-id ' +
+              '(out-{frame}.png → out-FRAME00007.png) or {n} for the bare number ' +
+              '(out-{n}.png → out-7.png). All other rendering options (--mode, ' +
+              '--scale, --background, --margin, --width/--height) apply to every ' +
+              'frame.'
+          }
+        ]
+      },
+      exitCodes: [
+        [0, 'Success — every PNG was written'],
+        [1, 'Invalid argument or runtime error'],
+        [2, 'File not found / unreadable']
+      ],
+      notes:
+        'Margin is in SVG user units, NOT pixels — viewBox="0 0 100 100" with ' +
+        '--margin 10 adds 10 user units on each side. In VISIBLE mode margin is ' +
+        'clamped to the original viewBox; in FULL and ELEMENT modes it expands ' +
+        'the bbox. Common use cases: SVG library previews, sprite-sheet thumbnails, ' +
+        'icon-set extraction, documentation diagrams, and converting SVGs for ' +
+        'platforms that do not support SVG natively.'
+    })
+  );
 }
 
 /**
@@ -563,9 +629,14 @@ USE CASES:
 function parseArgs(argv) {
   const args = argv.slice(2);
 
-  // Check for --help
+  // Check for --help / --version BEFORE any other parsing so users without
+  // valid arguments can still discover the tool.
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     printHelp();
+    process.exit(0);
+  }
+  if (args.includes('--version') || args.includes('-v')) {
+    printVersion('sbb-svg2png');
     process.exit(0);
   }
 

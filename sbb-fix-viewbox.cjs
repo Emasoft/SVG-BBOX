@@ -70,6 +70,7 @@ const {
   printInfo,
   printWarning
 } = require('./lib/cli-utils.cjs');
+const helpFormatter = require('./lib/help-formatter.cjs');
 
 // WHY: Module-level flags for quiet/verbose mode
 // Set by main() after parsing args, used by logging helpers
@@ -126,108 +127,124 @@ function logWarning(message) {
 }
 
 /**
- * Print help message and usage instructions.
+ * Print help message and usage instructions using the unified help formatter.
  * @returns {void}
  */
 function printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-fix-viewbox.cjs - Repair Missing SVG ViewBox & Dimensions              ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-DESCRIPTION:
-  Automatically fixes SVG files missing viewBox, width, or height attributes
-  by computing the full visual bbox of all content.
-
-USAGE:
-  node sbb-fix-viewbox.cjs input.svg [output.svg] [options]
-  node sbb-fix-viewbox.cjs --batch files.txt [options]
-
-ARGUMENTS:
-  input.svg           Input SVG file to fix
-  output.svg          Output file path (default: input_fixed.svg)
-
-OPTIONS:
-  --batch <file.txt>  Process multiple SVG files listed in text file
-                      Supports two formats per line:
-                      - Input only: input.svg (output auto-generated)
-                      - Input/output pair: input.svg<TAB>output.svg
-                      Lines starting with # are comments
-  --force             Force regeneration of viewBox and dimensions (ignore existing)
-  --overwrite         Overwrite input file (USE WITH CAUTION - loses original viewBox!)
-  --auto-open         Automatically open fixed SVG in Chrome/Chromium
-                      (only applies to single file mode)
-  --fbf-frame N       Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                      SVG produced by https://github.com/Emasoft/svg2fbf)
-                      before computing the viewBox. Single-file mode only.
-  --quiet             Minimal output - only prints output file path
-                      Useful for scripting and automation
-  --verbose           Show detailed progress information
-  --help, -h          Show this help message
-  --version, -v       Show version number
-
-WHAT IT DOES:
-  1. Loads SVG in headless Chrome
-  2. Computes full visual bbox of root <svg> (unclipped mode)
-  3. If viewBox is missing:
-     → Sets viewBox to computed bbox
-  4. If width/height are missing:
-     → Synthesizes them from viewBox aspect ratio
-  5. Saves repaired SVG to output file
-
-AUTO-REPAIR RULES:
-  • viewBox missing:
-      Set to full visual bbox of content
-
-  • width & height both missing:
-      Use viewBox width/height as px values
-
-  • Only width missing:
-      Derive width from height × (viewBox aspect ratio)
-
-  • Only height missing:
-      Derive height from width ÷ (viewBox aspect ratio)
-
-  • preserveAspectRatio:
-      Not modified (browser defaults apply)
-
-BATCH FILE FORMAT:
-  Each line can be:
-  - Input file only:     input.svg
-    (Output: input_fixed.svg in same directory)
-  - Input/output pair:   input.svg<TAB>output.svg
-    (Tab-separated or space-separated if both end in .svg)
-
-  Example batch file (files.txt):
-    # Comment line - ignored
-    simple.svg
-    drawing.svg    drawing_repaired.svg
-    /path/to/input.svg    /other/path/output_fixed.svg
-
-EXAMPLES:
-  # Fix SVG with default output name
-  node sbb-fix-viewbox.cjs broken.svg
-  → Creates: broken_fixed.svg
-
-  # Fix with custom output path
-  node sbb-fix-viewbox.cjs broken.svg repaired.svg
-
-  # Fix and automatically open in browser
-  node sbb-fix-viewbox.cjs broken.svg --auto-open
-
-  # Batch processing with explicit output paths
-  node sbb-fix-viewbox.cjs --batch files.txt
-
-  # Batch processing with force regeneration
-  node sbb-fix-viewbox.cjs --batch files.txt --force
-
-USE CASES:
-  • SVG exports from design tools missing viewBox
-  • Dynamically generated SVGs without proper dimensions
-  • SVGs that appear blank due to missing/incorrect viewBox
-  • Preparing SVGs for responsive web use
-
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-fix-viewbox',
+      tagline: 'Repair SVGs that are missing viewBox, width, or height attributes.',
+      description:
+        'Renders the SVG with headless Chromium, computes the full visual bbox of all ' +
+        'content, then synthesises a correct viewBox and dimensions. Handy for SVG ' +
+        'exports from design tools that omit those attributes (the SVG appears blank ' +
+        'in browsers without them).',
+      usage: [
+        'sbb-fix-viewbox <input.svg> [output.svg] [options]',
+        'sbb-fix-viewbox --batch <files.txt> [options]'
+      ],
+      examples: [
+        {
+          title: 'Fix one SVG (output auto-named broken_fixed.svg):',
+          command: 'sbb-fix-viewbox broken.svg'
+        },
+        {
+          title: 'Fix with explicit output path:',
+          command: 'sbb-fix-viewbox broken.svg repaired.svg'
+        },
+        {
+          title: 'Fix in place (overwrites input — loses original viewBox):',
+          command: 'sbb-fix-viewbox broken.svg --overwrite'
+        },
+        {
+          title: 'Fix and force-regenerate even if viewBox already exists:',
+          command: 'sbb-fix-viewbox already-has-vbox.svg --force'
+        },
+        {
+          title: 'Batch-fix many SVGs listed in a text file:',
+          command: 'sbb-fix-viewbox --batch files.txt'
+        },
+        {
+          title: 'Pin frame 3 of an FBF.SVG before computing the viewBox:',
+          command: 'sbb-fix-viewbox animation.fbf.svg --fbf-frame 3'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'batch',
+          type: 'string',
+          valueLabel: '<files.txt>',
+          description:
+            'Process many SVGs in one run. See the BATCH MODE section below for the file format.'
+        },
+        {
+          name: 'force',
+          type: 'boolean',
+          description: 'Force-regenerate viewBox and dimensions even when the SVG already has them.'
+        },
+        {
+          name: 'overwrite',
+          type: 'boolean',
+          description:
+            'Overwrite the input file in place. Use with caution — the original ' +
+            'viewBox/width/height are lost.'
+        },
+        {
+          name: 'auto-open',
+          type: 'boolean',
+          description: 'Open the fixed SVG in Chrome/Chromium when done (single-file mode only).'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before computing the viewBox so the ' +
+            'result describes that specific frame instead of the union across all frames. ' +
+            'Single-file mode only.'
+        },
+        {
+          name: 'quiet',
+          type: 'boolean',
+          description: 'Minimal output — only print the output file path.'
+        },
+        {
+          name: 'verbose',
+          type: 'boolean',
+          description: 'Show detailed progress information.'
+        }
+      ],
+      batch: {
+        flag: '--batch',
+        argLabel: '<files.txt>',
+        formatBody:
+          'A UTF-8 text file with one entry per line. Each entry is either a bare input ' +
+          'path (output auto-named as <basename>_fixed.svg in the same directory) or an ' +
+          'input/output PAIR separated by a tab or whitespace. Lines starting with # ' +
+          'are comments. Empty lines are ignored.',
+        examples: ['sbb-fix-viewbox --batch files.txt', 'sbb-fix-viewbox --batch files.txt --force']
+      },
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description: 'Pin frame N (1-based) of an FBF.SVG before computing the viewBox.'
+          }
+        ]
+      },
+      exitCodes: [
+        [0, 'Success — SVG was fixed'],
+        [1, 'Invalid argument or runtime error'],
+        [2, 'File not found / unreadable']
+      ],
+      notes:
+        'Auto-repair rules: missing viewBox is set to the full visual bbox; missing ' +
+        'width/height are derived from the viewBox; preserveAspectRatio is left ' +
+        'untouched. Existing viewBox/width/height are preserved unless --force is given.'
+    })
+  );
 }
 
 /**

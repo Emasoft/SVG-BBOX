@@ -177,75 +177,147 @@ const PUPPETEER_OPTIONS = {
 const argParser = createArgParser({
   name: 'sbb-getbbox',
   description: 'Compute visual bounding boxes for SVG files and elements',
-  usage:
-    'sbb-getbbox <svg-file> [object-ids...] [options]\n' +
-    '       sbb-getbbox --dir <directory> [options]\n' +
-    '       sbb-getbbox --list <txt-file> [options]',
+  tagline: 'Compute the true visual bounding box of an SVG file or any element inside it.',
+  longDescription:
+    'Renders the SVG with headless Chromium and reads the rendered geometry — ' +
+    'so the bbox accounts for stroke width, filters, transforms, clipping, and ' +
+    'every other property that affects the actual painted pixels. Single files, ' +
+    'whole directories, and explicit file lists are all supported. FBF.SVG ' +
+    '(Frame-By-Frame SVG, the format produced by svg2fbf) is recognised ' +
+    'natively — pin a specific frame with --fbf-frame.',
+  usage: [
+    'sbb-getbbox <svg-file> [object-ids...] [options]',
+    'sbb-getbbox --dir <directory> [--filter <regex>] [options]',
+    'sbb-getbbox --list <txt-file> [options]'
+  ],
+  examples: [
+    {
+      title: 'Bounding box of the whole drawing:',
+      command: 'sbb-getbbox logo.svg'
+    },
+    {
+      title: 'Bbox of one element by id (any number of ids accepted):',
+      command: 'sbb-getbbox icons.svg star arrow'
+    },
+    {
+      title: 'Process every .svg in a directory and emit JSON:',
+      command: 'sbb-getbbox --dir ./icons --json -'
+    },
+    {
+      title: 'Auto-detect a sprite sheet and split each glyph:',
+      command: 'sbb-getbbox sprites.svg --sprite'
+    },
+    {
+      title: 'Pin frame 12 of an FBF.SVG before measuring:',
+      command: 'sbb-getbbox animation.fbf.svg --fbf-frame 12'
+    }
+  ],
   flags: [
     {
       name: 'ignore-vbox',
-      description: 'Compute full drawing bbox, ignoring viewBox clipping',
+      description:
+        'Compute the FULL drawing bbox even when content extends past the SVG ' +
+        'viewBox (otherwise the viewBox is the clip).',
       type: 'boolean'
     },
     {
       name: 'sprite',
       alias: 's',
-      // WHY: Detailed description helps users understand sprite detection requirements
-      // Detection triggers: 3+ similar-sized children, common ID patterns, or grid arrangement
       description:
-        'Auto-detect sprite sheets and process all sprites. ' +
-        'Detection requires: (1) 3+ direct children in root <svg>, ' +
-        '(2) similar sizes (CV < 0.3), OR (3) common ID patterns (icon-, sprite-, symbol-, glyph-), ' +
-        'OR (4) grid arrangement. Use --ignore-vbox with sprites that extend beyond viewBox.',
+        'Auto-detect a sprite sheet and process every sprite. Detection ' +
+        'requires one of: 3+ direct children in the root <svg> with similar ' +
+        'sizes (CV < 0.3), common ID prefixes (icon-, sprite-, symbol-, glyph-), ' +
+        'or a grid arrangement. Combine with --ignore-vbox if individual ' +
+        'sprites extend beyond the parent viewBox.',
       type: 'boolean'
     },
     {
       name: 'dir',
       alias: 'd',
-      description: 'Batch process all SVG files in directory',
+      valueLabel: '<directory>',
+      description:
+        'Batch-process every .svg file inside <directory>. Combine with ' +
+        '--filter to narrow the set.',
       type: 'string'
     },
     {
       name: 'filter',
       alias: 'f',
-      description: 'Filter directory files by regex pattern',
+      valueLabel: '<regex>',
+      description: 'Filter --dir entries by regex (matched against the basename).',
       type: 'string'
     },
     {
       name: 'list',
       alias: 'l',
-      description: 'Process SVGs from list file',
+      valueLabel: '<list.txt>',
+      description:
+        'Read SVG paths from a UTF-8 text file, one path per line. Lines ' +
+        'starting with # are comments; empty lines are ignored.',
       type: 'string'
     },
     {
       name: 'json',
       alias: 'j',
-      description: 'Output as JSON: no value=auto-filename, path=save there, -=stdout',
+      valueLabel: '[path|-]',
+      description:
+        'Emit JSON instead of human-readable text. With no value an auto-named ' +
+        'file is created next to the input; with a path the report is saved ' +
+        'there; with a single dash (-) JSON is written to stdout.',
       type: 'optional-string'
     },
     {
       name: 'quiet',
       alias: 'q',
-      description: 'Minimal output - only prints bounding box values',
+      description: 'Minimal output — print only the bounding-box values.',
       type: 'boolean'
     },
     {
       name: 'verbose',
-      alias: 'v',
-      description: 'Show detailed progress information',
+      alias: 'V',
+      description: 'Show detailed progress information for long batch runs.',
       type: 'boolean'
     },
     {
       name: 'fbf-frame',
+      valueLabel: '<N>',
       description:
-        'Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame SVG from svg2fbf) ' +
-        'before computing the bbox. The PROSKENION <use> is rewritten to ' +
-        '#FRAMEnnnnn and its <animate> is dropped, so the bbox describes that ' +
-        'specific frame.',
+        'FBF.SVG only: pin frame N (1-based) before measuring. The PROSKENION ' +
+        '<use> is rewritten to #FRAMEnnnnn and its <animate> dropped, so the ' +
+        'bbox describes that exact frame instead of the union across the ' +
+        'entire SMIL timeline.',
       type: 'number',
       validator: (v) => Number.isInteger(v) && v >= 1,
       validationError: '--fbf-frame must be a positive integer (1-based frame number)'
     }
+  ],
+  batch: {
+    flag: '--list',
+    argLabel: '<list.txt>',
+    formatBody:
+      'A UTF-8 text file with one SVG path per line. Lines starting with # ' +
+      'are comments; empty lines are ignored. Both relative paths (resolved ' +
+      'from the CWD) and absolute paths are accepted. The --dir flag is the ' +
+      'sibling form for "every file in a folder".',
+    examples: [
+      'sbb-getbbox --list inputs.txt --json -',
+      'sbb-getbbox --dir ./assets --filter "icon-.*\\.svg$"'
+    ]
+  },
+  fbf: {
+    flags: [
+      {
+        flag: '--fbf-frame <N>',
+        description:
+          'Pin frame N (1-based) of an FBF.SVG so the bbox describes that ' +
+          'specific frame, not the union across the SMIL timeline.'
+      }
+    ]
+  },
+  exitCodes: [
+    [0, 'Success'],
+    [1, 'Invalid argument or runtime error'],
+    [2, 'File not found / unreadable']
   ],
   minPositional: 0,
   maxPositional: Infinity

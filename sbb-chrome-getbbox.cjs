@@ -31,6 +31,10 @@ const {
   writeJSONOutput
 } = require('./lib/cli-utils.cjs');
 
+// Unified help-screen formatter — single source of truth for the
+// branded header box, sectioned options, batch/FBF blocks, etc.
+const helpFormatter = require('./lib/help-formatter.cjs');
+
 /**
  * @typedef {Object} BBoxRect
  * @property {number} x - X coordinate
@@ -343,79 +347,120 @@ function saveJSON(result, outputPath) {
 }
 
 /**
- * Print help message
+ * Print help message using the unified help formatter.
+ * @returns {void}
  */
 function printHelp() {
-  const version = getVersion();
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-chrome-getbbox - Get bbox using Chrome .getBBox()                     ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-ℹ Version ${version}
-
-DESCRIPTION:
-  Get bounding box information using Chrome's native .getBBox() method.
-  This tool is for comparison with SvgVisualBBox algorithm.
-
-USAGE:
-  sbb-chrome-getbbox <input.svg> [element-ids...] [options]
-
-REQUIRED ARGUMENTS:
-  input.svg               Input SVG file path
-
-OPTIONAL ARGUMENTS:
-  element-ids...          Element IDs to get bbox for (if omitted, gets whole content)
-
-OPTIONS:
-  --margin <number>       Margin around bbox in SVG units (default: 5)
-  --json <path>           Save results as JSON to specified file (use - for stdout)
-  --fbf-frame <N>         Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                          SVG produced by https://github.com/Emasoft/svg2fbf)
-                          before computing the bbox. The PROSKENION <use> is
-                          rewritten to #FRAMEnnnnn and its <animate> is
-                          dropped, so the bbox describes that specific frame.
-  --quiet                 Minimal output - only prints bounding box values
-  --verbose               Show detailed progress information
-  --help, -h              Show this help message
-  --version, -v           Show version number
-
-═══════════════════════════════════════════════════════════════════════════════
-
-EXAMPLES:
-
-  # Get bbox for whole content
-  sbb-chrome-getbbox drawing.svg
-
-  # Get bbox for specific elements
-  sbb-chrome-getbbox drawing.svg text39 rect42 path55
-
-  # Get bbox with custom margin
-  sbb-chrome-getbbox drawing.svg logo --margin 10
-
-  # Save results as JSON
-  sbb-chrome-getbbox drawing.svg --json results.json
-
-═══════════════════════════════════════════════════════════════════════════════
-
-COMPARISON NOTES:
-
-  This tool uses Chrome's native .getBBox() method, which:
-  • Uses geometric calculations based on element bounds
-  • Often OVERSIZES vertically due to font metrics (ascender/descender)
-  • Ignores visual effects like filters, shadows, glows
-  • May not accurately reflect actual rendered pixels
-
-  Compare with:
-  • sbb-getbbox: Uses SvgVisualBBox (pixel-accurate canvas rasterization)
-  • sbb-inkscape-extract: Uses Inkscape (often UNDERSIZES due to font issues)
-
-USE CASES:
-  • Demonstrate .getBBox() limitations vs SvgVisualBBox
-  • Create comparison test cases
-  • Benchmark against other bbox methods
-  • Educational purposes showing why accurate bbox matters
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-chrome-getbbox',
+      tagline: "Read SVG geometry through Chrome's native getBBox() — the canonical browser bbox.",
+      description:
+        "Launches headless Chromium, parses the SVG with the browser's own SVG engine, " +
+        "and returns each element's bbox via the standard SVGGraphicsElement.getBBox() " +
+        'API. This is the geometric bbox the browser uses for layout and hit-testing — ' +
+        'not the painted-pixel bbox. Useful for comparing against the rasterized result ' +
+        'from sbb-getbbox (which IS pixel-accurate) and against the path-extents result ' +
+        'from sbb-inkscape-extract. Differences across the three tools surface font, ' +
+        'stroke, and filter effects that geometric bbox cannot see.',
+      usage: ['sbb-chrome-getbbox <input.svg> [element-ids...] [options]'],
+      examples: [
+        {
+          title: 'Bbox of the whole drawing:',
+          command: 'sbb-chrome-getbbox drawing.svg'
+        },
+        {
+          title: 'Bbox of one or more named elements:',
+          command: 'sbb-chrome-getbbox drawing.svg text39 rect42 path55'
+        },
+        {
+          title: 'Add a margin around every bbox (in SVG user units):',
+          command: 'sbb-chrome-getbbox drawing.svg logo --margin 10'
+        },
+        {
+          title: 'Emit a JSON report next to the input file:',
+          command: 'sbb-chrome-getbbox drawing.svg --json results.json'
+        },
+        {
+          title: 'Pipe JSON to another tool (use - for stdout):',
+          command: 'sbb-chrome-getbbox icons.svg --json - | jq .'
+        },
+        {
+          title: 'Pin frame 12 of an FBF.SVG before measuring:',
+          command: 'sbb-chrome-getbbox animation.fbf.svg --fbf-frame 12'
+        },
+        {
+          title: 'Compare browser-bbox vs pixel-bbox for the same element:',
+          command: [
+            'sbb-chrome-getbbox icons.svg star --json -',
+            'sbb-getbbox icons.svg star --json -'
+          ]
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'margin',
+          type: 'number',
+          valueLabel: '<number>',
+          description:
+            'Padding around each reported bbox, in SVG user units (not pixels). ' +
+            'The original (un-padded) bbox is also kept in the JSON output under ' +
+            'originalBbox.',
+          default: 5
+        },
+        {
+          name: 'json',
+          type: 'string',
+          valueLabel: '<path|->',
+          description:
+            'Emit a JSON report instead of human-readable text. Pass an explicit ' +
+            'file path, or a single dash (-) to write JSON to stdout (handy for ' +
+            'piping into jq or other tooling).'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before measuring. The PROSKENION ' +
+            '<use> is rewritten to #FRAMEnnnnn and its <animate> is dropped, so the ' +
+            'bbox describes that specific frame instead of the union across the ' +
+            'entire SMIL timeline.'
+        },
+        {
+          name: 'quiet',
+          type: 'boolean',
+          description: 'Minimal output — only print the bounding-box values.'
+        },
+        {
+          name: 'verbose',
+          type: 'boolean',
+          description: 'Show detailed progress information for long batch runs.'
+        }
+      ],
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              'Pin frame N (1-based) of an FBF.SVG so the bbox describes that ' +
+              'specific frame, not the union across the SMIL timeline.'
+          }
+        ]
+      },
+      exitCodes: [
+        [0, 'Success'],
+        [1, 'Invalid argument or runtime error'],
+        [2, 'File not found / unreadable']
+      ],
+      notes:
+        'sbb-chrome-getbbox returns the geometric bbox computed by the browser ' +
+        '— the same value layout and hit-testing use. It does NOT account for ' +
+        'stroke width, filters, or rendered ink. For pixel-accurate bbox, use ' +
+        'sbb-getbbox; for path-extents bbox, use sbb-inkscape-extract.'
+    })
+  );
 }
 
 /**

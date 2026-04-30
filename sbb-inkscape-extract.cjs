@@ -44,6 +44,8 @@ const { extractFbfFrame } = require('./lib/fbf.cjs');
 // See `lib/inkscape-utils.cjs` for the full rationale.
 const { applyStartupJitter, INKSCAPE_EXPORT_TIMEOUT_MS } = require('./lib/inkscape-utils.cjs');
 
+const helpFormatter = require('./lib/help-formatter.cjs');
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -84,72 +86,125 @@ const { applyStartupJitter, INKSCAPE_EXPORT_TIMEOUT_MS } = require('./lib/inksca
 // ═══════════════════════════════════════════════════════════════════════════
 
 function printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-inkscape-extract.cjs - SVG Object Extraction Tool               ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-DESCRIPTION:
-  Extract a single object (by ID) from an SVG file using Inkscape.
-  Exports only the specified object, optionally with a margin.
-
-USAGE:
-  node sbb-inkscape-extract.cjs input.svg --id <object-id> [options]
-  node sbb-inkscape-extract.cjs --batch <file> [options]
-
-OPTIONS:
-  --id <id>                 ID of the object to extract (required in single mode)
-  --output <file>           Output SVG file (default: <input>_<id>.svg)
-  --margin <pixels>         Margin around extracted object in pixels
-  --batch <file>            Process multiple extractions from batch file
-  --fbf-frame N             Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                            SVG from svg2fbf) before extracting. Single-file
-                            mode only (cannot be combined with --batch).
-  --help                    Show this help
-  --version                 Show version
-
-BATCH PROCESSING:
-  --batch <file>            Process multiple extractions from file list
-                            Format per line: input.svg object_id output.svg
-                            (tab or space separated)
-                            Lines starting with # are comments
-
-BATCH FILE FORMAT:
-  Each line contains: input.svg object_id output.svg
-  - Tab-separated or space-separated
-  - Lines starting with # are comments
-
-  Example batch file (extractions.txt):
-    # Extract icons from sprite sheet
-    sprite.svg icon_home home.svg
-    sprite.svg icon_settings settings.svg
-    sprite.svg icon_user user.svg
-
-EXAMPLES:
-
-  # Extract object with ID "icon_home"
-  node sbb-inkscape-extract.cjs sprite.svg --id icon_home
-
-  # Extract with custom output name
-  node sbb-inkscape-extract.cjs sprite.svg --id icon_home --output home.svg
-
-  # Extract with 10px margin
-  node sbb-inkscape-extract.cjs sprite.svg --id icon_home --margin 10
-
-  # Batch extraction from file list
-  node sbb-inkscape-extract.cjs --batch extractions.txt
-
-  # Batch extraction with margin
-  node sbb-inkscape-extract.cjs --batch extractions.txt --margin 10
-
-OUTPUT:
-  Creates a new SVG file containing only the specified object.
-
-  Exit codes:
-  • 0: Extraction successful
-  • 1: Error occurred
-  • 2: Invalid arguments
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-inkscape-extract',
+      tagline: 'Extract a single object from an SVG using the Inkscape CLI.',
+      description:
+        'Invokes the system Inkscape executable in headless mode to export a single object ' +
+        '(addressed by ID) from an SVG file as a standalone SVG. Useful for pulling icons ' +
+        'out of sprite sheets, isolating logos, or building per-element comparisons against ' +
+        'sbb-extract (SvgVisualBBox) and sbb-chrome-extract (Chrome .getBBox()). Inkscape ' +
+        'must be installed and on $PATH (or pointed to via SBB_INKSCAPE_PATH).',
+      usage: [
+        'sbb-inkscape-extract <input.svg> --id <object-id> [options]',
+        'sbb-inkscape-extract <input.svg> --id <object-id> --output <out.svg> [options]',
+        'sbb-inkscape-extract --batch <list.txt> [options]'
+      ],
+      examples: [
+        {
+          title: 'Extract object "icon_home" — output auto-named to sprite_icon_home.svg:',
+          command: 'sbb-inkscape-extract sprite.svg --id icon_home'
+        },
+        {
+          title: 'Extract with explicit output path:',
+          command: 'sbb-inkscape-extract sprite.svg --id icon_home --output home.svg'
+        },
+        {
+          title: 'Extract with a 10-pixel margin around the bbox:',
+          command: 'sbb-inkscape-extract sprite.svg --id icon_home --margin 10'
+        },
+        {
+          title: 'Pin frame 3 of an FBF.SVG before extraction:',
+          command:
+            'sbb-inkscape-extract animation.fbf.svg --id text40 --output frame3.svg --fbf-frame 3'
+        },
+        {
+          title: 'Batch-extract many icons from a sprite sheet in one Inkscape session:',
+          command: 'sbb-inkscape-extract --batch extractions.txt'
+        },
+        {
+          title: 'Batch-extract with a uniform 10-pixel margin per entry:',
+          command: 'sbb-inkscape-extract --batch extractions.txt --margin 10'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'id',
+          type: 'string',
+          valueLabel: '<object-id>',
+          description: 'ID of the object to extract. Required in single-file mode.'
+        },
+        {
+          name: 'output',
+          type: 'string',
+          valueLabel: '<out.svg>',
+          description:
+            'Output SVG path. Defaults to <input-basename>_<id>.svg in the current directory.'
+        },
+        {
+          name: 'margin',
+          type: 'number',
+          valueLabel: '<pixels>',
+          description:
+            'Margin around the extracted object in pixels. Passed to Inkscape as ' +
+            '--export-margin. Must be a non-negative integer.'
+        },
+        {
+          name: 'batch',
+          type: 'string',
+          valueLabel: '<list.txt>',
+          description:
+            'Process many extractions in one run. See the BATCH MODE section below for the file format.'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before invoking Inkscape. The PROSKENION ' +
+            '<use> is rewritten to #FRAMEnnnnn and its <animate> is dropped, so the extracted ' +
+            'SVG describes that specific frame. Single-file mode only — cannot be combined ' +
+            'with --batch.'
+        }
+      ],
+      batch: {
+        flag: '--batch',
+        argLabel: '<list.txt>',
+        formatBody:
+          'A UTF-8 text file with one extraction per line. Each line is "input.svg object_id ' +
+          'output.svg" — tab or whitespace separated. Lines starting with # are comments. ' +
+          'Empty lines are ignored. Useful for extracting many icons from a single sprite ' +
+          'sheet in one Inkscape invocation.',
+        examples: [
+          'sbb-inkscape-extract --batch extractions.txt',
+          'sbb-inkscape-extract --batch extractions.txt --margin 10'
+        ]
+      },
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              "Pin frame N (1-based) of an FBF.SVG before extracting. PROSKENION's <use> is " +
+              'rewritten to #FRAMEnnnnn and its <animate> is dropped, so the extracted SVG ' +
+              'reflects that specific frame instead of the union across all PROSKENION targets.'
+          }
+        ]
+      },
+      environment: { inkscape: true },
+      exitCodes: [
+        [0, 'Success — extraction completed'],
+        [1, 'Generic error (Inkscape failure, missing object ID, etc.)'],
+        [2, 'Invalid arguments / file not found']
+      ],
+      notes:
+        "COMPARISON NOTES: Inkscape's rendering often UNDERSIZES text elements vs the actual " +
+        'visual bbox in browsers. For pixel-accurate results use sbb-extract (SvgVisualBBox); ' +
+        "for Chrome's .getBBox() (which often OVERSIZES vertically) use sbb-chrome-extract."
+    })
+  );
 }
 
 /**

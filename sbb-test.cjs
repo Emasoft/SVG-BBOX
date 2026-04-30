@@ -39,6 +39,7 @@ const {
 } = require('./lib/security-utils.cjs');
 
 const { runCLI, printSuccess, printInfo, printBanner } = require('./lib/cli-utils.cjs');
+const helpFormatter = require('./lib/help-formatter.cjs');
 
 // FBF.SVG (Frame-By-Frame SVG, https://github.com/Emasoft/svg2fbf) helper.
 // Used by --fbf-frame N to pin PROSKENION to a specific frame BEFORE the
@@ -180,43 +181,83 @@ function makeHtmlShell() {
  * Print help message and exit.
  */
 function showHelp() {
-  console.log(`sbb-test v${getVersion()} - Test all SvgVisualBBox library functions
-
-Usage:
-  sbb-test <path/to/file.svg>
-  sbb-test [options]
-
-Description:
-  Loads an SVG file, runs all exported SvgVisualBBox functions, and writes
-  results to JSON and error log files in the current directory.
-
-Options:
-  -h, --help          Show this help message
-  -v, --version       Show version information
-  --quiet             Minimal output - only show test results (pass/fail)
-  --verbose           Show detailed test progress information
-  --fbf-frame N       Pin frame N (1-based) of an FBF.SVG (Frame-By-Frame
-                      SVG produced by svg2fbf) before running the tests.
-                      The PROSKENION <use> is rewritten to #FRAMEnnnnn and
-                      its <animate> is dropped, so all bbox functions run
-                      against that specific frame instead of the union of
-                      all PROSKENION targets the SMIL timeline would visit.
-
-Output Files:
-  <basename>-bbox-results.json   Test results (JSON)
-  <basename>-bbox-errors.log     Errors and diagnostics
-
-Functions Tested:
-  - getSvgElementVisualBBoxTwoPassAggressive
-  - getSvgElementsUnionVisualBBox
-  - getSvgElementVisibleAndFullBBoxes
-  - getSvgRootViewBoxExpansionForFullDrawing
-
-Examples:
-  sbb-test logo.svg                 Test logo.svg
-  sbb-test assets/icon.svg          Test icon.svg
-  sbb-test scene.fbf.svg --fbf-frame 7   Pin frame 7 of an FBF.SVG
-`);
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'sbb-test',
+      tagline:
+        'Diagnostic test runner — exercises every SvgVisualBBox library function on one SVG.',
+      description:
+        'Loads an SVG into headless Chromium, injects SvgVisualBBox.js, then runs every ' +
+        'exported bbox function on the root element and on a randomly chosen child element. ' +
+        'Writes structured JSON results and an error log to the current directory. Use this ' +
+        'to verify that the library is computing visual bounding boxes correctly on a given ' +
+        'SVG, or to capture diagnostics for bug reports.',
+      usage: ['sbb-test <path/to/file.svg> [options]'],
+      examples: [
+        {
+          title: 'Run all bbox functions on logo.svg:',
+          command: 'sbb-test logo.svg'
+        },
+        {
+          title: 'Test an asset and show detailed progress:',
+          command: 'sbb-test assets/icon.svg --verbose'
+        },
+        {
+          title: 'Quiet mode — print only pass/fail (good for CI):',
+          command: 'sbb-test scene.svg --quiet'
+        },
+        {
+          title: 'Pin frame 7 of an FBF.SVG before running the tests:',
+          command: 'sbb-test scene.fbf.svg --fbf-frame 7'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      options: [
+        {
+          name: 'quiet',
+          type: 'boolean',
+          description: 'Minimal output — only print the pass/fail test results.'
+        },
+        {
+          name: 'verbose',
+          type: 'boolean',
+          description: 'Show detailed progress information for every step.'
+        },
+        {
+          name: 'fbf-frame',
+          type: 'number',
+          valueLabel: '<N>',
+          description:
+            'FBF.SVG only: pin frame N (1-based) before running the tests so every bbox ' +
+            'function exercises that specific frame instead of the union of all frames the ' +
+            'SMIL timeline would visit. Single-file mode only.'
+        }
+      ],
+      fbf: {
+        flags: [
+          {
+            flag: '--fbf-frame <N>',
+            description:
+              "Pin frame N (1-based) of an FBF.SVG before running the tests. PROSKENION's " +
+              '<use> is rewritten to #FRAMEnnnnn and its <animate> is dropped, so all bbox ' +
+              'functions run against that single frame.'
+          }
+        ]
+      },
+      exitCodes: [
+        [0, 'Success — tests ran (see JSON for individual function results)'],
+        [1, 'Runtime error (browser launch failed, library missing, etc.)'],
+        [2, 'Invalid arguments or input file not readable']
+      ],
+      notes:
+        'Output files (written to the current directory): ' +
+        '<basename>-bbox-results.json (test results) and ' +
+        '<basename>-bbox-errors.log (errors and diagnostics). ' +
+        'Functions tested: getSvgElementVisualBBoxTwoPassAggressive, ' +
+        'getSvgElementsUnionVisualBBox, getSvgElementVisibleAndFullBBoxes, ' +
+        'getSvgRootViewBoxExpansionForFullDrawing.'
+    })
+  );
   process.exit(0);
 }
 

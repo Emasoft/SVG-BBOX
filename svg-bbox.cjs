@@ -16,6 +16,7 @@
 const path = require('path');
 const { getVersion } = require('./version.cjs');
 const { printError, printBanner } = require('./lib/cli-utils.cjs');
+const helpFormatter = require('./lib/help-formatter.cjs');
 const readline = require('readline');
 const { spawn } = require('child_process');
 
@@ -117,82 +118,125 @@ const TOOLS = [
 ];
 
 /**
- * Print the main help message with available commands and usage examples.
- * Displays all CLI tools organized by category (Core, Chrome, Inkscape).
- * @returns {void}
+ * Render the multi-line "suite menu" — every sub-tool grouped by category
+ * with a numeric prefix matching the interactive prompt index. Returned as
+ * a complete formatted section (header rule + body) so it can be printed
+ * verbatim after the unified help screen without losing line breaks to the
+ * notes-section word wrapper.
+ * @returns {string}
  */
-function printHelp() {
-  const version = getVersion();
-
-  console.log(`
-${c.cyan}${c.bold}svg-bbox${c.reset} ${c.dim}v${version}${c.reset}
-${c.dim}A toolkit for computing and using SVG bounding boxes you can trust${c.reset}
-
-${c.yellow}${c.bold}USAGE:${c.reset}
-  ${c.green}npx <command>${c.reset} [options]
-
-${c.yellow}${c.bold}AVAILABLE COMMANDS:${c.reset}
-`);
-
-  // Group tools by category
+function buildSuiteMenu() {
+  /** @type {Record<string, string>} */
   const categories = {
-    Core: 'Core Tools (Our Visual BBox Algorithm)',
-    Chrome: "Chrome Comparison Tools (Chrome's .getBBox())",
-    Inkscape: 'Inkscape Comparison Tools (Inkscape CLI)'
+    Core: 'Core tools (our visual bbox algorithm)',
+    Chrome: "Chrome comparison tools (Chrome's .getBBox())",
+    Inkscape: 'Inkscape comparison tools (Inkscape CLI)'
   };
 
-  // Counter for sequential tool numbering across all categories in the help output
+  const lines = [];
   let toolNumber = 1;
   for (const [catKey, catLabel] of Object.entries(categories)) {
-    console.log(`${c.magenta}${c.bold}${catLabel}:${c.reset}`);
+    lines.push('');
+    lines.push(`  ${c.magenta}${c.bold}${catLabel}:${c.reset}`);
     const toolsInCategory = TOOLS.filter((t) => t.category === catKey);
     for (const tool of toolsInCategory) {
-      console.log(`  ${c.yellow}${toolNumber}.${c.reset} ${c.cyan}${c.bold}${tool.name}${c.reset}`);
-      console.log(`     ${tool.description}`);
-      console.log(`     ${c.dim}Example: ${tool.example}${c.reset}`);
-      console.log();
+      const idx = String(toolNumber).padStart(2, ' ');
+      lines.push(`    ${c.yellow}${idx}.${c.reset} ${c.cyan}${c.bold}${tool.name}${c.reset}`);
+      lines.push(`        ${tool.description}`);
+      lines.push(`        ${c.dim}Example: ${tool.example}${c.reset}`);
       toolNumber++;
     }
   }
 
-  console.log(`${c.yellow}${c.bold}QUICK START:${c.reset}
-  ${c.dim}# Get bounding box info for an SVG${c.reset}
-  ${c.green}npx sbb-getbbox${c.reset} myfile.svg --json
-
-  ${c.dim}# Extract all objects as separate SVG files${c.reset}
-  ${c.green}npx sbb-extract${c.reset} myfile.svg --list
-
-  ${c.dim}# Render SVG to PNG at 2x scale${c.reset}
-  ${c.green}npx sbb-svg2png${c.reset} myfile.svg myfile.png --scale 2
-
-${c.yellow}${c.bold}NAMING CONVENTION:${c.reset}
-  ${c.dim}sbb-[function]${c.reset}           - Our reliable visual bbox algorithm
-  ${c.dim}sbb-chrome-[function]${c.reset}    - Chrome's .getBBox() method (for comparison)
-  ${c.dim}sbb-inkscape-[function]${c.reset}  - Inkscape tools (for comparison)
-
-${c.yellow}${c.bold}MORE INFO:${c.reset}
-  Run any command with ${c.green}--help${c.reset} for detailed usage information.
-  ${c.dim}Example: npx sbb-getbbox --help${c.reset}
-
-${c.yellow}${c.bold}BROWSER REQUIREMENTS:${c.reset}
-  ${c.dim}Core and Chrome tools require Chrome or Chromium browser.${c.reset}
-  ${c.dim}Browser is auto-detected or can be configured:${c.reset}
-
-  ${c.cyan}Environment Variables:${c.reset}
-    ${c.green}SVG_BBOX_BROWSER_PATH${c.reset}           Custom browser executable path
-    ${c.green}SVG_BBOX_SKIP_BROWSER_DOWNLOAD${c.reset}  Set to '1' to disable auto-download
-    ${c.green}PUPPETEER_EXECUTABLE_PATH${c.reset}       Puppeteer's native path override
-
-  ${c.dim}Auto-download Chrome: ${c.green}npx puppeteer browsers install chrome${c.reset}
-
-${c.yellow}${c.bold}DOCUMENTATION:${c.reset}
-  ${c.blue}https://github.com/Emasoft/SVG-BBOX${c.reset}
-
-${c.yellow}${c.bold}═══════════════════════════════════════════════════════════════════════════════${c.reset}
-`);
-  console.log(
-    `${c.cyan}Enter a number (1-${TOOLS.length}) to see detailed help for that tool, or press Ctrl+C to exit:${c.reset}`
+  lines.push('');
+  lines.push('  Naming convention:');
+  lines.push(`    ${c.dim}sbb-<function>${c.reset}           Our reliable visual bbox algorithm`);
+  lines.push(
+    `    ${c.dim}sbb-chrome-<function>${c.reset}    Chrome's .getBBox() method (for comparison)`
   );
+  lines.push(`    ${c.dim}sbb-inkscape-<function>${c.reset}  Inkscape tools (for comparison)`);
+  lines.push('');
+  lines.push(
+    `  Run any command with ${c.green}--help${c.reset} for detailed usage ` +
+      `(e.g. "npx sbb-getbbox --help").`
+  );
+  lines.push(
+    `  Or run "${c.green}npx svg-bbox${c.reset}" with no arguments for an interactive picker.`
+  );
+
+  // Section title + rule, body follows. Mirrors helpFormatter's renderSection
+  // shape so the menu reads as a first-class section, not a tacked-on dump.
+  const title = 'AVAILABLE COMMANDS';
+  const rule = '─'.repeat(title.length);
+  return `${title}\n${rule}${lines.join('\n')}`;
+}
+
+/**
+ * Print the main help message with available commands and usage examples.
+ * Renders the unified branded help screen, then prints the colored suite
+ * menu (kept outside `renderHelp` because the formatter's notes-section
+ * word-wrap would flatten the tabular layout). When invoked with no args,
+ * the caller drops into promptToolSelection() for an interactive picker.
+ * @returns {void}
+ */
+function printHelp() {
+  console.log(
+    helpFormatter.renderHelp({
+      toolName: 'svg-bbox',
+      tagline:
+        'A toolkit for computing and using SVG bounding boxes you can trust — ' +
+        'launcher for the full sbb-* command suite.',
+      description:
+        'svg-bbox is the umbrella entry point for a suite of CLI tools that compute, ' +
+        'extract, render, repair, and compare SVG content using a pixel-accurate visual ' +
+        "bbox algorithm (and, for cross-checking, Chrome's native .getBBox() and " +
+        "Inkscape's CLI). Run with --help to see the suite menu below; run with no " +
+        'arguments for an interactive picker that forwards --help to your chosen tool.',
+      usage: [
+        'svg-bbox                          # interactive tool picker',
+        'svg-bbox --help                   # show this suite menu',
+        'svg-bbox --version                # print version',
+        'npx <sbb-tool> [args] [options]   # run a specific tool directly'
+      ],
+      examples: [
+        {
+          title: 'Show this menu and pick a tool interactively:',
+          command: 'npx svg-bbox'
+        },
+        {
+          title: 'Get bounding-box info for an SVG (JSON output):',
+          command: 'npx sbb-getbbox myfile.svg --json'
+        },
+        {
+          title: 'List every drawable object in an SVG with a visual catalog:',
+          command: 'npx sbb-extract myfile.svg --list'
+        },
+        {
+          title: 'Render an SVG to PNG at 2x scale:',
+          command: 'npx sbb-svg2png myfile.svg myfile.png --scale 2'
+        },
+        {
+          title: 'Repair an SVG that is missing viewBox/width/height:',
+          command: 'npx sbb-fix-viewbox broken.svg fixed.svg'
+        },
+        {
+          title: 'Read the help screen of any sub-tool:',
+          command: 'npx sbb-compare --help'
+        }
+      ],
+      commonOptions: helpFormatter.DEFAULT_COMMON_OPTIONS,
+      environment: { inkscape: true },
+      exitCodes: [
+        [0, 'Success — help shown or interactive picker exited cleanly'],
+        [1, 'Unknown argument or invalid interactive selection']
+      ]
+    })
+  );
+
+  // Suite menu (outside renderHelp because the notes-section word wrapper
+  // would flatten the tabular layout into one long paragraph).
+  console.log(buildSuiteMenu());
+  console.log();
 }
 
 /**
@@ -216,6 +260,14 @@ function promptToolSelection() {
   if (!process.stdin.isTTY) {
     process.exit(0);
   }
+
+  // WHY: Print the picker prompt here (not inside printHelp) so the prompt
+  // only appears when we are actually about to read input. Keeps --help and
+  // the interactive launcher visually distinct.
+  console.log(
+    `${c.cyan}Enter a number (1-${TOOLS.length}) to see detailed help for that tool, ` +
+      `or press Ctrl+C to exit:${c.reset}`
+  );
 
   const rl = readline.createInterface({
     input: process.stdin,
